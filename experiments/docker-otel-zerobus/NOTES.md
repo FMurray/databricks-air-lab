@@ -1,0 +1,69 @@
+# Run notes — 2026-07-16 (e2-demo-field-eng, ws 1444828305810485, us-west-2)
+
+## What worked end-to-end ✅
+
+- **Docker path on AIR is fully functional.** podman build (no Docker Desktop license needed) →
+  push to personal Docker Hub (`forrestm/air-otel-smoke:0.1`) → `air register image` (~2 min) →
+  `air run` → **Job SUCCESS** on A10G, 14s user code. Run: jobs/runs/37776040541298.
+- Injected env vars confirmed on a real node: `NUM_NODES=1, LOCAL_WORLD_SIZE, WORLD_SIZE=1,
+  POD_RANK=0/NODE_RANK=0` + `MOSAICML_PLATFORM=true, MOSAICML_LOG_DIR=/databricks/customer-logs`
+  (MosaicML lineage), `PWD=/mnt/work`, venv on PATH. GPU: A10G, driver 580.126.16, CUDA 13.0.
+- **AIR → Zerobus egress is OPEN** (open-q #7b): the container reached
+  `<ws>.zerobus.us-west-2...:443` and got app-layer responses. Serverless egress policy did not block.
+
+## Cross-build gotchas (Apple Silicon → linux/amd64)
+
+- `uv` binary segfaults under qemu-user; base image venv has no pip/ensurepip.
+  Fix: vendor wheels on host (`uv pip install --target vendor --python-platform
+  x86_64-unknown-linux-gnu --python-version 3.12 --only-binary :all:`) + COPY + PYTHONPATH.
+- podman machine (libkrun) has no Rosetta here; emulation is fine for COPY-only builds.
+
+## air CLI v0.1.0 schema deltas vs docs
+
+- `env_variables` and `secrets` are TOP-LEVEL, not under `environment`.
+
+## ⚠️ Secret-handling lesson
+
+- `env | sort` in `command:` dumped the injected ZEROBUS_TOKEN secret into job logs
+  (bounded: 1h-expiry user token). Never dump raw env in workloads; filter TOKEN/SECRET/KEY.
+
+## 🔴 Zerobus OTLP: root cause of "export OK, zero rows"
+
+Symptom: OTLP Export RPC returns OK from laptop AND from AIR node; tables stay empty;
+no stream ever appears in `system.lakeflow.zerobus_stream` for our tables.
+
+Root cause (proven with raw HTTP/2 curl):
+```
+HTTP/2 200
+x-databricks-reason-phrase: Invalid token audience   ← real error
+grpc-status: 0                                       ← reported as SUCCESS
+grpc-message: {"X-Databricks-Reason-Phrase":"Invalid token audience"}
+```
+1. The bearer token must be minted with `resource=api://databricks/workspaces/<WS_ID>/zerobusDirectWriteApi`
+   AND `authorization_details` (UC privileges JSON) — docs only show this via **service principal
+   client_credentials**. A normal `all-apis` user/CLI token → "Invalid token audience".
+2. **Edge bug/footgun: auth failures are returned with `grpc-status: 0` (OK)** — every OTLP
+   client treats the export as successful. Silent data loss. Verified: garbage token, nonexistent
+   table, and bogus workspace ID ALL return OK. → report to Zerobus team (on-call playbook:
+   Confluence UN/5268832571). Huge [the customer]-relevance: silent-drop observability pipe.
+
+Dead ends tried: RFC 8693 token-exchange of user token for the zerobus resource — endpoint exists
+but requires `authorization_details` already in the subject token's claims → SP-only in practice.
+Also ruled out: row tracking, variant shredding, catalog commits, default storage, region mismatch.
+Note `system.lakeflow.zerobus_stream` is ACCOUNT-WIDE per region — other workspaces' streams
+(trustly_demo, demos_prod) show OTLP working in us-west-2 generally.
+
+## Blocked on
+
+- An SP (client id + secret) with USE CATALOG/USE SCHEMA on `users`/`users.forrest_murray` and
+  SELECT+MODIFY on the two `air_otel_*` tables — SP creation is admin-only on e2-demo-field-eng
+  (forrest is not admin). Then: mint token per docs recipe, store in `air_lab` scope, re-run
+  job 37776040541298's config — everything else is proven.
+
+## Cleanup / debt
+
+- Tables: `users.forrest_murray.air_otel_{logs,metrics,logs_nort}` (logs_nort was a row-tracking
+  hypothesis test — droppable).
+- Token in job-run logs (expired ~18:26 UTC). Secret scope `air_lab` holds `zerobus_token` (stale).
+- Docker Desktop quit but still installed; podman is the sanctioned-adjacent path (license doc:
+  Confluence UN/3570664348 recommends Arca; podman avoids the license question entirely).
