@@ -33,7 +33,7 @@ Notebooks (interactive) · IDE via SSH tunnel · scheduled Jobs / Jobs API / DAB
 - Two managed Python envs: **Standard** (minimal) and **Databricks AI** (PyTorch, Transformers, etc. preloaded). Env `version: "4"` default; v5+ adds features (e.g. `timeout` on `@distributed`).
 - Deps: pip/uv style — inline specs, `-r requirements.txt`, wheels, index flags. Installed with `uv`.
 - Workspace **base environments** for serverless GPU are supported.
-- **Custom Docker** (Beta, CLI only): `environment.docker_image.url` after `air register image`. Constraints: Docker Hub only (no ECR/GCR/GHCR), <20 GB, `WORKDIR` ignored, mutually exclusive with `dependencies`/`version`.
+- **Custom Docker** (DCS, Beta, CLI only): `environment.docker_image.url` after `air register image <url> -p <profile>` (per user per tag, 2–6 min; private = Docker Hub PAT via `docker login`/`--interactive-authenticate`/secret scope). Constraints: Docker Hub only (no ECR/GCR/GHCR), <20 GB, `WORKDIR` ignored (use absolute paths), mutually exclusive with `dependencies`/`version`. Base images `databricksruntime/air:dcs-base-{aws,azure}-{runtime,devel}` ship CUDA/NCCL/EFA + uv venv at `/opt/venv`. Injected env vars: `NUM_NODES`, `LOCAL_WORLD_SIZE`, `WORLD_SIZE`, `POD_RANK`/`NODE_RANK`, and (multi-node) `LOCAL_ADDR`, `MASTER_ADDR`, `MASTER_PORT`.
 - Notebook jobs: no Environments-panel deps — use `%pip install`; no auto-recovery for incompatible package versions.
 
 ## Distributed API (`serverless_gpu`, Beta)
