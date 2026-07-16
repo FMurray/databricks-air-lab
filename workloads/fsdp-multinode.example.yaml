@@ -1,0 +1,33 @@
+# Multi-node FSDP fine-tune — the CLI-only path (2 nodes × 8xH100).
+# Schema source of truth: `air -h config` and `air -h config.<section>`
+experiment_name: air-lab-fsdp-multinode
+
+environment:
+  version: "4"
+  dependencies:
+    - torch
+    - transformers
+    - datasets
+  env_variables:
+    HF_HOME: /tmp/hf
+  secrets:
+    HF_TOKEN: air_lab/hf_token
+
+compute:
+  num_accelerators: 16          # must be whole-node multiple (8) => 2 nodes
+  accelerator_type: GPU_8xH100
+
+code_source:
+  type: snapshot
+  snapshot:
+    root_path: .
+    include_paths:
+      - src/
+
+# TODO(open-q #3): confirm which rank/master env vars are injected for torchrun
+command: torchrun --nproc_per_node=8 $CODE_SOURCE_PATH/src/train_fsdp.py
+
+max_retries: 2
+timeout_minutes: 240
+usage_policy_name: air-lab      # verify what this emits in system.billing.usage (open-q #5)
+mlflow_run_name: fsdp-multinode-smoke

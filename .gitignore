@@ -1,0 +1,4 @@
+workloads/*.yaml
+!workloads/*.example.yaml
+.DS_Store
+__pycache__/
