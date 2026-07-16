@@ -1,0 +1,28 @@
+# Multi-language escape hatch: JVM workload via custom Docker (Beta) + arbitrary bash command.
+# Constraints: Docker Hub only, <20GB, WORKDIR ignored, docker_image excludes dependencies/version.
+# Register first: `air register image ...`
+experiment_name: air-lab-java-smoke
+
+environment:
+  docker_image:
+    url: docker.io/<org>/air-java-cuda:0.1   # Temurin JDK + CUDA runtime + DJL/JCuda smoke jar
+
+compute:
+  num_accelerators: 1
+  accelerator_type: GPU_1xA10
+
+code_source:
+  type: snapshot
+  snapshot:
+    root_path: .
+    include_paths:
+      - experiments/multi-language/
+
+# Smoke test: prove the JVM can see the GPU, then enumerate injected env vars
+command: |
+  env | sort
+  nvidia-smi
+  java -jar $CODE_SOURCE_PATH/experiments/multi-language/gpu-smoke.jar
+
+timeout_minutes: 30
+mlflow_run_name: java-gpu-smoke
