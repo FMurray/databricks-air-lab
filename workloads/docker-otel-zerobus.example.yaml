@@ -1,22 +1,25 @@
 # Custom Docker image on AIR emitting OTEL logs/metrics -> Zerobus OTLP -> UC Delta.
 # Prereqs: tables created (experiments/docker-otel-zerobus/setup/create_tables.sql),
 #          image pushed to Docker Hub + `air register image`, SP creds in secret scope `air_lab`.
+# NOTE: air CLI v0.1.0 — env_variables and secrets are TOP-LEVEL (not under environment).
 experiment_name: air-lab-docker-otel-zerobus
 
 environment:
   docker_image:
     url: docker.io/<dockerhub-org>/air-otel-smoke:0.1
-  env_variables:
-    WORKSPACE_ID: "<numeric-workspace-id>"        # e.g. 1234567890123456
-    WORKSPACE_URL: "https://<instance>.cloud.databricks.com"
-    ZEROBUS_REGION: us-east-1                     # workspace region
-    OTEL_LOGS_TABLE: <catalog>.<schema>.air_otel_logs
-    OTEL_METRICS_TABLE: <catalog>.<schema>.air_otel_metrics
-    EPOCHS: "3"
-    STEPS_PER_EPOCH: "20"
-  secrets:
-    DATABRICKS_CLIENT_ID: air_lab/zerobus_sp_client_id
-    DATABRICKS_CLIENT_SECRET: air_lab/zerobus_sp_client_secret
+
+env_variables:
+  WORKSPACE_ID: "<numeric-workspace-id>"        # e.g. 1234567890123456
+  WORKSPACE_URL: "https://<instance>.cloud.databricks.com"
+  ZEROBUS_REGION: us-east-1                     # workspace region
+  OTEL_LOGS_TABLE: <catalog>.<schema>.air_otel_logs
+  OTEL_METRICS_TABLE: <catalog>.<schema>.air_otel_metrics
+  EPOCHS: "3"
+  STEPS_PER_EPOCH: "20"
+
+secrets:
+  DATABRICKS_CLIENT_ID: air_lab/zerobus_sp_client_id
+  DATABRICKS_CLIENT_SECRET: air_lab/zerobus_sp_client_secret
 
 compute:
   num_accelerators: 1
