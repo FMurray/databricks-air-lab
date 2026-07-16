@@ -31,7 +31,10 @@ from opentelemetry.sdk.resources import Resource
 
 
 def mint_token() -> str:
-    """SP OAuth M2M: client_credentials grant against the workspace token endpoint."""
+    """Bearer token for Zerobus: prefer a pre-minted token from secrets (ZEROBUS_TOKEN);
+    fall back to SP OAuth M2M client_credentials grant."""
+    if os.environ.get("ZEROBUS_TOKEN"):
+        return os.environ["ZEROBUS_TOKEN"]
     resp = requests.post(
         f"{os.environ['WORKSPACE_URL']}/oidc/v1/token",
         auth=(os.environ["DATABRICKS_CLIENT_ID"], os.environ["DATABRICKS_CLIENT_SECRET"]),
