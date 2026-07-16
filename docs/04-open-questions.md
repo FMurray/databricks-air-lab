@@ -14,8 +14,10 @@ Product & platform (verify against a real workspace, not docs):
 7. Docker path: how does `air register image` auth to Docker Hub? Private repos? Scan/allowlist step?
    ✅ ANSWERED (docs): per-user per-tag registration (2–6 min, pulls+caches); private via Docker Hub PAT
    (`docker login` / `--interactive-authenticate` / `--scope`+`--key` secret). No scan/allowlist documented.
-7b. Can an AIR container reach `*.zerobus.<region>.cloud.databricks.com:443` (serverless egress policy)?
-   Gates the whole OTEL-via-Zerobus idea — see `experiments/docker-otel-zerobus/`.
+7b. Can an AIR container reach `*.zerobus.<region>.cloud.databricks.com:443`?
+   ✅ ANSWERED 2026-07-16: yes, egress allowed (verified from job 37776040541298 on e2-demo-field-eng).
+   BUT Zerobus OTLP needs an SP-minted token with the zerobusDirectWriteApi resource audience, and the
+   edge reports auth failures as grpc-status 0 (silent drop!) — see experiments/docker-otel-zerobus/NOTES.md.
 8. UC volume mount semantics inside CLI workloads (FUSE path? read-only?) vs notebook sessions.
 9. Snowflake access from an AIR workload (use case 2): egress rules, Lakehouse Federation vs direct connector?
 10. Checkpoint/restart ergonomics at the 7-day cap: does `max_retries` resume or restart from scratch?
