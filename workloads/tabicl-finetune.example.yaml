@@ -1,0 +1,27 @@
+# Fine-tune the released TabICL checkpoint on bank-marketing — the realistic [the customer] path.
+experiment_name: air-lab-tabicl-finetune
+
+environment:
+  version: "4"
+  dependencies:
+    - "tabicl[finetune]"
+  env_variables:
+    HF_HOME: /tmp/hf
+
+compute:
+  num_accelerators: 1
+  accelerator_type: GPU_1xA10
+
+code_source:
+  type: snapshot
+  snapshot:
+    root_path: .
+    include_paths:
+      - experiments/foundation-models/tabicl/
+
+command: python $CODE_SOURCE_PATH/experiments/foundation-models/tabicl/finetune_smoke.py --epochs 10
+
+max_retries: 0
+timeout_minutes: 120
+usage_policy_name: air-lab
+mlflow_run_name: tabicl-finetune-smoke

@@ -1,0 +1,29 @@
+# Sprawl head-to-head: one TabICL checkpoint vs per-task XGBoost (Marketing pilot demo asset).
+experiment_name: air-lab-tabicl-bench
+
+environment:
+  version: "4"
+  dependencies:
+    - tabicl          # PyPI release is fine for inference; checkpoint pulls from HF hub
+    - xgboost
+    - tabulate        # pandas.to_markdown
+  env_variables:
+    HF_HOME: /tmp/hf
+
+compute:
+  num_accelerators: 1
+  accelerator_type: GPU_1xA10   # right-sizing IS the story; rerun on 1xH100 for the 10s claim
+
+code_source:
+  type: snapshot
+  snapshot:
+    root_path: .
+    include_paths:
+      - experiments/foundation-models/tabicl/
+
+command: python $CODE_SOURCE_PATH/experiments/foundation-models/tabicl/bench_sprawl.py
+
+max_retries: 0
+timeout_minutes: 120
+usage_policy_name: air-lab
+mlflow_run_name: tabicl-sprawl-bench

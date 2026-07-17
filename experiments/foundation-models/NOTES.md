@@ -53,3 +53,20 @@ Context: [the customer] technical summary doc (13e09FKCfpHX6wVaKQOoOTEJkIO3zez4n
 
 Launch (from repo root, live copy of the YAML minus `.example`):
 `air workload submit workloads/tabicl-pol.yaml -p <profile>` — verify exact subcommand via `air -h`.
+
+### Useful-while-testing tracks (2026-07-17)
+
+Inference/fine-tune tracks that produce customer-legible artifacts while the PoL ladder runs.
+TabICL API: sklearn-style `TabICLClassifier`/`TabICLRegressor` (checkpoints auto-download from
+HF hub; `n_estimators`, `batch_size`, `offload_mode="auto"` are the memory levers) and
+`FinetunedTabICLClassifier` (`pip install tabicl[finetune]`).
+
+| Track | Files | Deliverable |
+|---|---|---|
+| Sprawl head-to-head | `tabicl/bench_sprawl.py` + `workloads/tabicl-bench.example.yaml` (A10) | One checkpoint vs per-task tuned XGBoost on 5 marketing-ish OpenML tasks (bank-marketing 1461, churn 40701, credit-g 31, adult 1590, click 1220): accuracy / time-to-model / GPU peak. The Q4 Marketing pilot slide. |
+| Memory envelope | `tabicl/mem_probe.py` + `workloads/tabicl-memprobe.example.yaml` (H100; rerun on A10, ± `--offload`) | rows→GPU-GB curve to OOM at 100 features → concrete data for open-q #17 (B300). Upstream claim to check: 50K×100 fit+predict <10s on H100. |
+| Fine-tune on real data | `tabicl/finetune_smoke.py` + `workloads/tabicl-finetune.example.yaml` (A10) | Zero-shot vs fine-tuned AUC on bank-marketing; verifies ckpt reload into zero-shot API. The realistic [the customer] path (they won't pretrain from scratch). |
+
+Notes: datasets via `sklearn.fetch_openml` (egress from AIR assumed OK per zerobus finding, open-q #7b —
+verify openml.org specifically); switch to Delta/UC tables when the pilot wants customer-shaped data;
+all three log to the auto-created MLflow run when available and degrade to stdout locally.
