@@ -3,15 +3,20 @@
 Env contract (set via workload YAML env_variables/secrets):
   WORKSPACE_ID, WORKSPACE_URL, ZEROBUS_REGION      -- endpoint construction
   OTEL_LOGS_TABLE, OTEL_METRICS_TABLE              -- <catalog>.<schema>.<table>, pre-created
-  DATABRICKS_CLIENT_ID, DATABRICKS_CLIENT_SECRET   -- SP creds (secrets), used to mint a bearer token
+  DATABRICKS_CLIENT_ID, DATABRICKS_CLIENT_SECRET   -- SP creds (secrets), used to mint bearer tokens
+  ZEROBUS_TOKEN                                    -- optional pre-minted token override (skips minting)
   EPOCHS, STEPS_PER_EPOCH                          -- loop size (optional)
 
-Zerobus OTLP constraints honored here:
+Zerobus OTLP constraints honored here (hard-won, see NOTES.md):
   - gRPC only (proto.grpc exporter, not http)
   - one table per request -> one exporter per signal, each with its own table header
-  - bearer token expires in 1h -> fine for smoke; long runs need a collector with oauth2 refresh
+  - the bearer token MUST be minted with resource=api://databricks/workspaces/<id>/zerobusDirectWriteApi
+    and authorization_details for THAT table; a plain all-apis token is rejected -- and the edge
+    reports rejections as grpc-status 0 (success!), so a wrong token means silent data loss
+  - tokens expire in 1h -> long runs need an OTEL Collector sidecar with oauth2 refresh
 """
 
+import json
 import logging
 import math
 import os
@@ -30,25 +35,41 @@ from opentelemetry.sdk.metrics.export import PeriodicExportingMetricReader
 from opentelemetry.sdk.resources import Resource
 
 
-def mint_token() -> str:
-    """Bearer token for Zerobus: prefer a pre-minted token from secrets (ZEROBUS_TOKEN);
-    fall back to SP OAuth M2M client_credentials grant."""
+def mint_token(table: str) -> str:
+    """Zerobus-audience SP OAuth token, downscoped to one target table.
+
+    ZEROBUS_TOKEN env overrides (single shared token, e.g. pre-minted for a smoke test).
+    """
     if os.environ.get("ZEROBUS_TOKEN"):
         return os.environ["ZEROBUS_TOKEN"]
+    catalog, schema, _ = table.split(".")
+    authz = [
+        {"type": "unity_catalog_privileges", "privileges": ["USE CATALOG"],
+         "object_type": "CATALOG", "object_full_path": catalog},
+        {"type": "unity_catalog_privileges", "privileges": ["USE SCHEMA"],
+         "object_type": "SCHEMA", "object_full_path": f"{catalog}.{schema}"},
+        {"type": "unity_catalog_privileges", "privileges": ["SELECT", "MODIFY"],
+         "object_type": "TABLE", "object_full_path": table},
+    ]
     resp = requests.post(
         f"{os.environ['WORKSPACE_URL']}/oidc/v1/token",
         auth=(os.environ["DATABRICKS_CLIENT_ID"], os.environ["DATABRICKS_CLIENT_SECRET"]),
-        data={"grant_type": "client_credentials", "scope": "all-apis"},
+        data={
+            "grant_type": "client_credentials",
+            "scope": "all-apis",
+            "resource": f"api://databricks/workspaces/{os.environ['WORKSPACE_ID']}/zerobusDirectWriteApi",
+            "authorization_details": json.dumps(authz),
+        },
         timeout=30,
     )
     resp.raise_for_status()
     return resp.json()["access_token"]
 
 
-def zerobus_headers(token: str, table: str):
+def zerobus_headers(table: str):
     # gRPC metadata keys must be lowercase
     return (
-        ("authorization", f"Bearer {token}"),
+        ("authorization", f"Bearer {mint_token(table)}"),
         ("x-databricks-zerobus-table-name", table),
     )
 
@@ -58,14 +79,13 @@ def setup_telemetry():
         f"https://{os.environ['WORKSPACE_ID']}.zerobus."
         f"{os.environ['ZEROBUS_REGION']}.cloud.databricks.com:443"
     )
-    token = mint_token()
     resource = Resource.create(
         {
             "service.name": "air-otel-smoke",
             # AIR-injected context so rows are attributable to the workload
             "air.node_rank": os.environ.get("POD_RANK", "0"),
             "air.world_size": os.environ.get("WORLD_SIZE", "1"),
-            "mlflow.run_name": os.environ.get("MLFLOW_RUN_NAME", ""),
+            "air.mlflow_run_id": os.environ.get("MLFLOW_RUN_ID", ""),
         }
     )
 
@@ -74,7 +94,7 @@ def setup_telemetry():
         BatchLogRecordProcessor(
             OTLPLogExporter(
                 endpoint=endpoint,
-                headers=zerobus_headers(token, os.environ["OTEL_LOGS_TABLE"]),
+                headers=zerobus_headers(os.environ["OTEL_LOGS_TABLE"]),
             )
         )
     )
@@ -88,7 +108,7 @@ def setup_telemetry():
             PeriodicExportingMetricReader(
                 OTLPMetricExporter(
                     endpoint=endpoint,
-                    headers=zerobus_headers(token, os.environ["OTEL_METRICS_TABLE"]),
+                    headers=zerobus_headers(os.environ["OTEL_METRICS_TABLE"]),
                 ),
                 export_interval_millis=10_000,
             )
