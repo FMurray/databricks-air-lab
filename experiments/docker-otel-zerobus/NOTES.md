@@ -67,3 +67,34 @@ Note `system.lakeflow.zerobus_stream` is ACCOUNT-WIDE per region — other works
 - Token in job-run logs (expired ~18:26 UTC). Secret scope `air_lab` holds `zerobus_token` (stale).
 - Docker Desktop quit but still installed; podman is the sanctioned-adjacent path (license doc:
   Confluence UN/3570664348 recommends Arca; podman avoids the license question entirely).
+
+## Run notes — 2026-07-17 (fevm-forrest-aws-stable, ws 7474645949300216, us-east-1)
+
+### ✅ FULL PIPELINE PROVEN (v0.3, runs 774891161163006 / 382445774856272)
+
+- SP `air-lab-zerobus` (appId 292da548-…) + workspace-level secret via `databricks
+  service-principal-secrets-proxy create <sp-id>` (admin required).
+- Working token recipe (the whole unlock): client_credentials + `resource=api://databricks/
+  workspaces/<WS_ID>/zerobusDirectWriteApi` + `authorization_details` (UC privileges JSON).
+  Minted per-table in-container (train.py). Correct-audience probe → row visible in Delta in seconds.
+- **GPU metrics** land via NVML observable gauges (util/mem/power/temp per GPU) — verified from A10.
+- **Requester identity**: `air.requester` derived from HYPERPARAMETERS_PATH → resource attr on all
+  signals AND per-record log attribute via OTEL baggage + logging.Filter. ⚠️ HYPERPARAMETERS_PATH only
+  exists when the YAML has a `parameters:` block — without one, requester silently absent.
+- Per-table downscoping enforced for real: logs-only token → PERMISSION_DENIED on metrics export
+  (and post-auth errors DO surface to the client; the grpc-status:0 silent-OK is edge-auth-only).
+- Authoritative identity: join `air.mlflow_run_id` → system.lakeflow.job_run_timeline
+  (utils/visibility/telemetry_identity.sql). Feature ask for Zerobus PM: server-side principal
+  stamping; per-team SPs are the interim authenticated-attribution model.
+
+### PCI compliance (checked 2026-07-17)
+
+- Public PCI DSS v4.0 matrix lists **Lakeflow Connect - Zerobus Ingest ✓** and **AI Runtime
+  Interactive ✓** (docs/aws/en/security/privacy/pci). AIR docs: all standards except FedRAMP High /
+  DoD IL5; AIR CLI + custom Docker (DCS for air) inherit AIR's compliance posture.
+- Zerobus also listed under HIPAA + HITRUST; being default-enabled for compliance-security-profile
+  workspaces mid-July 2026. (Older internal FAQ saying "No PCI" is stale.)
+- Operative requirement: the *workspace* must have the compliance security profile enabled — the
+  components are certified, the deployment context does the qualifying. [the customer] deltas to flag:
+  Docker-Hub-only image hosting (their security won't love public/external registry), and
+  cross-region GPU fallback vs their Private-Link-only posture.

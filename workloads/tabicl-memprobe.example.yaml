@@ -1,0 +1,28 @@
+# TabICL inference memory envelope (rows -> GPU GB until OOM) — data for open-q #17 (B300).
+# Run once on GPU_1xH100 and once on GPU_1xA10; add `--offload` for the offload_mode=auto variant.
+experiment_name: air-lab-tabicl-memprobe
+
+environment:
+  version: "4"
+  dependencies:
+    - tabicl
+  env_variables:
+    HF_HOME: /tmp/hf
+
+compute:
+  num_accelerators: 1
+  accelerator_type: GPU_1xH100
+
+code_source:
+  type: snapshot
+  snapshot:
+    root_path: .
+    include_paths:
+      - experiments/foundation-models/tabicl/
+
+command: python $CODE_SOURCE_PATH/experiments/foundation-models/tabicl/mem_probe.py --features 100
+
+max_retries: 0
+timeout_minutes: 120
+usage_policy_name: air-lab
+mlflow_run_name: tabicl-memprobe-h100
