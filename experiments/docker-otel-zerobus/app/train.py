@@ -21,9 +21,11 @@ import logging
 import math
 import os
 import random
+import re
 import time
 
 import requests
+from opentelemetry import baggage, context as otel_context
 from opentelemetry import metrics
 from opentelemetry._logs import set_logger_provider
 from opentelemetry.exporter.otlp.proto.grpc._log_exporter import OTLPLogExporter
@@ -74,20 +76,104 @@ def zerobus_headers(table: str):
     )
 
 
+def harvest_identity() -> dict:
+    """Requester identity + workload correlation IDs, best-effort from the AIR runtime.
+
+    air.requester is DERIVED from HYPERPARAMETERS_PATH (/Workspace/Users/<submitter>/.air/...),
+    which the platform materializes from the submitting user's workspace dir — better than a
+    hand-set env var, but still self-reported at the row level. For chargeback-grade truth,
+    join air.mlflow_run_id / job run against system.lakeflow.job_run_timeline (see
+    utils/visibility/telemetry_identity.sql).
+    """
+    ctx = {}
+    m = re.search(r"/Workspace/Users/([^/]+)/", os.environ.get("HYPERPARAMETERS_PATH", ""))
+    if m:
+        ctx["air.requester"] = m.group(1)
+    if os.environ.get("SUBMITTED_BY"):  # explicit override wins
+        ctx["air.requester"] = os.environ["SUBMITTED_BY"]
+    for attr, env in [
+        ("air.mlflow_run_id", "MLFLOW_RUN_ID"),
+        ("air.mlflow_experiment_id", "MLFLOW_EXPERIMENT_ID"),
+        ("air.workspace_id", "WORKSPACE_ID"),
+    ]:
+        if os.environ.get(env):
+            ctx[attr] = os.environ[env]
+    return ctx
+
+
+class BaggageFilter(logging.Filter):
+    """Copies OTEL baggage entries onto every stdlib log record, so identity set in the
+    client context propagates to all logs emitted anywhere in the process — including
+    third-party libraries that know nothing about it. LoggingHandler then maps the extra
+    record fields to OTEL log attributes."""
+
+    def filter(self, record):
+        for k, v in baggage.get_all().items():
+            setattr(record, k, v)
+        return True
+
+
+def register_gpu_metrics(meter):
+    """Per-GPU observable gauges via NVML (nvidia-ml-py). No-ops gracefully off-GPU."""
+    try:
+        import pynvml
+        pynvml.nvmlInit()
+        handles = [pynvml.nvmlDeviceGetHandleByIndex(i)
+                   for i in range(pynvml.nvmlDeviceGetCount())]
+    except Exception as e:
+        logging.getLogger("train").warning("NVML unavailable, skipping GPU metrics: %s", e)
+        return
+
+    from opentelemetry.metrics import Observation
+
+    def observe(fn):
+        def callbacks(_options):
+            out = []
+            for i, h in enumerate(handles):
+                try:
+                    out.append(Observation(fn(h), {"gpu": str(i)}))
+                except Exception:
+                    pass
+            return out
+        return [callbacks]
+
+    p = __import__("pynvml")
+    meter.create_observable_gauge(
+        "gpu.utilization.percent",
+        callbacks=observe(lambda h: p.nvmlDeviceGetUtilizationRates(h).gpu))
+    meter.create_observable_gauge(
+        "gpu.memory.used.bytes",
+        callbacks=observe(lambda h: p.nvmlDeviceGetMemoryInfo(h).used))
+    meter.create_observable_gauge(
+        "gpu.memory.total.bytes",
+        callbacks=observe(lambda h: p.nvmlDeviceGetMemoryInfo(h).total))
+    meter.create_observable_gauge(
+        "gpu.power.watts",
+        callbacks=observe(lambda h: p.nvmlDeviceGetPowerUsage(h) / 1000.0))
+    meter.create_observable_gauge(
+        "gpu.temperature.celsius",
+        callbacks=observe(lambda h: p.nvmlDeviceGetTemperature(h, p.NVML_TEMPERATURE_GPU)))
+
+
 def setup_telemetry():
     endpoint = (
         f"https://{os.environ['WORKSPACE_ID']}.zerobus."
         f"{os.environ['ZEROBUS_REGION']}.cloud.databricks.com:443"
     )
+    identity = harvest_identity()
     resource = Resource.create(
         {
             "service.name": "air-otel-smoke",
             # AIR-injected context so rows are attributable to the workload
             "air.node_rank": os.environ.get("POD_RANK", "0"),
             "air.world_size": os.environ.get("WORLD_SIZE", "1"),
-            "air.mlflow_run_id": os.environ.get("MLFLOW_RUN_ID", ""),
+            **identity,
         }
     )
+    # Propagate requester through the OTEL client context (baggage): anything logged
+    # under this context — by us or by libraries — carries the identity as an attribute.
+    for k, v in identity.items():
+        otel_context.attach(baggage.set_baggage(k, v))
 
     logger_provider = LoggerProvider(resource=resource)
     logger_provider.add_log_record_processor(
@@ -100,6 +186,7 @@ def setup_telemetry():
     )
     set_logger_provider(logger_provider)
     handler = LoggingHandler(level=logging.INFO, logger_provider=logger_provider)
+    handler.addFilter(BaggageFilter())
     logging.basicConfig(level=logging.INFO, handlers=[handler, logging.StreamHandler()])
 
     meter_provider = MeterProvider(
@@ -122,6 +209,7 @@ def main():
     logger_provider, meter_provider = setup_telemetry()
     log = logging.getLogger("train")
     meter = metrics.get_meter("air-otel-smoke")
+    register_gpu_metrics(meter)
     loss_gauge = meter.create_gauge("train.loss")
     step_counter = meter.create_counter("train.steps")
 
