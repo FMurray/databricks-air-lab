@@ -1,0 +1,35 @@
+# TabICL v2 pretraining proof-of-life — stage-1 smoke on a single GPU.
+# Ladder: 1xA10 (this file) → 1xH100 → GPU_8xH100 NPROC=8 → stage-3 memory probe (open-q #17).
+# Schema source of truth: `air -h config` and `air -h config.<section>`
+experiment_name: air-lab-tabicl-pol
+
+environment:
+  version: "4"
+  dependencies:
+    # tabicl.train is packaged, so a git install is enough — no repo checkout needed.
+    # [pretraining] extra pulls transformers/xgboost/wandb (wandb disabled via env below).
+    - "tabicl[pretraining] @ git+https://github.com/soda-inria/tabicl"
+  env_variables:
+    WANDB_MODE: disabled
+    NPROC_PER_NODE: "1"
+    MAX_STEPS: "100"
+    N_JOBS: "8"          # CPU prior-gen workers per rank; tune against GPU util
+    # CKPT_DIR: /Volumes/<catalog>/<schema>/<volume>/tabicl-pol   # for restart tests
+
+compute:
+  num_accelerators: 1
+  accelerator_type: GPU_1xA10   # rung 3: GPU_8xH100 + NPROC_PER_NODE=8
+
+code_source:
+  type: snapshot
+  snapshot:
+    root_path: .
+    include_paths:
+      - experiments/foundation-models/tabicl/
+
+command: bash $CODE_SOURCE_PATH/experiments/foundation-models/tabicl/pol_stage1_smoke.sh
+
+max_retries: 0            # PoL: fail loud; bump for restart-semantics test (open-q #10)
+timeout_minutes: 60
+usage_policy_name: air-lab
+mlflow_run_name: tabicl-pol-stage1-smoke
