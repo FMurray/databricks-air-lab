@@ -4,10 +4,19 @@ Product & platform (verify against a real workspace, not docs):
 
 1. `@distributed` — is `gpus=8` truly the only distributed shape (no 2/4-GPU)? What happens on A10?
 2. Multi-node CLI: max `num_accelerators` in practice? Scheduling latency for 2+ nodes from a reserved pool vs on-demand?
+   ✅ PARTIALLY ANSWERED 2026-07-22: 2 nodes (16xH100) on-demand on e2-demo-field-eng scheduled in
+   ~40s submit→running (run 505819227973807). Multinode silently PuPr'd 2026-07-17 (#research-on-air);
+   multiples of 8xH100 only (#ai-air-product-champions); field guide: max 16 nodes/128 GPUs, sweet
+   spot 3–8 nodes, AWS-only. Max-in-practice + reserved-pool latency still untested.
 3. What env vars does the CLI inject into `command` (rank, world size, master addr, `$CODE_SOURCE_PATH`, …)?
    ✅ ANSWERED for the Docker path (docker-images docs): `NUM_NODES`, `LOCAL_WORLD_SIZE`, `WORLD_SIZE`,
    `POD_RANK`/`NODE_RANK`, multi-node: `LOCAL_ADDR`, `MASTER_ADDR`, `MASTER_PORT`. Still verify the
    non-Docker snapshot path matches (the `env | sort` in our workloads covers this).
+   ✅ SNAPSHOT PATH CONFIRMED 2026-07-22 (multinode probe, run 505819227973807): `NUM_NODES=2`,
+   `NODE_RANK`/`POD_RANK`, `LOCAL_WORLD_SIZE=8`, `WORLD_SIZE=16`, `MASTER_ADDR`, `MASTER_PORT`
+   all injected, plus NCCL tuning (`NCCL_DEBUG=INFO`, `NCCL_IB_TIMEOUT=22`, `NCCL_CUMEM_ENABLE=0`,
+   `AWS_OFI_NCCL_VERSION=v1.15.0`). torchrun wires straight in — see
+   experiments/foundation-models/multinode/probe_multinode.sh.
 4. Reserved pool vs on-demand: how does a workload target the pool? Is it implicit per-workspace?
 5. `usage_policy_name`: what actually lands in system.billing.usage — does it give any attribution inside a reserved pool?
 6. Standard env contents: is there a JRE? gcc? What's on PATH? (matters for multi-language)

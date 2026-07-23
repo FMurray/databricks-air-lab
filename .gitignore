@@ -6,3 +6,4 @@ apps/training-hub/config/teams.yaml
 __pycache__/
 experiments/docker-otel-zerobus/vendor/
 .claude/skills/*-workspace/
+.mkdocs-site/
