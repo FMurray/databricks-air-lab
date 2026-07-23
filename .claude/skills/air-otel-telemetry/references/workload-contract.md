@@ -53,9 +53,23 @@ mlflow_run_name: my-run
 
 ## Training code side
 
+Reuse the canonical module (`utils/telemetry/airtel.py` in-repo; the skill's `assets/airtel.py`
+copy only outside the repo). In-repo snapshot workloads ship it like this:
+
+```yaml
+code_source:
+  type: snapshot
+  snapshot:
+    root_path: ../..            # repo root relative to this YAML
+    include_paths: [utils/telemetry/, <your-training-dir>/]
+command: |
+  export PYTHONPATH=$CODE_SOURCE_PATH
+  python $CODE_SOURCE_PATH/<your-training-dir>/train.py
+```
+
 ```python
 import logging
-import airtel  # copied from the skill's assets/ next to train.py
+from utils.telemetry import airtel  # or `import airtel` when the file sits next to train.py
 
 telemetry = airtel.init(service_name="my-training")   # logs + metrics + GPU gauges + identity
 log = logging.getLogger("train")

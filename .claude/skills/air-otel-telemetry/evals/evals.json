@@ -1,0 +1,19 @@
+{
+  "skill_name": "air-otel-telemetry",
+  "evals": [
+    {
+      "id": 0,
+      "name": "wire-basic-workload",
+      "prompt": "Our team's AIR workload is in this directory (train.py + workload.yaml). Wire up OTEL telemetry so training logs, loss metrics, and GPU utilization land in our Delta tables forrest_aws_stable_catalog.airlab.air_otel_logs and .air_otel_metrics via Zerobus. Workspace id 7474645949300216 (host fevm-forrest-aws-stable.cloud.databricks.com, us-east-1); our service principal creds are in secret scope air_lab as zerobus_sp_client_id / zerobus_sp_client_secret. IMPORTANT: do not run any databricks/air CLI commands, do not submit anything, and make no network calls — just update the files in place and write a VERIFY.md explaining exactly how we'd verify rows actually landed.",
+      "expected_output": "Updated workload.yaml (top-level env_variables + secrets, parameters block, no raw env dump) and training code that mints per-table zerobusDirectWriteApi-audience tokens with authorization_details, uses gRPC exporters (one per signal), adds NVML GPU gauges, plus a VERIFY.md that warns about grpc-status:0 silent drops and checks rows via SQL.",
+      "files": ["fixtures/wire-basic"]
+    },
+    {
+      "id": 1,
+      "name": "debug-silent-drop",
+      "prompt": "Our AIR training workload (this directory) exports OTEL logs to Zerobus. The OTLP exporter reports successful exports and the job succeeds, but forrest_aws_stable_catalog.airlab.air_otel_logs has zero rows — it's been like this for days. Figure out what's wrong and fix the code. Do not run any CLI commands or make network calls — diagnose from the files and write up the root cause in DIAGNOSIS.md along with the fix.",
+      "expected_output": "DIAGNOSIS.md identifying that the token lacks the zerobusDirectWriteApi resource audience + authorization_details, and that the Zerobus edge reports auth failures as grpc-status 0 so clients see 'success'; fixed get_token() minting with resource + authorization_details; recommends probe/raw-curl reason-phrase check and SQL row verification.",
+      "files": ["fixtures/debug-silent-drop"]
+    }
+  ]
+}

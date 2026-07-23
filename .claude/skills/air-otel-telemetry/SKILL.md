@@ -46,10 +46,16 @@ authorization_details). Full recipe + curl diagnostics: `references/auth-and-tok
 
 ## Wiring a workload
 
-1. Copy `assets/airtel.py` next to the training code. It provides
-   `airtel.init(service_name=...)` → configures the log bridge, loss/step meters, per-GPU NVML
-   gauges (graceful no-op off-GPU), identity resource attrs, and baggage propagation. Training
-   code then just uses stdlib `logging` and the returned meter.
+1. **Reuse the `airtel` module — never write telemetry wiring by hand.**
+   In the databricks-air-lab repo the canonical module is `utils/telemetry/airtel.py`: ship it
+   with the workload (`code_source.snapshot.include_paths: [utils/telemetry/]` + set
+   `PYTHONPATH`, or COPY into the Docker image). Outside that repo, copy `assets/airtel.py`
+   (a synced portability copy). Either way, training code makes one call —
+   `airtel.init(service_name=...)` → log bridge, loss/step meters, per-GPU NVML gauges
+   (graceful no-op off-GPU), identity resource attrs, baggage propagation — and then just uses
+   stdlib `logging` and the returned meter. Also: target the **OTLP endpoint**, not the Zerobus
+   record SDK (`databricks-zerobus-ingest-sdk`) — the SDK path needs custom row schemas and
+   protobuf codegen and is the wrong surface for OTEL-shaped telemetry.
 2. Dependencies (pip/uv or Dockerfile or vendored wheels):
    `opentelemetry-sdk>=1.27  opentelemetry-exporter-otlp-proto-grpc>=1.27  requests  nvidia-ml-py`
    (gRPC only — Zerobus has **no OTLP/HTTP endpoint**.)

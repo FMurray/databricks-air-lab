@@ -15,3 +15,7 @@ Ordered by customer pull (see `docs/private/[the customer]-baseline.md`):
    sensible defaults per workload family, right-sizing hints (did this need an H100?).
 4. **`checkpoint/`** — checkpoint/restart harness for the 7-day runtime cap (resume-aware `max_retries` wrapper).
 5. **`audit/`** — GPU access audit: who *can* reach serverless GPU in a workspace (until GPU-only entitlement ships).
+6. **`telemetry/`** — `airtel.py`, the canonical OTEL→Zerobus emission module for AIR workloads
+   (one `airtel.init()` call: logs bridge, metrics, GPU gauges, identity). Ship via snapshot
+   `include_paths` or Docker COPY. The `air-otel-telemetry` skill references it; the skill's
+   `assets/airtel.py` is a synced portability copy for use outside this repo.

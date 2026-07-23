@@ -121,6 +121,26 @@ Findings (open-q #17 / B300):
 - `air run --override compute.accelerator_type=... mlflow_run_name=...` works as advertised.
 - H100 capacity on e2-demo-field-eng: instantly scheduled (2026-07-22, ~00:25 UTC).
 
+#### Multi-node probe — RESULTS (2026-07-22, e2-demo-field-eng, 2×8xH100, run 505819227973807)
+
+✅ SUCCESS, 34s total node time (~40s submit→running for 2 nodes on-demand). Files:
+`multinode/{probe_multinode.sh,allreduce_probe.py}` + `workloads/multinode-probe.example.yaml`.
+
+- **Multinode is live**: silently PuPr'd 2026-07-17 (Ben Hansen, #research-on-air) — the field guide
+  (updated May 17) and public docs still say Private Preview; [the customer]'s [customer contact] hit that doc lag
+  2026-07-22 (#[the customer]-model-training-gpu-blocker). Shapes: multiples of 8xH100 only; guide says max
+  16 nodes / 128 GPUs, sweet spot 3–8 nodes, AWS-only.
+- **RDMA path confirmed end-to-end**: aws-ofi-nccl 1.15.0 over EFA (`efa-direct`, 32 NICs/node),
+  GPUDirect RDMA (`GDRDMA`) inter-node channels, NVLS/NVLink intra-node. NCCL 2.26.2.
+- **Bandwidth**: 256MB all_reduce across 16 ranks / 2 nodes: 1.4 ms/iter, algbw 191 GB/s,
+  busbw ~359 GB/s — near the p5's 3.2 Tbps (400 GB/s) EFA line rate.
+- **torchrun just works** on the snapshot path via injected env (open-q #3 closed) — no Docker needed.
+- Schema quirks: `environment.version` requires a `dependencies` list (use `[]`); torch preinstalled.
+- CLI log stream shows node 0 only; `air logs <run> --node 1` for others.
+
+This closes the "can we even do multi-node" question for the LLM ladder — rung 3 (16xH100 FSDP)
+is unblocked; next missing piece is just `train_fsdp.py`.
+
 #### AIR CLI schema findings (v0.1.0, verified via --dry-run 2026-07-17)
 
 - `environment.env_variables` **rejected** ("Unknown field"; only dependencies/docker_image/version).
