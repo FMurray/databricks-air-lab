@@ -88,14 +88,29 @@ if it generalizes, promote to `docs/` with the ✅ annotation → if it answers 
 
 - [ ] Success criteria + expected evidence written in NOTES.md
 - [ ] Probe asserts its claim and prints a distinctive sentinel
+- [ ] Local pre-flight where feasible (single-process/CPU mode) — archive its output next to the
+      probe (`preflight-<date>.log`), don't just quote it
+- [ ] **COMMIT the criteria, probe, and any pre-registered constants BEFORE `air run`.** This is
+      the enforcement mechanism for pre-registration: an end-of-session commit cannot prove the
+      prediction preceded the run. (Fallback if you forgot: the workspace snapshot tarball at
+      `/Workspace/<user>/.air/repo_snapshots/...` has a server-side `created_at` and contains the
+      exact code that ran — `databricks workspace get-status` + export it. Use it as recovery,
+      not as the plan.)
 - [ ] Smallest sufficient shape; short `timeout_minutes`; `max_retries: 0` unless testing retries
 - [ ] No unfiltered `env` dumps in `command`
 - [ ] Dry-run (`air run --dry-run`) passed
 
 ## Post-run checklist
 
-- [ ] Raw log archived as `run-<id>.log` in the experiment dir (all nodes if multi-node)
+- [ ] Raw log archived as `run-<id>.log` in the experiment dir; multi-node: every node
+      (`air logs <id> --node N > run-<id>.nodeN.log`)
 - [ ] Claim→evidence mapping in NOTES.md; numbers labeled measured/derived/inferred
+- [ ] Tool versions recorded in the results entry (`air --version`, plus torch/NCCL from the log)
 - [ ] ✅ annotations with date + run id + workspace on anything promoted to docs/ or open-qs
 - [ ] Example YAML updated with any schema/behavior quirks discovered
 - [ ] Committed (git log is the lab notebook)
+
+The standard applies to process claims too: "this followed the skill" needs the same receipts —
+a pre-run commit hash, archived pre-flight output, all-node logs. If audited and a gap exists,
+say so plainly, recover what's recoverable (snapshot tarball, workspace timestamps), and patch
+the checklist so the gap is structural-proof next time.

@@ -38,4 +38,34 @@ Status 2026-07-22: scaffolded, nothing launched.
 
 ## Findings
 
-(none yet — fill in per run, verified facts move to docs/)
+### Exec probe ✅ VERIFIED 2026-07-22, run 93215537511850, e2-demo-field-eng
+1xA10, env image "4", air CLI v0.1.0, snapshot code source. Raw log: `run-93215537511850.log`.
+Scope caveat: measured on e2-demo-field-eng only — the fevm run's output was unretrievable
+(see log-capture finding below), so none of these claims are established for fevm nodes yet.
+
+| Claim | Evidence (run-93215537511850.log) | Status |
+|---|---|---|
+| Snapshot preserves git +x bit; scripts exec in place | `PROBE:snapshot_script_exec=ok` (no chmod needed) | measured |
+| ELF binaries exec from snapshot mount (rw overlay, no noexec) | `PROBE:snapshot_binary_exec=ok`, `PROBE:snapshot_mount=rw,relatime,…overlaybd…` | measured |
+| /tmp allows binary exec | `PROBE:tmp_binary_exec=ok` | measured |
+| **JRE already present on standard env** (open-q #6) | `PROBE:java=/usr/bin/java` — version not captured, probe updated to grab it next run | measured (presence only) |
+| gcc present (open-q #6) | `PROBE:gcc=/usr/bin/gcc` | measured (presence only) |
+| Target ABI: Ubuntu 24.04.4, glibc 2.39 | `PROBE:os=…24.04.4 LTS`, `PROBE:glibc=…2.39` | measured |
+| Egress to Maven Central + Adoptium | `PROBE:egress:…maven…=200`, `…adoptium…=200` | measured |
+| 16 vCPU on the 1xA10 node shape | `PROBE:nproc=16` | measured |
+
+Ladder consequence: step 0 fully green on field-eng — step 1 (DJL) is unblocked, and a system
+JRE may make the portable-JRE download unnecessary (branch on `PROBE:java_version` next run).
+
+### Log-capture gap on fevm-forrest-aws-stable — run 938962751074433, 2026-07-22
+Identical YAML, same day, air v0.1.0. Job `SUCCESS`, 62s execution, MLflow **system metrics
+delivered** (CPU/disk/GPU gauges present on run fdbe1f21401a403ba65eb72eadfe3c08) — but stdout
+is unretrievable by all three documented channels: `air logs` streaming ("No logs available"),
+`air logs --download-to` (hangs), MLflow artifacts (empty ~40 min post-run), Jobs API
+(metadata only for gen_ai_compute_task). Raw submission log: `run-938962751074433.log`.
+Control: the same YAML on e2-demo-field-eng streamed live and landed logs (run above), and the
+2026-07-16 Docker-path baseline (run 37776040541298) still has its `logs/` artifacts.
+**Inferred**: workspace-specific log-capture defect on fevm (snapshot path exonerated by the
+control; alternative not excluded: a fevm↔field-eng rollout-version difference that will also
+hit other new workspaces — worth #ai-runtime-oncall either way, [the customer] UAT depends on log
+delivery). Status: reported to nobody yet — escalate.
