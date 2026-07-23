@@ -32,10 +32,11 @@ scripts/assets referenced by relative path.
 
 ## Conventions
 
-- **Every claim gets a receipt — no exceptions.** Product is Preview/Beta; docs lag; findings feed
-  a live customer engagement. A result is "verified" only with run id + workspace + date, quoted
-  primary evidence, and the raw log archived as `run-<id>.log` in the experiment dir. Full
-  standard (assertion-based probes, measured/derived/inferred labeling, known observation traps,
+- **Show, don't characterize — every result claim carries its receipt.** Product is Preview/Beta;
+  docs lag; findings feed a live customer engagement. A result is "verified" only with run id +
+  workspace + date and the quoted output that backs it; MLflow (local, synced to managed) is the
+  evidence layer for raw output — the repo commits code, predictions, and conclusions, not data.
+  Full standard (assertion-based probes, measured/derived/inferred labeling, observation traps,
   pre/post-run checklists): `.claude/skills/experiment-verification/SKILL.md`.
 - Workload YAMLs: `workloads/*.example.yaml` are committed templates; live copies (workspace
   specifics) are gitignored siblings without `.example`.
