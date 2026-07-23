@@ -9,12 +9,9 @@ environment:
     # tabicl.train is packaged, so a git install is enough — no repo checkout needed.
     # [pretraining] extra pulls transformers/xgboost/wandb (wandb disabled via env below).
     - "tabicl[pretraining] @ git+https://github.com/soda-inria/tabicl"
-  env_variables:
-    WANDB_MODE: disabled
-    NPROC_PER_NODE: "1"
-    MAX_STEPS: "100"
-    N_JOBS: "8"          # CPU prior-gen workers per rank; tune against GPU util
-    # CKPT_DIR: /Volumes/<catalog>/<schema>/<volume>/tabicl-pol   # for restart tests
+  # env_variables rejected by air v0.1.0 schema — knobs passed inline in `command` instead:
+  #   NPROC_PER_NODE / MAX_STEPS / N_JOBS (prior-gen CPU workers per rank; tune vs GPU util)
+  #   CKPT_DIR=/Volumes/<catalog>/<schema>/<volume>/tabicl-pol for restart tests
 
 compute:
   num_accelerators: 1
@@ -23,13 +20,13 @@ compute:
 code_source:
   type: snapshot
   snapshot:
-    root_path: .
+    root_path: ..    # relative to THIS YAML's directory, not CWD (verified 2026-07-17)
     include_paths:
       - experiments/foundation-models/tabicl/
 
-command: bash $CODE_SOURCE_PATH/experiments/foundation-models/tabicl/pol_stage1_smoke.sh
+command: NPROC_PER_NODE=1 MAX_STEPS=100 N_JOBS=8 bash $CODE_SOURCE_PATH/experiments/foundation-models/tabicl/pol_stage1_smoke.sh
 
 max_retries: 0            # PoL: fail loud; bump for restart-semantics test (open-q #10)
 timeout_minutes: 60
-usage_policy_name: air-lab
+# usage_policy_name: air-lab   # must exist in target workspace or validation fails
 mlflow_run_name: tabicl-pol-stage1-smoke

@@ -61,8 +61,8 @@ experiment_name: my-training
 environment:
   version: "4"
   dependencies: [torch, transformers]   # or -r requirements.txt / wheels / pip flags
-  env_variables: {BATCH_SIZE: "32"}
-  secrets: {HF_TOKEN: my_scope/hf_token}
+  env_variables: {BATCH_SIZE: "32"}     # ⚠ REJECTED by air v0.1.0 ("Unknown field", verified 2026-07-17) — inline env in `command` instead
+  secrets: {HF_TOKEN: my_scope/hf_token}  # unverified against v0.1.0 schema
   # OR docker_image: {url: docker.io/org/img:tag}   # excludes dependencies/version
 compute:
   num_accelerators: 16            # whole-node multiples for multi-GPU types
@@ -70,6 +70,7 @@ compute:
 code_source:
   type: snapshot
   snapshot: {root_path: ., git: {branch: main, remote: true}, include_paths: [src/]}
+  # root_path resolves relative to the YAML file's directory, not CWD (verified 2026-07-17)
 command: torchrun --nproc_per_node=8 $CODE_SOURCE_PATH/train.py
 parameters: {training: {batch_size: 32}}
 max_retries: 2
