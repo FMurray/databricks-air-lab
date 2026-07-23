@@ -48,18 +48,27 @@ dev-on-CPU-first discipline is a [the customer] operating-model theme; A10 is th
 
 ## 4. Multi-language (Java/JVM, non-Python)
 
-**Fit: not first-class.** Python-only env model and distributed API. Two escape hatches, both CLI-only:
+**Fit: not first-class.** Python-only env model and distributed API. Three escape hatches, all CLI-only:
 
 1. `command` is arbitrary bash → anything the base env can run.
 2. Custom Docker image (Beta) → bring a JVM + your jar. Constraints: Docker Hub only, <20 GB, no
-   `dependencies`/`version` alongside, `WORKDIR` ignored.
+   `dependencies`/`version` alongside, `WORKDIR` ignored. **Beta status rules this out for
+   customers that can't adopt pre-GA features.**
+3. **Prebuilt self-contained artifacts via snapshot/UC volume** (GA surface only): portable
+   jlink JRE + fat jar, GraalVM native-image binaries, or `zig cc` cross-compiled tools —
+   executed from `command`. Depends on exec permissions of the snapshot mount (probe first);
+   security tradeoff: unscanned binaries. See `experiments/multi-language/NOTES.md` (the ladder).
 
 **What's lost outside Python:** `@distributed`, `serverless_gpu.data.UCVolumeDataset`, automatic MLflow
 integration, Spark Connect ergonomics. A Java DL4J/Spark-based trainer gets raw GPUs + bash, nothing more.
 
 **Test plan (`experiments/multi-language/`):**
-- [ ] Plain `command: java -jar ...` on Standard env — is a JRE even present? (likely not → Docker path)
-- [ ] Custom image with Temurin JDK + CUDA libs; verify GPU visibility from JVM (JCuda/DJL smoke test)
+- [ ] Exec probe: snapshot mount noexec? +x preserved? glibc? egress to Maven/Adoptium?
+      (`workloads/exec-probe.example.yaml`)
+- [ ] Plain `command: java -jar ...` on Standard env — is a JRE even present? (probe answers this)
+- [ ] Portable Temurin JRE + DJL fat jar via snapshot; verify GPU visibility from JVM
+      (`workloads/djl-train.example.yaml`)
+- [ ] GraalVM native-image of the DJL trainer (stretch — JNI metadata for runtime libtorch loading)
 - [ ] UC data access from Java: Spark Connect Scala/Java client? UC volume FUSE path visibility?
 - [ ] MLflow tracking from Java client against workspace tracking server
 - [ ] Multi-node coordination without `@distributed` — env vars available to `command` for rank/world-size?

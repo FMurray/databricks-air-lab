@@ -70,3 +70,64 @@ HF hub; `n_estimators`, `batch_size`, `offload_mode="auto"` are the memory lever
 Notes: datasets via `sklearn.fetch_openml` (egress from AIR assumed OK per zerobus finding, open-q #7b —
 verify openml.org specifically); switch to Delta/UC tables when the pilot wants customer-shaped data;
 all three log to the auto-created MLflow run when available and degrade to stdout locally.
+
+#### Sprawl bench — RESULTS (2026-07-17, e2-demo-field-eng, GPU_1xA10, run 949450981660633)
+
+✅ SUCCESS end-to-end, **194s total** (env build 10s). Egress to openml.org AND HF hub works from
+inside the workload (open-q #7b reinforced). MLflow run: experiment 4392293921068480,
+run 8b80195159e24fb7bdbd903299923cb5.
+
+| dataset | n_train | feats | TabICL AUC (s) | XGB default AUC (s) | XGB tuned AUC (s) |
+|---|---|---|---|---|---|
+| bank-marketing | 30,000 | 16 | **0.9420** (20.4s) | 0.9289 (0.1s) | 0.9336 (22.4s) |
+| churn | 4,000 | 20 | **0.9270** (1.1s) | 0.9202 (0.1s) | 0.9188 (12.4s) |
+| credit-g | 800 | 20 | 0.8446 (1.6s) | 0.8105 (0.1s) | **0.8538** (7.3s) |
+| adult | 30,000 | 14 | 0.9254 (7.5s) | 0.9263 (0.1s) | **0.9269** (20.2s) |
+| click-prediction | 30,000 | 9 | 0.6857 (6.5s) | 0.6758 (0.1s) | **0.6921** (23.5s) |
+
+Read: zero-tuning TabICL beats tuned XGBoost on 2/5, ties 1, narrowly loses 2 — with no per-task
+pipeline. GPU peak **10.4 GB at 30K rows × 16 features** on the 24GB A10 → memory-bound confirmed;
+30K×100-feature tasks will need H100 (mem probe next). Node GPU-util metric read 0% throughout
+(sampling artifact? forward passes are seconds long) — don't trust that gauge for short jobs.
+
+#### Memory probe — RESULTS (2026-07-22, e2-demo-field-eng, 100 synthetic features, n_estimators=8)
+
+H100 run 1022517780681952 (SUCCESS, 837s) · A10 run via `--override compute.accelerator_type`
+(FAILED at 200K — see below). MLflow experiment 3794164435314621.
+
+| rows | A10 24GB peak (wall) | H100 80GB peak (wall) |
+|---|---|---|
+| 1K | 4.1 GB (18s incl. ckpt dl) | 4.2 GB (12s) |
+| 5K | 9.7 GB (3s) | 9.7 GB (2s) |
+| 10K | 14.5 GB (6s) | 16.7 GB (2s) |
+| 25K | 17.9 GB (13s) | 37.6 GB (5s) |
+| 50K | 22.4 GB (28s) | 54.4 GB (10s) |
+| 100K | 12.5 GB (114s) ← self-chunking kicks in | 64.6 GB (23s) |
+| 200K | **KILLED — host-RAM OOM (exit 137)** | 41.8 GB (97s) ← self-chunking |
+| 400K | — | 40.3 GB (225s) |
+| 600K | — | **44.2 GB (422s) — no OOM** |
+
+Findings (open-q #17 / B300):
+- **Inference does NOT need B300.** TabICL v2 completes 600K×100 on one H100; above ~100K rows it
+  self-manages memory (chunk/offload), trading wall time (~7 min at 600K) for footprint. It never
+  hit torch CUDA OOM on either card.
+- **The A10 death was HOST RAM, not GPU RAM**: exit 137 (OOM-killer SIGKILL, no traceback) at 200K
+  rows — the 1xA10 node's CPU memory is the binding constraint for the offload path. Sharp edge for
+  right-sizing guidance: "A10 to ~50K×100 in-GPU / ~100K chunked; beyond that, H100 or fail weird."
+- A10 sweet spot confirmed: ≤50K rows × 100 feats fits in 24GB in-GPU; sub-30s.
+- GPU-util gauge is real (pegged 99–100% on big rungs); 0% readings on short jobs are sampling misses.
+- Remaining B300 question is now **pretraining-side only** (stage-3 60K-row context, FA3, float32) —
+  PoL rung 4, not inference.
+- `air run --override compute.accelerator_type=... mlflow_run_name=...` works as advertised.
+- H100 capacity on e2-demo-field-eng: instantly scheduled (2026-07-22, ~00:25 UTC).
+
+#### AIR CLI schema findings (v0.1.0, verified via --dry-run 2026-07-17)
+
+- `environment.env_variables` **rejected** ("Unknown field"; only dependencies/docker_image/version).
+  Docs lag. Workaround: inline env in `command` (`HF_HOME=/tmp/hf python …`). `secrets` unverified.
+- `code_source.snapshot.root_path` resolves **relative to the YAML file's directory**, not CWD —
+  YAMLs in `workloads/` need `root_path: ..`.
+- `usage_policy_name` referencing a nonexistent policy fails validation (e2-demo-field-eng has no
+  `air-lab` policy) — omit unless the workspace has one (open-q #5 still open).
+- Submit = `air run -f <yaml> [-p profile] [--watch|--dry-run]`; `--dry-run` does full validation
+  incl. workspace API calls — use it always.

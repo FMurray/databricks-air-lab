@@ -1,0 +1,27 @@
+# Polyglot ladder step 1: DJL (Java) MNIST training on GPU via portable JRE — no Docker.
+# Prereqs: run exec-probe first; build the fat jar locally (gradle shadowJar).
+experiment_name: air-lab-djl-train
+
+environment:
+  version: "4"
+  dependencies: []   # schema: version requires an inline dependencies list (air v0.1.0)
+
+compute:
+  num_accelerators: 1
+  accelerator_type: GPU_1xA10   # smoke on A10; H100 once green
+
+code_source:
+  type: snapshot
+  snapshot:
+    root_path: ..
+    include_paths:
+      - experiments/multi-language/djl-train/build/libs/
+      - experiments/multi-language/djl-train/run_djl.sh
+
+# Env inline in command (env_variables rejected by air v0.1.0 schema).
+# For the no-egress path, stage a JRE in a UC volume and prepend: JRE_TARBALL=/Volumes/...
+command: EPOCHS=2 bash $CODE_SOURCE_PATH/experiments/multi-language/djl-train/run_djl.sh
+
+max_retries: 0
+timeout_minutes: 60
+mlflow_run_name: djl-train-smoke

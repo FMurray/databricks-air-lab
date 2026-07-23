@@ -1,0 +1,27 @@
+// DJL MNIST trainer — polyglot ladder step 1.
+// Build the fat jar locally (needs JDK 17+): gradle shadowJar
+// NOTE: verify latest DJL BOM version before building; 0.30.0 is a from-memory pin.
+plugins {
+    id 'java'
+    id 'com.github.johnrengelman.shadow' version '8.1.1'
+}
+
+java {
+    toolchain { languageVersion = JavaLanguageVersion.of(17) }
+}
+
+repositories { mavenCentral() }
+
+dependencies {
+    implementation platform('ai.djl:bom:0.30.0')
+    implementation 'ai.djl:api'
+    implementation 'ai.djl:basicdataset'
+    implementation 'ai.djl:model-zoo'
+    runtimeOnly 'ai.djl.pytorch:pytorch-engine'
+    // DJL resolves the CUDA libtorch native lib at runtime (needs egress on the node).
+    // To vendor instead (no-egress path), uncomment with the matching version/classifier:
+    // runtimeOnly 'ai.djl.pytorch:pytorch-native-cu124::linux-x86_64'
+    runtimeOnly 'org.slf4j:slf4j-simple:2.0.13'
+}
+
+jar { manifest { attributes 'Main-Class': 'lab.TrainMnist' } }
