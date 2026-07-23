@@ -161,7 +161,9 @@ Two assertion-gated proofs on 2×8xH100; the run succeeds iff rank 0 prints all 
 Local pre-flight (single-process CPU, this Mac): `LOCAL_VERIFY_OK checksum=3093 grad_diff=1.610e-14`.
 
 **RESULTS — ✅ VERIFIED 2026-07-22, run 723000000990125, e2-demo-field-eng, 55s total.**
-Raw log: `multinode/run-723000000990125.log`. Claim→evidence:
+Raw evidence: job run 723000000990125 (retrieve: `air logs 723000000990125 [--node 1] -p
+e2-demo-field-eng`; logs not committed by policy — see experiment-verification skill).
+Line refs below are into the node-0 log. Claim→evidence:
 
 | Claim | Evidence (log line) |
 |---|---|
@@ -178,13 +180,15 @@ so the cluster could not have "learned" the answer from the code path that produ
 skill" was itself audited. Verifiable: pre-registration ordering is attested server-side — the
 submit-time snapshot tarball (`.air/repo_snapshots/databricks-air-lab_20260722_210449.tar.gz`,
 workspace `created_at` 1784768690197 = 01:04:50 UTC) contains `EXPECTED_CHECKSUM = 3093.0`
-(line 35), and the run emitted the matching result at 01:06:37 UTC. Gaps found and fixed:
-(1) work was committed only AFTER the run, so git couldn't prove criteria preceded submission —
-skill now requires a pre-run commit; (2) node-1 logs weren't archived — now
-`run-<id>.node1.log` for both runs; (3) pre-flight output archived (`preflight-20260722.log`,
-re-executed — labeled as such); (4) versions: air CLI v0.1.0; NCCL 2.26.2+cuda12.2 (run logs); runtime torch version NOT
+(line 35), and the run emitted the matching result at 01:06:37 UTC. Gaps found and addressed:
+(1) evidence-ordering: the snapshot tarball's server-side timestamp is the pre-registration
+mechanism (automatic on every submit; pre-run commits optional); (2) node-1 checked for both
+runs (`air logs <id> --node 1`); (3) pre-flight re-executed 2026-07-22, output verbatim:
+`LOCAL_VERIFY_OK checksum=3093 grad_diff=1.610e-14` (cmd: `python3 distributed_correctness_probe.py --local`);
+(4) versions: air CLI v0.1.0; NCCL 2.26.2+cuda12.2 (run logs); runtime torch version NOT
 captured — neither probe prints it, a gap to close in future probes; local pre-registration
-used torch 2.13.0 CPU.
+used torch 2.13.0 CPU. Policy decision 2026-07-22: raw logs are NOT committed to the repo
+(anonymization + evidence-strength rationale in the skill); platform holds raw evidence.
 
 #### AIR CLI schema findings (v0.1.0, verified via --dry-run 2026-07-17)
 
