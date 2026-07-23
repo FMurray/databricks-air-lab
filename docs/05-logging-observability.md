@@ -15,6 +15,11 @@ Every `air run` submission = **one Databricks job run + one MLflow run**, linked
 
 ## Where the bytes go
 
+⚠️ Not universal: on fevm-forrest-aws-stable, run 938962751074433 (2026-07-22) delivered NO
+stdout via any channel below despite SUCCESS + system metrics flowing (identical YAML worked on
+e2-demo-field-eng, run 93215537511850). Verify log delivery per workspace before relying on it —
+see experiments/multi-language/NOTES.md.
+
 stdout/stderr of your `command` is captured by the **SGC launcher** and lands in three places:
 1. Live streaming: `air logs <run-id>` (node 0), `--node N` for others, `--download-to DIR` for files.
 2. **MLflow artifacts**: `logs/node_N/logs-N.chunk.txt` (your output, chunked) +

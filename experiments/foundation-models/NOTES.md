@@ -174,6 +174,18 @@ grad diff 6.1e-16 = measured (order-of-summation noise at fp64 machine epsilon).
 computed on a MacBook via the colsum·rowsum identity BEFORE submission (see pre-registration above),
 so the cluster could not have "learned" the answer from the code path that produced the reference.
 
+**Process-evidence audit (self-applied, 2026-07-22).** The claim "this followed the verification
+skill" was itself audited. Verifiable: pre-registration ordering is attested server-side — the
+submit-time snapshot tarball (`.air/repo_snapshots/databricks-air-lab_20260722_210449.tar.gz`,
+workspace `created_at` 1784768690197 = 01:04:50 UTC) contains `EXPECTED_CHECKSUM = 3093.0`
+(line 35), and the run emitted the matching result at 01:06:37 UTC. Gaps found and fixed:
+(1) work was committed only AFTER the run, so git couldn't prove criteria preceded submission —
+skill now requires a pre-run commit; (2) node-1 logs weren't archived — now
+`run-<id>.node1.log` for both runs; (3) pre-flight output archived (`preflight-20260722.log`,
+re-executed — labeled as such); (4) versions: air CLI v0.1.0; NCCL 2.26.2+cuda12.2 (run logs); runtime torch version NOT
+captured — neither probe prints it, a gap to close in future probes; local pre-registration
+used torch 2.13.0 CPU.
+
 #### AIR CLI schema findings (v0.1.0, verified via --dry-run 2026-07-17)
 
 - `environment.env_variables` **rejected** ("Unknown field"; only dependencies/docker_image/version).
