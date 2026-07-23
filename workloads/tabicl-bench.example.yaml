@@ -7,8 +7,7 @@ environment:
     - tabicl          # PyPI release is fine for inference; checkpoint pulls from HF hub
     - xgboost
     - tabulate        # pandas.to_markdown
-  env_variables:
-    HF_HOME: /tmp/hf
+  # env_variables rejected by air v0.1.0 schema — set env inline in `command`
 
 compute:
   num_accelerators: 1
@@ -17,13 +16,13 @@ compute:
 code_source:
   type: snapshot
   snapshot:
-    root_path: .
+    root_path: ..    # relative to THIS YAML's directory, not CWD (verified 2026-07-17)
     include_paths:
       - experiments/foundation-models/tabicl/
 
-command: python $CODE_SOURCE_PATH/experiments/foundation-models/tabicl/bench_sprawl.py
+command: HF_HOME=/tmp/hf python $CODE_SOURCE_PATH/experiments/foundation-models/tabicl/bench_sprawl.py
 
 max_retries: 0
 timeout_minutes: 120
-usage_policy_name: air-lab
+# usage_policy_name: air-lab   # must exist in target workspace or validation fails
 mlflow_run_name: tabicl-sprawl-bench

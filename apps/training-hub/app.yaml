@@ -1,0 +1,7 @@
+command: ["streamlit", "run", "app.py"]
+
+env:
+  - name: HUB_WAREHOUSE_HTTP_PATH
+    value: ""   # /sql/1.0/warehouses/<id> — required for the Fleet usage panel
+  - name: HUB_TEAMS_CONFIG
+    value: "config/teams.yaml"
