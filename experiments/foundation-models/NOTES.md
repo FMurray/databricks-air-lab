@@ -141,6 +141,39 @@ Findings (open-q #17 / B300):
 This closes the "can we even do multi-node" question for the LLM ladder — rung 3 (16xH100 FSDP)
 is unblocked; next missing piece is just `train_fsdp.py`.
 
+#### Distributed correctness probe — pre-registered success criteria (written BEFORE submit, 2026-07-22)
+
+File: `multinode/distributed_correctness_probe.py` (+ `workloads/multinode-correctness.example.yaml`).
+Two assertion-gated proofs on 2×8xH100; the run succeeds iff rank 0 prints all three sentinels:
+
+1. `PROOF1_MATMUL_EXACT_OK` — 16 ranks each compute a distinct formula-derived integer matmul
+   shard (A_r: 4096×1024 @ B_r: 1024×4096, fp64-exact); all-reduced sum must (a) equal the
+   **pre-registered checksum 3093** computed on a MacBook (torch 2.13.0 CPU) via the independent
+   colsum·rowsum identity BEFORE the run, and (b) match rank 0's full single-GPU reference
+   **bit-for-bit** (`torch.equal`). Per-rank partial sums are all distinct/nonzero
+   (-1108, 4180, -5079, 6135, 3040, 3061, 6113, -5093, 4157, -1072, -3083, -2063, 2039, -8168,
+   2047, -2013 → Σ=3093), so a missing/duplicated/wrong rank provably changes the total.
+2. `PROOF2_GRAD_PARITY_OK` — per-rank MSE gradients on distinct data shards, all-reduce-averaged,
+   must match rank 0's single-process gradient over the full global batch (8,192 rows) to <1e-9
+   (fp64). Local CPU pre-flight measured 1.6e-14.
+3. `DISTRIBUTED_CORRECTNESS_OK` — both proofs passed + barrier.
+
+Local pre-flight (single-process CPU, this Mac): `LOCAL_VERIFY_OK checksum=3093 grad_diff=1.610e-14`.
+
+**RESULTS — ✅ VERIFIED 2026-07-22, run 723000000990125, e2-demo-field-eng, 55s total.**
+Raw log: `multinode/run-723000000990125.log`. Claim→evidence:
+
+| Claim | Evidence (log line) |
+|---|---|
+| 16 GPUs computed 16 distinct exact matmul shards; all-reduce produced the pre-registered off-cluster checksum AND matched a single-GPU reference bit-for-bit | L1470: `PROOF1_MATMUL_EXACT_OK checksum=3093 (pre-registered match, bit-exact vs reference, 9.7s)` — assertion-gated, unreachable on any mismatch |
+| Data-parallel gradient averaging across 2 nodes = single-process gradient over the full 8,192-row batch | L1485: `PROOF2_GRAD_PARITY_OK max_abs_diff=6.106e-16 over 9352 params` (measured; fp64; tolerance was 1e-9) |
+| Both proofs + barrier completed | L1496: `DISTRIBUTED_CORRECTNESS_OK`; L1504: `Job status: SUCCESS` |
+
+Epistemic labels: checksum/bit-exactness = measured-exact (integer arithmetic, no tolerance);
+grad diff 6.1e-16 = measured (order-of-summation noise at fp64 machine epsilon). The checksum was
+computed on a MacBook via the colsum·rowsum identity BEFORE submission (see pre-registration above),
+so the cluster could not have "learned" the answer from the code path that produced the reference.
+
 #### AIR CLI schema findings (v0.1.0, verified via --dry-run 2026-07-17)
 
 - `environment.env_variables` **rejected** ("Unknown field"; only dependencies/docker_image/version).
