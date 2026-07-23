@@ -20,6 +20,10 @@ Product & platform (verify against a real workspace, not docs):
 4. Reserved pool vs on-demand: how does a workload target the pool? Is it implicit per-workspace?
 5. `usage_policy_name`: what actually lands in system.billing.usage — does it give any attribution inside a reserved pool?
 6. Standard env contents: is there a JRE? gcc? What's on PATH? (matters for multi-language)
+   ✅ PARTIALLY ANSWERED 2026-07-22, run 93215537511850, e2-demo-field-eng (env image "4"):
+   JRE at /usr/bin/java and gcc at /usr/bin/gcc both present (versions not yet captured);
+   Ubuntu 24.04.4, glibc 2.39; snapshot mount is rw + exec (git +x preserved); egress to
+   Maven Central/Adoptium open. See experiments/multi-language/NOTES.md for receipts.
 7. Docker path: how does `air register image` auth to Docker Hub? Private repos? Scan/allowlist step?
    ✅ ANSWERED (docs): per-user per-tag registration (2–6 min, pulls+caches); private via Docker Hub PAT
    (`docker login` / `--interactive-authenticate` / `--scope`+`--key` secret). No scan/allowlist documented.
