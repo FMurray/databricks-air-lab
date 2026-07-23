@@ -1,10 +1,5 @@
 """airtel — OTEL telemetry for Databricks AIR workloads via Zerobus OTLP.
 
-PORTABILITY COPY: the canonical module lives at utils/telemetry/airtel.py in the
-databricks-air-lab repo — inside that repo, REUSE the module (include_paths +
-PYTHONPATH), do not copy this file. Copy this only when working outside the repo,
-and keep it in sync with the canonical version.
-
 Copy this file next to your training code and call `airtel.init(service_name=...)` once at
 startup. It wires: stdlib-logging → OTLP logs, a meter for custom metrics, per-GPU NVML gauges
 (graceful no-op off-GPU), requester identity (resource attrs + baggage → per-record attrs).

@@ -1,0 +1,27 @@
+# Multi-node NCCL probe (open-q #2 scheduling, #3 env plumbing, RDMA bandwidth).
+# Multinode silently PuPr'd 2026-07-17 (#research-on-air); multiples of 8xH100 only per
+# #ai-air-product-champions 2026-07-22 — the A10 override below tests whether that's enforced.
+# H100:  as-is (2 nodes × 8xH100).
+# A10:   --override compute.accelerator_type=GPU_1xA10 compute.num_accelerators=2
+experiment_name: air-lab-multinode-probe
+
+environment:
+  version: "4"
+  dependencies: []   # schema: version requires dependencies; torch is preinstalled
+
+compute:
+  num_accelerators: 16
+  accelerator_type: GPU_8xH100
+
+code_source:
+  type: snapshot
+  snapshot:
+    root_path: ..    # relative to THIS YAML's directory, not CWD
+    include_paths:
+      - experiments/foundation-models/multinode/
+
+command: bash $CODE_SOURCE_PATH/experiments/foundation-models/multinode/probe_multinode.sh
+
+max_retries: 0
+timeout_minutes: 30
+mlflow_run_name: multinode-probe
