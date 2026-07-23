@@ -25,14 +25,18 @@ scripts/assets referenced by relative path.
 
 | Skill | Use when |
 |---|---|
+| `experiment-verification` | **BEFORE any `air run` and before writing results into NOTES.md/docs/** — evidence standards, receipts, archiving, promotion pipeline |
 | `air-otel-telemetry` | wiring logs/metrics/GPU telemetry from AIR workloads into Delta via Zerobus OTLP; debugging "export OK but zero rows" |
 
 (Add new skills for any procedure you had to figure out twice.)
 
 ## Conventions
 
-- **Verify hands-on before asserting.** Product is Preview/Beta; docs lag. When you verify
-  something, annotate it in `docs/` with the date and run id (see existing annotations).
+- **Every claim gets a receipt — no exceptions.** Product is Preview/Beta; docs lag; findings feed
+  a live customer engagement. A result is "verified" only with run id + workspace + date, quoted
+  primary evidence, and the raw log archived as `run-<id>.log` in the experiment dir. Full
+  standard (assertion-based probes, measured/derived/inferred labeling, known observation traps,
+  pre/post-run checklists): `.claude/skills/experiment-verification/SKILL.md`.
 - Workload YAMLs: `workloads/*.example.yaml` are committed templates; live copies (workspace
   specifics) are gitignored siblings without `.example`.
 - Experiments: one dir per family under `experiments/`, findings in its `NOTES.md`; facts that

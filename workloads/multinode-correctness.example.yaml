@@ -1,0 +1,29 @@
+# Distributed correctness probe: exact sharded matmul (pre-registered checksum) +
+# data-parallel gradient parity, 2×8xH100. Success = DISTRIBUTED_CORRECTNESS_OK from rank 0.
+# Success criteria + pre-registered values: experiments/foundation-models/NOTES.md (2026-07-22).
+experiment_name: air-lab-multinode-correctness
+
+environment:
+  version: "4"
+  dependencies: []   # torch preinstalled
+
+compute:
+  num_accelerators: 16
+  accelerator_type: GPU_8xH100
+
+code_source:
+  type: snapshot
+  snapshot:
+    root_path: ..    # relative to THIS YAML's directory, not CWD
+    include_paths:
+      - experiments/foundation-models/multinode/
+
+command: >-
+  torchrun --nnodes=$NUM_NODES --node_rank=$NODE_RANK
+  --master_addr=$MASTER_ADDR --master_port=$MASTER_PORT
+  --nproc_per_node=$LOCAL_WORLD_SIZE
+  $CODE_SOURCE_PATH/experiments/foundation-models/multinode/distributed_correctness_probe.py
+
+max_retries: 0
+timeout_minutes: 20
+mlflow_run_name: multinode-correctness
