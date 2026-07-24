@@ -62,6 +62,13 @@ network posture better than our open sandboxes). Profile: `mkazia-lw2`. Catalog:
    plane); nothing is user-fixable. Until then: use **MLflow params/metrics as the receipt
    channel** (tracking API is healthy) and wrap any artifact/storage call in a
    `signal.alarm` timeout so runs fail fast instead of hanging to TIMEDOUT.
+   **Plane differential (driver run 819191474863053, CPU serverless notebook):**
+   root-storage TCP 443 connects ✅ from the CPU serverless plane but not from GPU nodes —
+   the breakage is **specific to the Gen AI (GPU) data plane's egress config**, which is why
+   notebooks behave normally while every AIR run is log-less. And `pypi.org` fails with DNS
+   `Temporary failure in name resolution` (CPU plane too) → the pip blocker is an egress/DNS
+   allowlist, not a bucket policy. Point the fix at: GPU-plane egress → workspace root
+   storage, plus DNS/egress allowlist for PyPI on both planes.
 
 ## Deploy procedure (per workspace)
 
