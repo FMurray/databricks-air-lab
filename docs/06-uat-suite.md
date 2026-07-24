@@ -46,18 +46,22 @@ network posture better than our open sandboxes). Profile: `mkazia-lw2`. Catalog:
 2. **Service principal**: SCIM create is admin-only; SPs from other workspaces are
    `invalid_client` here. Blocks #2 auth. Secret scope `air_lab` is ready to receive creds.
 3. **Enable Databricks Apps** for the org. Blocks #7.
-4. **pip dependencies broken in GPU env build**: `environment.dependencies: [emoji]` +
-   `python -c "import emoji"` fails (run 219665188914633) while the identical no-deps command
-   succeeds (983297781679761). Likely PyPI egress blocked from the hardened network. Blocks
-   every deps-carrying workload: gpu-burn(+NVML), xgboost, tabicl, vllm, lora. Fix is
-   admin/network-side; workaround candidates: none good user-side (vendoring wheels via UC
-   volume requires a working volume — see ask #1).
-5. **Log delivery broken for AIR runs**: zero MLflow log artifacts and `air logs` returns
-   "No logs available" on ALL runs including successes (exec-probe 903444851308928, multinode
-   128835177125736; ~20+ min after completion). Same class of issue previously seen on one
-   other workspace (docs/05 ⚠️). Green run = assertions passed is the only receipt available;
-   stdout `RESULT` lines are unrecoverable. Escalate to #ai-runtime-oncall — observability
-   (UAT item P4) can't pass without log delivery.
+4. **ROOT CAUSE (unified) — serverless compute cannot reach the workspace's S3 / PyPI.**
+   Direct evidence, run 906184622669132 (2026-07-24): in-workload `mlflow.log_artifact` fails
+   `HTTPSConnectionPool(host='mkazia-lw2-workspace-root-storage.s3-fips.us-east-1.amazonaws.com')
+   Max retries exceeded` — connection-level, from a GPU node, captured via MLflow params (the
+   tracking API works). One network misconfiguration produces all of these symptoms:
+   - **No logs on any AIR run** (`air logs` empty, zero MLflow log artifacts): the launcher
+     ships log chunks to that same root-storage bucket.
+   - **Runs TIMEDOUT even after user code completes**: launcher log-shipping hangs in cleanup
+     (probe logged `probe_done=yes`, then the run sat until timeout).
+   - **pip `dependencies` fail** (run 219665188914633 with just `[emoji]`): PyPI egress blocked
+     from env build. Blocks gpu-burn(+NVML), xgboost, tabicl, vllm, lora.
+   - **Catalog bucket 403 from serverless SQL** (ask #1) — same hardening theme.
+   Fix is network-side (bucket policies / egress rules must allowlist the serverless data
+   plane); nothing is user-fixable. Until then: use **MLflow params/metrics as the receipt
+   channel** (tracking API is healthy) and wrap any artifact/storage call in a
+   `signal.alarm` timeout so runs fail fast instead of hanging to TIMEDOUT.
 
 ## Deploy procedure (per workspace)
 
