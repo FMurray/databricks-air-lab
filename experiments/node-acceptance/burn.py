@@ -1,4 +1,9 @@
-"""GPU burn + health check (UAT A1). One process per visible GPU, simultaneous matmul load.
+"""GPU burn + health check (UAT A1). Single process, all GPUs concurrently.
+
+CUDA kernel launches are async: one thread keeps every device busy by round-robin queueing
+matmuls on each device's default stream. Deliberately NO multiprocessing — mp spawn/Manager
+deadlocked inside the AIR launcher (observed 2026-07-24, run 603656373172623 hung until
+timeout with BURN_SECONDS=30).
 
 Env knobs: BURN_SECONDS (default 120), EXPECT_GPUS (assert count if set), MATMUL_N (default 8192).
 Exit 0 only if: all expected GPUs enumerate, uncorrected ECC delta is 0 on every GPU,
@@ -8,11 +13,10 @@ import os
 import time
 
 import torch
-import torch.multiprocessing as mp
 
 try:
     import pynvml
-except ImportError:  # nvidia-ml-py in the workload deps; fall back gracefully for local runs
+except ImportError:  # nvidia-ml-py in the workload deps; degrade gracefully without it
     pynvml = None
 
 BURN_SECONDS = int(os.environ.get("BURN_SECONDS", "120"))
@@ -38,72 +42,67 @@ def nvml_snapshot(idx):
     return snap
 
 
-def burn_one(idx, results):
-    torch.cuda.set_device(idx)
-    a = torch.randn(MATMUL_N, MATMUL_N, device="cuda", dtype=torch.float16)
-    b = torch.randn(MATMUL_N, MATMUL_N, device="cuda", dtype=torch.float16)
-    start_snap = nvml_snapshot(idx)
-    flops_per_mm = 2 * MATMUL_N**3
-    iters, throttled, max_temp, max_power = 0, 0, 0, 0.0
-    torch.cuda.synchronize()
-    t0 = time.time()
-    while time.time() - t0 < BURN_SECONDS:
-        c = a @ b  # noqa: F841
-        iters += 1
-        if iters % 50 == 0:
-            torch.cuda.synchronize()
-            s = nvml_snapshot(idx)
-            if s:
-                max_temp = max(max_temp, s["temp_c"])
-                max_power = max(max_power, s["power_w"])
-                if s["throttle"] & HW_THROTTLE_MASK:
-                    throttled += 1
-    torch.cuda.synchronize()
-    elapsed = time.time() - t0
-    end_snap = nvml_snapshot(idx)
-    ecc_delta = None
-    if start_snap.get("ecc_uncorrected") is not None:
-        ecc_delta = end_snap["ecc_uncorrected"] - start_snap["ecc_uncorrected"]
-    results[idx] = {
-        "tflops": flops_per_mm * iters / elapsed / 1e12,
-        "iters": iters, "max_temp_c": max_temp, "max_power_w": max_power,
-        "hw_throttle_samples": throttled, "ecc_uncorrected_delta": ecc_delta,
-        "name": torch.cuda.get_device_name(idx),
-    }
-
-
 def main():
     if pynvml is not None:
         pynvml.nvmlInit()
     n = torch.cuda.device_count()
-    print(f"RESULT gpus_visible={n}")
+    print(f"RESULT gpus_visible={n}", flush=True)
     expect = os.environ.get("EXPECT_GPUS")
     assert not expect or n == int(expect), f"expected {expect} GPUs, saw {n}"
     assert n > 0, "no CUDA devices visible"
 
-    with mp.Manager() as mgr:
-        results = mgr.dict()
-        procs = [mp.Process(target=burn_one, args=(i, results)) for i in range(n)]
-        [p.start() for p in procs]
-        [p.join() for p in procs]
-        results = dict(results)
+    mats = []
+    for i in range(n):
+        with torch.cuda.device(i):
+            a = torch.randn(MATMUL_N, MATMUL_N, device="cuda", dtype=torch.float16)
+            b = torch.randn(MATMUL_N, MATMUL_N, device="cuda", dtype=torch.float16)
+            mats.append((a, b))
+    start = {i: nvml_snapshot(i) for i in range(n)}
+    stats = {i: {"iters": 0, "max_temp_c": 0, "max_power_w": 0.0, "hw_throttle_samples": 0}
+             for i in range(n)}
+
+    flops_per_mm = 2 * MATMUL_N**3
+    t0 = time.time()
+    loops = 0
+    while time.time() - t0 < BURN_SECONDS:
+        for i, (a, b) in enumerate(mats):
+            with torch.cuda.device(i):
+                c = a @ b  # noqa: F841 — async launch; sync below
+            stats[i]["iters"] += 1
+        loops += 1
+        if loops % 25 == 0:
+            for i in range(n):
+                torch.cuda.synchronize(i)
+                s = nvml_snapshot(i)
+                if s:
+                    st = stats[i]
+                    st["max_temp_c"] = max(st["max_temp_c"], s["temp_c"])
+                    st["max_power_w"] = max(st["max_power_w"], s["power_w"])
+                    if s["throttle"] & HW_THROTTLE_MASK:
+                        st["hw_throttle_samples"] += 1
+    for i in range(n):
+        torch.cuda.synchronize(i)
+    elapsed = time.time() - t0
 
     failures = []
-    for i in sorted(results):
-        r = results[i]
-        print(f"RESULT gpu={i} name='{r['name']}' tflops={r['tflops']:.1f} "
-              f"max_temp_c={r['max_temp_c']} max_power_w={r['max_power_w']:.0f} "
-              f"hw_throttle_samples={r['hw_throttle_samples']} "
-              f"ecc_uncorrected_delta={r['ecc_uncorrected_delta']}")
-        if r["ecc_uncorrected_delta"] not in (None, 0):
-            failures.append(f"gpu{i}: {r['ecc_uncorrected_delta']} uncorrected ECC errors")
-        if r["hw_throttle_samples"] > 0:
+    for i in range(n):
+        st = stats[i]
+        end = nvml_snapshot(i)
+        ecc_delta = None
+        if start[i].get("ecc_uncorrected") is not None:
+            ecc_delta = end["ecc_uncorrected"] - start[i]["ecc_uncorrected"]
+        tflops = flops_per_mm * st["iters"] / elapsed / 1e12
+        print(f"RESULT gpu={i} name='{torch.cuda.get_device_name(i)}' tflops={tflops:.1f} "
+              f"max_temp_c={st['max_temp_c']} max_power_w={st['max_power_w']:.0f} "
+              f"hw_throttle_samples={st['hw_throttle_samples']} ecc_uncorrected_delta={ecc_delta}",
+              flush=True)
+        if ecc_delta not in (None, 0):
+            failures.append(f"gpu{i}: {ecc_delta} uncorrected ECC errors")
+        if st["hw_throttle_samples"] > 0:
             failures.append(f"gpu{i}: HW throttle observed under load")
-    assert len(results) == n, f"only {len(results)}/{n} burn processes reported"
     assert not failures, "; ".join(failures)
-    print(f"RESULT burn=PASS gpus={n} seconds={BURN_SECONDS}")
+    print(f"RESULT burn=PASS gpus={n} seconds={BURN_SECONDS}", flush=True)
 
 
 if __name__ == "__main__":
-    mp.set_start_method("spawn")
     main()
