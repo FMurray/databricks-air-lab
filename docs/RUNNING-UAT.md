@@ -62,6 +62,11 @@ air run --file workloads/<workload>.yaml -p mkazia-lw2
 
 ## Ground rules
 
+- **All distributed multi-node training goes through the `air` CLI** (workload YAML,
+  `compute.num_accelerators` spanning nodes). The notebook `@distributed` API is not
+  production-ready for this engagement — don't build or demo multi-node on it. Notebooks
+  here are for single-node/interactive work and the verification checks above.
+
 - Dry-run on A10 before ANY H100 submission; H100/multinode runs cost real money — announce
   in the team channel before pool-scale sweeps.
 - Never put tokens/secrets in workload YAML `command:` or dump env in job logs. Secrets go in

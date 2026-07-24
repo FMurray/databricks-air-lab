@@ -57,6 +57,9 @@ scripts/assets referenced by relative path.
   `e2-demo-field-eng` = shared demo workspace (no admin, be polite); anything else — ask.
 - Local container builds use **podman**, not Docker Desktop (license restrictions;
   cross-build notes in `experiments/docker-otel-zerobus/NOTES.md`).
+- **Distributed multi-node = air CLI only.** The notebook `@distributed` API is not
+  production-ready for the customer engagement driving this repo — never build UAT items,
+  demos, or recommendations on it; document it only as out-of-scope context.
 
 ## Environment quirks worth knowing
 
