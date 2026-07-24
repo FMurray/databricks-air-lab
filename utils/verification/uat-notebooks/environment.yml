@@ -1,0 +1,13 @@
+# Environment spec for the UAT check notebooks (fe-sandbox-mkazia-lw2).
+# Serverless notebook environments are applied per-notebook via the Environment side panel;
+# import this file there (Environment panel → gear → Import), or replicate the fields manually.
+#
+# GPU checks (checks/gpu-smoke): Environment panel → Base environment: AI, Accelerator: A10
+#   (H100 for the acceptance pass). The Accelerator field is panel-managed — if a notebook
+#   import didn't preserve it, set it once and save.
+# CPU checks (checks/network-blockers, DRIVER): default serverless env is fine.
+#
+# NB (2026-07-24): keep dependencies [] until the PyPI-egress blocker is fixed —
+# any pip dependency currently fails the environment build on this workspace.
+client: '1'
+dependencies: []
