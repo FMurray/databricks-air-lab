@@ -36,6 +36,16 @@ record("gpu_available", True, f"{n}x {torch.cuda.get_device_name(0)}")
 
 # COMMAND ----------
 
+# shape assertion — DRIVER passes expect_gpus per shape (e.g. 8 for GPU_8xH100)
+try:
+    expect = dbutils.widgets.get("expect_gpus").strip()
+except Exception:
+    expect = ""
+if expect:
+    record("gpu_count_matches_shape", n == int(expect), f"saw {n}, expected {expect}")
+
+# COMMAND ----------
+
 # measured matmul throughput — sanity bar only (A10 bf16 ≳ 20 TFLOPS effective)
 N = 8192
 a = torch.randn(N, N, device="cuda", dtype=torch.bfloat16)
