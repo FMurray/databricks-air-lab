@@ -17,6 +17,21 @@ databricks auth login --host https://fe-sandbox-mkazia-lw2.cloud.databricks.com 
 cd databricks-air-lab
 ```
 
+## Zero-setup path: the notebook suite
+
+No CLI needed for the environment/network checks and the notebook-surface GPU smoke:
+**open `uat/DRIVER` (in this folder) and Run-all** on serverless. It executes each notebook
+under `uat/checks/` as its own ephemeral run using that child's environment (per-env pattern)
+and prints a got-vs-expected matrix — the same matrix to re-run after the network fix lands.
+
+- `uat/checks/network-blockers` — any serverless env (the blocker verification).
+- `uat/checks/gpu-smoke` — needs its environment set once: open it, Environment panel →
+  Base environment **AI**, Accelerator **A10** (H100 for acceptance), save. `uat/environment.yml`
+  documents the spec. Reports `skipped_no_gpu` instead of failing on CPU envs.
+
+The AIR *submission-path* workloads below still require the `air` CLI — that's the product
+surface for CLI training workloads; a notebook can't exercise it.
+
 ## Run a UAT workload
 
 ```bash
