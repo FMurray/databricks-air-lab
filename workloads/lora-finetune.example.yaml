@@ -1,0 +1,31 @@
+# UAT W3: LoRA fine-tune, GA surface. Dry-run default: 0.5B model on A10 (plumbing proof).
+# Acceptance run (needs HF egress + gated-model token if Mistral):
+#   --override compute.accelerator_type=GPU_8xH100 env_variables.MODEL_ID=mistralai/Mistral-7B-v0.3 env_variables.MAX_STEPS=200
+experiment_name: air-lab-lora-finetune
+
+environment:
+  version: "4"
+  dependencies:
+    - peft
+    - datasets
+
+env_variables:
+  MODEL_ID: Qwen/Qwen2.5-0.5B
+  MAX_STEPS: "60"
+
+compute:
+  num_accelerators: 1
+  accelerator_type: GPU_1xA10
+
+code_source:
+  type: snapshot
+  snapshot:
+    root_path: ..
+    include_paths:
+      - experiments/foundation-models/lora/
+
+command: python $CODE_SOURCE_PATH/experiments/foundation-models/lora/finetune_lora.py
+
+max_retries: 0
+timeout_minutes: 60
+mlflow_run_name: lora-finetune
