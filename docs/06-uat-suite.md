@@ -72,6 +72,10 @@ network posture better than our open sandboxes). Profile: `mkazia-lw2`. Catalog:
      is an egress/DNS allowlist.
    Point the fix at: GPU-plane egress path to workspace root storage (proxy/firewall rules,
    not just bucket policy), plus DNS/egress allowlist for PyPI on both planes.
+   **Self-contained repro: `/Workspace/Shared/databricks-air-lab/REPRO-GPU-EGRESS`** — attach
+   Serverless GPU (A10, AI v4), Run-all, ~2 min. Verified verdicts: A10 →
+   `upload=REPRODUCED after 60s` (run 845924716536114); plain serverless →
+   `upload=OK in 10.3s` (run 786560643819370).
 
 ## Deploy procedure (per workspace)
 
