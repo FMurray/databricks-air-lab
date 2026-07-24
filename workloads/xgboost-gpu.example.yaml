@@ -1,0 +1,28 @@
+# UAT W5: XGBoost GPU train — known report: hangs on H100, works on A10. Run BOTH:
+#   A10 control (this default), then --override compute.accelerator_type=GPU_1xH100
+# If the H100 run times out with last log line "PHASE data_ready" → repro confirmed,
+# escalate to #ai-runtime-oncall BEFORE customers hit it.
+experiment_name: air-lab-xgboost-gpu
+
+environment:
+  version: "4"
+  dependencies:
+    - xgboost
+    - scikit-learn
+
+compute:
+  num_accelerators: 1
+  accelerator_type: GPU_1xA10
+
+code_source:
+  type: snapshot
+  snapshot:
+    root_path: ..
+    include_paths:
+      - experiments/classic-ml/
+
+command: python $CODE_SOURCE_PATH/experiments/classic-ml/xgboost_gpu_repro.py
+
+max_retries: 0
+timeout_minutes: 30
+mlflow_run_name: xgboost-gpu

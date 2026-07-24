@@ -1,0 +1,30 @@
+# UAT A1: GPU burn + health per node. Default = cheap A10 dry-run; acceptance sweep uses
+# the H100 override below, submitted once per pool node in parallel.
+#   --override compute.accelerator_type=GPU_8xH100 env_variables.EXPECT_GPUS=8 env_variables.BURN_SECONDS=900
+experiment_name: air-lab-gpu-burn
+
+environment:
+  version: "4"
+  dependencies:
+    - nvidia-ml-py
+
+env_variables:
+  EXPECT_GPUS: "1"
+  BURN_SECONDS: "120"
+
+compute:
+  num_accelerators: 1
+  accelerator_type: GPU_1xA10
+
+code_source:
+  type: snapshot
+  snapshot:
+    root_path: ..
+    include_paths:
+      - experiments/node-acceptance/
+
+command: python $CODE_SOURCE_PATH/experiments/node-acceptance/burn.py
+
+max_retries: 0
+timeout_minutes: 30
+mlflow_run_name: gpu-burn
