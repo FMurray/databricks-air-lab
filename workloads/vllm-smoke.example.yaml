@@ -1,0 +1,27 @@
+# UAT W6: vLLM via pip in standard env v4 (GA surface — Docker is out of scope for this
+# customer). A10 for the dry-run; the acceptance question is H100:
+#   --override compute.accelerator_type=GPU_1xH100
+# NB: model download needs HF egress — exec-probe reports egress status first.
+experiment_name: air-lab-vllm-smoke
+
+environment:
+  version: "4"
+  dependencies:
+    - vllm
+
+compute:
+  num_accelerators: 1
+  accelerator_type: GPU_1xA10
+
+code_source:
+  type: snapshot
+  snapshot:
+    root_path: ..
+    include_paths:
+      - experiments/env-flexibility/
+
+command: python $CODE_SOURCE_PATH/experiments/env-flexibility/vllm_smoke.py
+
+max_retries: 0
+timeout_minutes: 45
+mlflow_run_name: vllm-smoke
