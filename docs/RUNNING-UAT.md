@@ -20,17 +20,24 @@ cd databricks-air-lab
 ## Zero-setup path: the notebook suite
 
 No CLI needed for the environment/network checks and the notebook-surface GPU smoke:
-**open `uat/DRIVER` (in this folder) and Run-all** on serverless. It executes each notebook
-under `uat/checks/` as its own ephemeral run using that child's environment (per-env pattern)
-and prints a got-vs-expected matrix — the same matrix to re-run after the network fix lands.
+**open `uat/DRIVER` (in this folder) and Run-all** on plain serverless. It reads
+`uat/uat_config.py` (the suite config: env version, deps, and the check × accelerator-shape
+matrix), launches each check notebook as a one-time notebook job **per shape** with the
+accelerator pinned via the Jobs API (`compute.hardware_accelerator: GPU_1xA10|GPU_1xH100|
+GPU_8xH100`), and prints one aggregated got-vs-expected matrix.
 
-- `uat/checks/network-blockers` — any serverless env (the blocker verification).
-- `uat/checks/gpu-smoke` — needs its environment set once: open it, Environment panel →
-  Base environment **AI**, Accelerator **A10** (H100 for acceptance), save. `uat/environment.yml`
-  documents the spec. Reports `skipped_no_gpu` instead of failing on CPU envs.
+- **`shapes` widget** controls cost: default `GPU_1xA10` = cheap dry-run; `all` includes
+  **8xH100 (real money — coordinate first)**; or a comma list like `GPU_1xA10,GPU_1xH100`.
+- Verified 2026-07-24: A10 notebook job via this path → `1x NVIDIA A10G`, 66.4 TFLOPS bf16,
+  NVML healthy (run 832802492734599).
+- Add a check: drop a notebook in `uat/checks/` ending with `dbutils.notebook.exit(json)`,
+  add an entry to `uat_config.py`. (The config is deliberately NOT named `environment.yml` —
+  that filename is a live Databricks convention that overrides the folder's notebook
+  environments and broke the CPU driver when we tried it.)
 
-The AIR *submission-path* workloads below still require the `air` CLI — that's the product
-surface for CLI training workloads; a notebook can't exercise it.
+The AIR *submission-path* workloads below still require the `air` CLI — and per the ground
+rules, **all distributed multi-node runs are CLI-only** (no shapes beyond one node in the
+notebook suite by design).
 
 ## Run a UAT workload
 
