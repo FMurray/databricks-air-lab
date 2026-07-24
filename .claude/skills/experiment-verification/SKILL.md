@@ -40,12 +40,26 @@ as "mostly working" is the thing this skill exists to prevent.
 
 ## Where evidence lives: MLflow
 
-**MLflow is the evidence layer** — local MLflow synced with the managed Databricks MLflow
-(sync tooling is being built separately; treat the MLflow run as the canonical record either way).
+**MLflow is the evidence layer** — the platform-recorded workspace run is the source of truth,
+and `utils/verification/archive_run.py` mirrors it into the repo-local store
+(`sqlite:///experiments/mlflow.db` + `experiments/mlartifacts/`, both committed) so receipts
+survive workspace retention and travel with `git clone`:
+
+```
+uv run --with mlflow python -m utils.verification.archive_run \
+    --profile <profile> --job-run-id <id> --experiment <name> \
+    --extra <client-side submission/preflight log> ...
+```
+
+The copy carries params, full metric histories, tags, and artifacts, plus provenance tags
+(`archive.source_run_id`, `archive.source_workspace`, `archive.archived_at`); `--extra` files
+land under `client_logs/` so loose local logs become artifacts OF the linked run instead of
+free-floating text. Browse with `mlflow ui --backend-store-uri sqlite:///experiments/mlflow.db`.
 
 - Log metrics/params from the run; attach files that matter (run logs, result tables, probe
   output) as **run artifacts** so they outlive job-run log retention (~60 days).
-- Record the MLflow run ID/URL alongside the Job Run ID in NOTES.md.
+- Record the MLflow run ID/URL alongside the Job Run ID in NOTES.md — and the local archive
+  run ID once archived.
 - NOTES.md is the narrative: quoted excerpts, pointers, conclusions. The repo commits **code,
   predictions, and conclusions — not data**: `run-*.log` / `preflight-*.log` are gitignored
   (local working copies are fine); raw output belongs in MLflow.
@@ -70,6 +84,12 @@ as "mostly working" is the thing this skill exists to prevent.
 - Docs lag the product in both directions; Slack is "reported", not "verified". Both are
   hypotheses until you ran it. Note tool versions (`air --version`; torch/NCCL from logs) —
   findings are version-scoped.
+- **Log delivery is per-workspace unreliable**: a run can report SUCCESS and stream MLflow
+  system metrics while its stdout is unretrievable by every channel (`air logs` streaming +
+  download, MLflow artifacts, Jobs API). Verified 2026-07-22: run 938962751074433 on
+  fevm-forrest-aws-stable lost all stdout; identical YAML on e2-demo-field-eng (run
+  93215537511850) streamed fine. Design probes so critical evidence also lands somewhere
+  durable (MLflow params/metrics, a UC volume) — don't stake a finding on stdout alone.
 
 ## Pre-submit checklist
 
@@ -84,6 +104,8 @@ as "mostly working" is the thing this skill exists to prevent.
 
 - [ ] Quoted output + run identity in NOTES.md; claim→evidence table for headline results
 - [ ] MLflow run ID recorded; artifacts attached if the raw output needs to outlive job-run retention
+- [ ] Run archived to the local store (`utils/verification/archive_run.py`, `--extra` for
+      client-side logs); local archive run ID added next to the claim in NOTES.md
 - [ ] Multi-node claims checked on every node
 - [ ] Numbers labeled measured/derived/inferred; failures reported as they happened
 - [ ] Generalizable findings promoted to docs/ with ✅ date + run id; open-qs updated in place

@@ -45,7 +45,7 @@ grpc-message: {"X-Databricks-Reason-Phrase":"Invalid token audience"}
 2. **Edge bug/footgun: auth failures are returned with `grpc-status: 0` (OK)** — every OTLP
    client treats the export as successful. Silent data loss. Verified: garbage token, nonexistent
    table, and bogus workspace ID ALL return OK. → report to Zerobus team (on-call playbook:
-   Confluence UN/5268832571). Huge [the customer]-relevance: silent-drop observability pipe.
+   Confluence UN/5268832571). Huge customer-relevance: silent-drop observability pipe.
 
 Dead ends tried: RFC 8693 token-exchange of user token for the zerobus resource — endpoint exists
 but requires `authorization_details` already in the subject token's claims → SP-only in practice.
@@ -95,6 +95,40 @@ Note `system.lakeflow.zerobus_stream` is ACCOUNT-WIDE per region — other works
 - Zerobus also listed under HIPAA + HITRUST; being default-enabled for compliance-security-profile
   workspaces mid-July 2026. (Older internal FAQ saying "No PCI" is stale.)
 - Operative requirement: the *workspace* must have the compliance security profile enabled — the
-  components are certified, the deployment context does the qualifying. [the customer] deltas to flag:
+  components are certified, the deployment context does the qualifying. Customer deltas to flag:
   Docker-Hub-only image hosting (their security won't love public/external registry), and
   cross-region GPU fallback vs their Private-Link-only posture.
+
+## Deploy notes — 2026-07-24 (fe-sandbox-mkazia-lw2, ws 7474656734648830, us-east-1)
+
+Goal: replicate the proven fevm pipeline in the shared test workspace (catalog
+`mkazia_lw2_catalog_7474656734648830`, per owner's direction). PrivateLink workspace
+(host aliases to nvirginia.privatelink); serverless warehouse egresses via proxy to
+**S3 FIPS endpoints** → looks like a hardened/compliance-profile sandbox.
+
+### Done (my access: `users` group only, broad grants on the target catalog)
+
+- Profile `mkazia-lw2` (OAuth U2M). Warehouse: Serverless Starter `e7e6ecf78c767db6`.
+- Schema `mkazia_lw2_catalog_7474656734648830.airlab` created (metadata op — succeeded).
+- Secret scope `air_lab` created (empty until an SP exists).
+- Live YAML `workloads/docker-otel-zerobus-mkazia.yaml` (gitignored).
+- Image `docker.io/forrestm/air-otel-smoke:0.3` registered via `air register image -p mkazia-lw2`.
+- **Zerobus edge live for this ws**: raw probe (bogus token) → HTTP/2 200, `grpc-status: 16`,
+  `x-databricks-reason-phrase: Malformed token` (request 0fb234dd, 2026-07-24). NB: malformed
+  token → 16 at edge; it's *plausible-but-wrong-audience* tokens that get the silent status-0 drop.
+
+### Blocked — needs workspace admin (mkazia)
+
+1. **Catalog storage is broken from serverless**: ALL table reads/writes in
+   `mkazia_lw2_catalog_7474656734648830` fail `[UNAUTHORIZED_ACCESS]` — S3 HEAD 403 on
+   `s3://mkazia-lw2-catalog-7474656734648830/...` with UC-vended session creds
+   (S3 request 29SYE4VY3CM208DE via s3-fips + proxy 192.168.200.20). Isolation: pre-existing
+   `default.t1` also unreadable; `system.billing.usage` + `samples` read fine from the same
+   warehouse ⇒ bucket policy / storage-credential IAM role for THIS bucket, not my grants and
+   not serverless egress generally. Likely aws:SourceVpce-style bucket policy that doesn't
+   allowlist serverless (NCC) endpoints. OTEL tables can't be created until fixed.
+2. **SP creation admin-only** (SCIM 403). fevm SP is invalid_client here (different account or
+   not workspace-assigned) — can't reuse. Need an SP created+assigned here, or admin for Forrest.
+
+Open risk once unblocked: Zerobus commits server-side into the same bucket — if the bucket
+policy is VPCe-scoped it may 403 Zerobus's writer too. Test immediately after the policy fix.

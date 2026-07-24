@@ -15,6 +15,6 @@ WHERE (product_features.ai_runtime.compute_type IS NOT NULL
 GROUP BY ALL
 ORDER BY usage_date DESC;
 
--- TODO: join system.billing.list_prices for $ ([the customer] asked how to find the serverless GPU SKU there).
+-- TODO: join system.billing.list_prices for $ (the customer asked how to find the serverless GPU SKU there).
 -- TODO(open-q #5): check what usage_policy_name / identity metadata lands here for reserved pools —
 --   today pools reportedly emit one aggregate record (the P0 attribution gap).

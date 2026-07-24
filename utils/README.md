@@ -1,6 +1,6 @@
 # Utilities backlog
 
-Ordered by customer pull (see `docs/private/[the customer]-baseline.md`):
+Ordered by customer pull (see `docs/private/customer-baseline.md`):
 
 1. **`billing/`** — chargeback/attribution queries on `system.billing.usage`. This is the interim answer
    to customer P0 #3 until per-workload tagging in reserved pools exists.
@@ -11,7 +11,7 @@ Ordered by customer pull (see `docs/private/[the customer]-baseline.md`):
    - `billing/air_usage.sql` — original standalone query (field-guide provenance).
 2. **`visibility/`** — admin job/compute visibility (the July deliverable): who is running what on which
    accelerator, queue depth on shared pools, utilization vs reservation.
-3. **`submit/`** — workload authoring helpers ([customer contact]'s "minor lift" gap): YAML generator/validator,
+3. **`submit/`** — workload authoring helpers (a customer engineer's "minor lift" gap): YAML generator/validator,
    sensible defaults per workload family, right-sizing hints (did this need an H100?).
 4. **`checkpoint/`** — checkpoint/restart harness for the 7-day runtime cap (resume-aware `max_retries` wrapper).
 5. **`audit/`** — GPU access audit: who *can* reach serverless GPU in a workspace (until GPU-only entitlement ships).
@@ -19,3 +19,7 @@ Ordered by customer pull (see `docs/private/[the customer]-baseline.md`):
    (one `airtel.init()` call: logs bridge, metrics, GPU gauges, identity). Ship via snapshot
    `include_paths` or Docker COPY. The `air-otel-telemetry` skill references it; the skill's
    `assets/airtel.py` is a synced portability copy for use outside this repo.
+7. **`verification/`** — `archive_run.py`: mirrors workspace MLflow runs into the repo-local
+   evidence store (`experiments/mlflow.db` + `mlartifacts/`, committed) with provenance tags;
+   `--extra` attaches client-side logs. The receipt layer for the `experiment-verification`
+   skill — see that skill for when/how.

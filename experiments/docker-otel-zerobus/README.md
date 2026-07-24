@@ -13,7 +13,7 @@ Two questions in one experiment:
   governed Delta table — queryable next to `system.billing.usage`. Feeds the admin/visibility
   deliverable (`utils/visibility/`).
 - **OTLP is language-neutral**: the same pipe works from the Java OTEL SDK. This is the observability
-  story for non-Python AIR workloads ([customer MLE]'s Java question) where auto-MLflow doesn't exist.
+  story for non-Python AIR workloads (the customer's Java question) where auto-MLflow doesn't exist.
 
 ## Zerobus OTLP facts (docs.databricks.com/aws/en/ingestion/opentelemetry/)
 

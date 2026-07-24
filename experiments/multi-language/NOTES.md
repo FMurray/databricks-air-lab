@@ -39,7 +39,10 @@ Status 2026-07-22: scaffolded, nothing launched.
 ## Findings
 
 ### Exec probe ✅ VERIFIED 2026-07-22, run 93215537511850, e2-demo-field-eng
-1xA10, env image "4", air CLI v0.1.0, snapshot code source. Raw log: `run-93215537511850.log`.
+1xA10, env image "4", air CLI v0.1.0, snapshot code source.
+Receipt: local MLflow archive run `e728a2e8dbed45d6b53b3125c85f5fa3` (source run
+`bc9fddcfc1ff45b3b91065c07e2588a9`) — platform `logs/` + CLI submission log under `client_logs/`;
+open with `mlflow ui --backend-store-uri sqlite:///experiments/mlflow.db`.
 Scope caveat: measured on e2-demo-field-eng only — the fevm run's output was unretrievable
 (see log-capture finding below), so none of these claims are established for fevm nodes yet.
 
@@ -62,10 +65,14 @@ Identical YAML, same day, air v0.1.0. Job `SUCCESS`, 62s execution, MLflow **sys
 delivered** (CPU/disk/GPU gauges present on run fdbe1f21401a403ba65eb72eadfe3c08) — but stdout
 is unretrievable by all three documented channels: `air logs` streaming ("No logs available"),
 `air logs --download-to` (hangs), MLflow artifacts (empty ~40 min post-run), Jobs API
-(metadata only for gen_ai_compute_task). Raw submission log: `run-938962751074433.log`.
+(metadata only for gen_ai_compute_task).
+Receipt: local MLflow archive run `6b6eff4d49174168b02b531c9b928f27` (source run
+`fdbe1f21401a403ba65eb72eadfe3c08`) — carries the 13 system metrics that DID flow and the CLI
+submission log under `client_logs/`; its **absence of platform `logs/` artifacts is itself the
+evidence** (compare the field-eng archive run, which has them).
 Control: the same YAML on e2-demo-field-eng streamed live and landed logs (run above), and the
 2026-07-16 Docker-path baseline (run 37776040541298) still has its `logs/` artifacts.
 **Inferred**: workspace-specific log-capture defect on fevm (snapshot path exonerated by the
 control; alternative not excluded: a fevm↔field-eng rollout-version difference that will also
-hit other new workspaces — worth #ai-runtime-oncall either way, [the customer] UAT depends on log
+hit other new workspaces — worth #ai-runtime-oncall either way, the customer UAT depends on log
 delivery). Status: reported to nobody yet — escalate.

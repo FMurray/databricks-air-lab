@@ -70,7 +70,7 @@ log shipping dir — TODO: confirm files written there get shipped too).
 Native logging is **per-run and UI-centric**: great for a person debugging one run; logs are text
 chunks in MLflow artifacts, metrics live in the MLflow store. What it does NOT give you:
 - SQL over structured events **across all runs/teams** (fleet view: who OOMed this week?)
-- Joins against `system.billing.usage` / pool utilization (the [the customer] chargeback/visibility ask)
+- Joins against `system.billing.usage` / pool utilization (the customer chargeback/visibility ask)
 - A story for **non-Python/Java workloads** (no MLflow autolog; stdout chunks only)
 OTLP→Zerobus lands structured logs/metrics in governed Delta tables and fills exactly that gap —
 complementary, not competing. (See `experiments/docker-otel-zerobus/NOTES.md` for its current

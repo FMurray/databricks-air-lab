@@ -2,10 +2,10 @@
 
 Goal: train across multiple 8×H100 nodes with torchrun — no custom Docker, no cluster setup.
 
-!!! note "Status: live, but the docs say otherwise"
-    Multi-node went Public Preview silently on 2026-07-17; the public docs and field guide still
-    said Private Preview days later. Shapes: **multiples of `GPU_8xH100` only**. Field guide
-    reports max 16 nodes / 128 GPUs, sweet spot 3–8 nodes, AWS-only (reported, not lab-verified).
+!!! note "Status: Public Preview (recently)"
+    Multi-node reached Public Preview on 2026-07-17 — recent enough that some published docs may
+    still say Private Preview. Shapes: **multiples of `GPU_8xH100` only**. Field guide reports
+    max 16 nodes / 128 GPUs, sweet spot 3–8 nodes, AWS-only (reported, not lab-verified).
 
 ✅ **Verified end-to-end 2026-07-22** (e2-demo-field-eng): 2 nodes / 16×H100 scheduled on-demand in
 ~40s (run 505819227973807), and a pre-registered distributed-correctness proof passed bit-exact
