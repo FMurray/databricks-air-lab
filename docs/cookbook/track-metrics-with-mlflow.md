@@ -9,10 +9,10 @@ Every run gets per-node system metrics in MLflow with **zero config** (`system/n
 memory, disk, network, and per-GPU utilization/memory/power. ✅ Verified present even on a 14-second
 smoke run (2026-07-16).
 
-!!! warning "The GPU-util gauge lies on short steps"
-    Sampled gauges read **0%** during sub-second forward passes and 99–100% on long ones —
-    ✅ observed both ways on real runs (2026-07-17/22). Never conclude "idle GPU" from the gauge on
-    a short-step job; check wall-time and memory instead.
+!!! warning "GPU-util readings under-sample short steps"
+    Sampled gauges can read **0%** during sub-second forward passes while reading 99–100% on long
+    ones — ✅ observed both ways on real runs (2026-07-17/22). Don't conclude "idle GPU" from the
+    gauge on a short-step job; check wall-time and GPU memory instead.
 
 ## Custom metrics: attach to the run the platform made
 

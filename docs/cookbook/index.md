@@ -13,10 +13,10 @@ anything unverified is labeled as such.
 ## Observe things
 
 - [Stream logs and artifacts](stream-logs-and-artifacts.md) — where every byte of output actually lands
-- [Track metrics with MLflow](track-metrics-with-mlflow.md) — free system metrics, custom metrics, the gauges that lie
+- [Track metrics with MLflow](track-metrics-with-mlflow.md) — free system metrics, custom metrics, and which readings need interpretation
 - [Ship telemetry to Delta](ship-telemetry-to-delta.md) — fleet-wide SQL over structured logs/metrics
 
 ## Survive things
 
-- [Checkpoint past the 7-day cap](checkpoint-past-the-7-day-cap.md) — the runtime ceiling and how to duck it
+- [Checkpoint past the 7-day cap](checkpoint-past-the-7-day-cap.md) — the runtime ceiling and how to work within it
 - [Debug a failed run](debug-a-failed-run.md) — symptom → actual cause, from failures we actually hit

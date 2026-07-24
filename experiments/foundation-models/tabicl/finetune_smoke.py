@@ -1,6 +1,6 @@
 """Fine-tune the released TabICL checkpoint on a real dataset (bank-marketing) on AIR.
 
-Closest analog to what [the customer] Marketing would actually run: adapt the public checkpoint
+Closest analog to what the customer's marketing team would actually run: adapt the public checkpoint
 to their data distribution rather than pretrain from scratch. Compares zero-shot vs
 fine-tuned AUC and verifies the fine-tuned checkpoint reloads into the zero-shot API.
 """

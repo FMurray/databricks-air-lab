@@ -1,10 +1,10 @@
 # Foundation-model training on AIR — experiment notes
 
-## TabICL pretraining proof of life ([the customer] Marketing pilot, Q4)
+## TabICL pretraining proof of life (customer marketing pilot, Q4)
 
 Status 2026-07-17: research + scaffolding done, nothing launched yet.
 Files: `tabicl/pol_stage1_smoke.sh`, `workloads/tabicl-pol.example.yaml`.
-Context: [the customer] technical summary doc (13e09FKCfpHX6wVaKQOoOTEJkIO3zez4nM7uFeIBS19E).
+Context: customer technical summary doc (link in docs/private/customer-refs.md).
 
 ### What TabICL pretraining actually is (verified against soda-inria/tabicl@main)
 
@@ -15,7 +15,7 @@ Context: [the customer] technical summary doc (13e09FKCfpHX6wVaKQOoOTEJkIO3zez4n
   Paper used **4 GPUs** — this is not a big-iron pretrain.
 - **No real data.** Priors are synthetic (`graph_scm`), generated **on the fly on CPU** in
   dataloader workers (`--prior_device cpu --n_jobs 16`). No dataset ingest for PoL; UC/Spark
-  Connect only enters later if [the customer] fine-tunes on their tables.
+  Connect only enters later if the customer fine-tunes on their tables.
 - Deps are mild: torch>=2.2, sklearn, einops, `[pretraining]` extra adds transformers/xgboost/wandb.
   No pinned CUDA extensions. FlashAttention-3 is **optional** (`--use_flash_attn3`), off in
   stage 1, on in stages 2–3 "when installed".
@@ -65,7 +65,7 @@ HF hub; `n_estimators`, `batch_size`, `offload_mode="auto"` are the memory lever
 |---|---|---|
 | Sprawl head-to-head | `tabicl/bench_sprawl.py` + `workloads/tabicl-bench.example.yaml` (A10) | One checkpoint vs per-task tuned XGBoost on 5 marketing-ish OpenML tasks (bank-marketing 1461, churn 40701, credit-g 31, adult 1590, click 1220): accuracy / time-to-model / GPU peak. The Q4 Marketing pilot slide. |
 | Memory envelope | `tabicl/mem_probe.py` + `workloads/tabicl-memprobe.example.yaml` (H100; rerun on A10, ± `--offload`) | rows→GPU-GB curve to OOM at 100 features → concrete data for open-q #17 (B300). Upstream claim to check: 50K×100 fit+predict <10s on H100. |
-| Fine-tune on real data | `tabicl/finetune_smoke.py` + `workloads/tabicl-finetune.example.yaml` (A10) | Zero-shot vs fine-tuned AUC on bank-marketing; verifies ckpt reload into zero-shot API. The realistic [the customer] path (they won't pretrain from scratch). |
+| Fine-tune on real data | `tabicl/finetune_smoke.py` + `workloads/tabicl-finetune.example.yaml` (A10) | Zero-shot vs fine-tuned AUC on bank-marketing; verifies ckpt reload into zero-shot API. The realistic customer path (they won't pretrain from scratch). |
 
 Notes: datasets via `sklearn.fetch_openml` (egress from AIR assumed OK per zerobus finding, open-q #7b —
 verify openml.org specifically); switch to Delta/UC tables when the pilot wants customer-shaped data;
@@ -127,8 +127,8 @@ Findings (open-q #17 / B300):
 `multinode/{probe_multinode.sh,allreduce_probe.py}` + `workloads/multinode-probe.example.yaml`.
 
 - **Multinode is live**: silently PuPr'd 2026-07-17 (Ben Hansen, #research-on-air) — the field guide
-  (updated May 17) and public docs still say Private Preview; [the customer]'s [customer contact] hit that doc lag
-  2026-07-22 (#[the customer]-model-training-gpu-blocker). Shapes: multiples of 8xH100 only; guide says max
+  (updated May 17) and public docs still say Private Preview; a customer engineer hit that doc lag
+  2026-07-22 (customer channel — see docs/private/customer-refs.md). Shapes: multiples of 8xH100 only; guide says max
   16 nodes / 128 GPUs, sweet spot 3–8 nodes, AWS-only.
 - **RDMA path confirmed end-to-end**: aws-ofi-nccl 1.15.0 over EFA (`efa-direct`, 32 NICs/node),
   GPUDirect RDMA (`GDRDMA`) inter-node channels, NVLS/NVLink intra-node. NCCL 2.26.2.
