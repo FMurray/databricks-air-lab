@@ -20,7 +20,7 @@ docs use all three; billing surfaces both `product_features.ai_runtime.*` and `p
 | `GPU_1xH100` | 1 | 80 GB | no |
 | `GPU_8xH100` | 8 | 8×80 GB | `@distributed(gpus=8)` single-node; multi-node via CLI only |
 
-- Only A10 and H100 today. B200/B300 (Blackwell) being scoped — active [the customer] leadership escalation.
+- Only A10 and H100 today. B200/B300 (Blackwell) being scoped — active customer leadership escalation.
 - Cross-region GPU borrowing during capacity crunch (possible egress cost; "Cloudless Compute" design covers this).
 - Reserved capacity = pools, tied to **one workspace**; rebalancing needs eng + ~48h notice.
 
@@ -92,8 +92,8 @@ Note `command` is **arbitrary bash** — this is the only documented escape hatc
 - MLflow runs auto-created; checkpointing supported; logs via workspace.
 - Billing: `system.billing.usage` with `product_features.ai_runtime.compute_type` / `product_features.serverless_gpu.workload_type` (see `utils/`).
 - `usage_policy_name` → serverless usage policies (Private Preview-era feature; enrollment matters).
-- Known gap: reservation pools bill as a single aggregate record — no per-user/per-workload attribution yet (P0 for [the customer]).
-- Access control gap: serverless GPU access rides the workspace serverless flag — no GPU-only entitlement subset yet (P0 for [the customer]; eng thread in `#eng-serverless-compute-cost-control` 2026-07-08).
+- Known gap: reservation pools bill as a single aggregate record — no per-user/per-workload attribution yet (customer P0).
+- Access control gap: serverless GPU access rides the workspace serverless flag — no GPU-only entitlement subset yet (customer P0; eng thread in `#eng-serverless-compute-cost-control` 2026-07-08).
 
 ## Limits (as of 2026-07)
 

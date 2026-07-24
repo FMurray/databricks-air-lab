@@ -3,7 +3,7 @@
 Goal: know where every byte of your workload's output lands, and how to get it back.
 
 ✅ Verified against run 37776040541298 / MLflow run f38a5161… (2026-07-16, e2-demo-field-eng);
-full notes in `reference/05-logging-observability.md`.
+full notes in [Logging & observability](../05-logging-observability.md).
 
 ## The dual-run model
 
@@ -46,7 +46,7 @@ When a run fails weirdly, read `databricks-launcher.log` before pinging anyone. 
 Logs on the workspace outlive the session, but if a run produced a fact worth keeping, copy the
 raw log next to it (`experiments/<family>/run-<id>.log` in this repo). A claim someone can't
 reconstruct from artifacts is a liability — see
-[how to read the receipts](../reference/about-receipts.md).
+[how to read the receipts](../about-receipts.md).
 
 ## Next
 

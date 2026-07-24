@@ -1,4 +1,4 @@
-# Fine-tune the released TabICL checkpoint on bank-marketing — the realistic [the customer] path.
+# Fine-tune the released TabICL checkpoint on bank-marketing — the realistic customer path.
 experiment_name: air-lab-tabicl-finetune
 
 environment:

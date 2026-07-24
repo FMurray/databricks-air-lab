@@ -34,15 +34,15 @@ Product & platform (verify against a real workspace, not docs):
 8. UC volume mount semantics inside CLI workloads (FUSE path? read-only?) vs notebook sessions.
 9. Snowflake access from an AIR workload (use case 2): egress rules, Lakehouse Federation vs direct connector?
 10. Checkpoint/restart ergonomics at the 7-day cap: does `max_retries` resume or restart from scratch?
-11. Cross-region fallback: is it observable (region in system tables?) and can it be disabled per-workload? ([the customer] Private Link concern makes this compliance-relevant)
+11. Cross-region fallback: is it observable (region in system tables?) and can it be disabled per-workload? (the customer's Private-Link-only posture makes this compliance-relevant)
 12. XGBoost H100 hang: driver/env issue or docs-notebook issue? Repro and bisect.
 13. Ray on AIR: what does cluster bootstrap look like on one 8xH100 node? Multi-node Ray via CLI possible?
 14. SSH/IDE tunnel: session lifetime, idle timeout, can it attach to 8xH100?
 
 Roadmap (chase PM/eng, don't guess):
 
-15. GPU-only entitlement ([the customer] P0 #2) — design/date from cost-control team (Shuyu, Harsh, Piyush).
+15. GPU-only entitlement (customer P0 #2) — design/date from cost-control team (Shuyu, Harsh, Piyush).
 16. Per-workload tagging in reserved pools (P0 #3) — Angel/Dima/Yu Peng thread; what's the eng design?
-17. B200/B300 timeline (Tejas skeptical it's needed — validate with [customer-model] memory profile).
+17. B200/B300 timeline (Tejas skeptical it's needed — validate with the customer FM's memory profile).
 18. Private-Link-based cross-region backbone (Alex Esibov) — Cloudless Compute wiki (UN space, page 6117393607).
 19. Dynamic pool reallocation self-service — anything beyond 48h-notice eng process?

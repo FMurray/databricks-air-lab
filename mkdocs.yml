@@ -1,5 +1,5 @@
-site_name: Databricks AIR Lab
-site_description: Verified knowledge and utilities for Databricks AIR (serverless GPU training)
+site_name: AIR Lab Cookbook
+site_description: Field-tested recipes for Databricks AIR (serverless GPU training)
 docs_dir: docs
 site_dir: .mkdocs-site
 
@@ -10,7 +10,10 @@ exclude_docs: |
 theme:
   name: material
   features:
+    - navigation.tabs
     - navigation.sections
+    - navigation.indexes
+    - navigation.top
     - content.code.copy
   palette:
     - media: "(prefers-color-scheme: light)"
@@ -28,10 +31,38 @@ markdown_extensions:
   - admonition
   - pymdownx.superfences
   - tables
+  - attr_list
+  - md_in_html
+  - pymdownx.emoji:
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg
 
 nav:
-  - Start here: index.md
-  - AIR feature surface: 01-air-feature-surface.md
-  - Workload × AIR fit matrix: 03-workload-matrix.md
-  - Open questions: 04-open-questions.md
-  - Logging & observability: 05-logging-observability.md
+  - Home: index.md
+  - Getting started:
+      - getting-started/index.md
+      - Pick your compute: getting-started/pick-your-compute.md
+  - Cookbook:
+      - cookbook/index.md
+      - Run things:
+          - Submit a workload: cookbook/submit-a-workload.md
+          - Run multi-node training: cookbook/run-multi-node-training.md
+          - Use a custom Docker image: cookbook/use-a-custom-docker-image.md
+          - Run non-Python workloads: cookbook/run-non-python-workloads.md
+      - Observe things:
+          - Stream logs and artifacts: cookbook/stream-logs-and-artifacts.md
+          - Track metrics with MLflow: cookbook/track-metrics-with-mlflow.md
+          - Ship telemetry to Delta: cookbook/ship-telemetry-to-delta.md
+      - Survive things:
+          - Checkpoint past the 7-day cap: cookbook/checkpoint-past-the-7-day-cap.md
+          - Debug a failed run: cookbook/debug-a-failed-run.md
+  - Fleet ops:
+      - fleet-ops/index.md
+      - See spend by team: fleet-ops/see-spend-by-team.md
+      - Attribute usage: fleet-ops/attribute-usage.md
+  - Reference:
+      - AIR feature surface: 01-air-feature-surface.md
+      - Workload × AIR fit matrix: 03-workload-matrix.md
+      - Open questions: 04-open-questions.md
+      - Logging & observability: 05-logging-observability.md
+      - How to read the receipts: about-receipts.md

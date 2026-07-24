@@ -15,9 +15,9 @@ How each workload family maps onto AIR's surface, what to test, and where the sh
 **Sharp edges:** 7-day max runtime → checkpoint/restart discipline; capacity/cross-region fallback;
 `gpus=8` required for decorator (no 2- or 4-GPU distributed on a node).
 
-**[the customer] angle:** [customer-model] tabular FM (TabICL) is *memory-bound* not compute-bound — whole dataset in GPU memory,
-attention blow-up OOMs. Test: activation checkpointing / FlashAttention / sequence sharding on H100 before
-conceding "needs B300". Also Mistral-class rapid fine-tuning for Ops team.
+**Customer angle:** the customer's tabular FM (TabICL-class) is *memory-bound* not compute-bound — whole
+dataset in GPU memory, attention blow-up OOMs. Test: activation checkpointing / FlashAttention / sequence
+sharding on H100 before conceding "needs B300". Also Mistral-class rapid fine-tuning for an ops team.
 
 **Experiments:** `experiments/foundation-models/`
 
@@ -37,7 +37,7 @@ conceding "needs B300". Also Mistral-class rapid fine-tuning for Ops team.
 ## 3. Classic ML (XGBoost, forecasting, sklearn-scale)
 
 **Fit:** supported and documented (A10 examples: XGBoost, time-series). Real question is *should*:
-dev-on-CPU-first discipline is a [the customer] operating-model theme; A10 is the right-size default.
+dev-on-CPU-first discipline is a customer operating-model theme; A10 is the right-size default.
 
 **Sharp edges:**
 - **Known bug:** docs sgc-xgboost notebook hangs on H100 (works on A10). Repro + track. (`#ai-runtime-oncall`)
@@ -63,9 +63,11 @@ dev-on-CPU-first discipline is a [the customer] operating-model theme; A10 is th
 integration, Spark Connect ergonomics. A Java DL4J/Spark-based trainer gets raw GPUs + bash, nothing more.
 
 **Test plan (`experiments/multi-language/`):**
-- [ ] Exec probe: snapshot mount noexec? +x preserved? glibc? egress to Maven/Adoptium?
-      (`workloads/exec-probe.example.yaml`)
-- [ ] Plain `command: java -jar ...` on Standard env — is a JRE even present? (probe answers this)
+- [x] Exec probe ✅ 2026-07-22, run 93215537511850, e2-demo-field-eng: snapshot mount rw+exec,
+      +x preserved, glibc 2.39/Ubuntu 24.04, Maven+Adoptium egress 200 (`workloads/exec-probe.example.yaml`;
+      receipts in `experiments/multi-language/NOTES.md`)
+- [x] JRE present on Standard env (`/usr/bin/java`, same run; version capture added to probe) —
+      `java -jar` viable without shipping a JRE, pending version check
 - [ ] Portable Temurin JRE + DJL fat jar via snapshot; verify GPU visibility from JVM
       (`workloads/djl-train.example.yaml`)
 - [ ] GraalVM native-image of the DJL trainer (stretch — JNI metadata for runtime libtorch loading)
@@ -73,13 +75,13 @@ integration, Spark Connect ergonomics. A Java DL4J/Spark-based trainer gets raw 
 - [ ] MLflow tracking from Java client against workspace tracking server
 - [ ] Multi-node coordination without `@distributed` — env vars available to `command` for rank/world-size?
 
-**[the customer] angle:** [customer MLE] raised Java; use case still unknown — *qualify before engineering*. Plausible honest
+**Customer angle:** a customer architect raised Java; use case still unknown — *qualify before engineering*. Plausible honest
 answer: "Python-first; JVM via container escape hatch; here's the demo and here's what you give up."
 
 ## 5. Batch inference / embedding jobs
 
 Internal positioning includes batch inference on SGC. Same mechanics as training paths; test only if a
-[the customer] team asks (they currently serve on edge).
+customer team asks (they currently serve on edge).
 
 ## Cross-cutting test dimensions (apply to every family)
 

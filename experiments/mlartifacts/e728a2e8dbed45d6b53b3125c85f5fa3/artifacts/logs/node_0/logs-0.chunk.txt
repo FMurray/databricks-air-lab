@@ -1,0 +1,46 @@
+Root python environment activated successfully
+Environment setup started at Thu Jul 23 01:10:54 AM UTC 2026
+Hyperparameters path: /Workspace/Users/forrest.murray@databricks.com/.air/cli_launch/air-lab-exec-probe/exec-probe_9fed2685eeb44fe7/training_config.yaml
+Inspecting tarball at /Workspace/Users/forrest.murray@databricks.com/.air/repo_snapshots/databricks-air-lab/databricks-air-lab_20260722_210953.tar.gz...
+tar: Ignoring unknown extended header keyword 'LIBARCHIVE.xattr.com.apple.provenance'
+Extracting code_source into /databricks/code_source...
+tar: Ignoring unknown extended header keyword 'LIBARCHIVE.xattr.com.apple.provenance'
+tar: Ignoring unknown extended header keyword 'LIBARCHIVE.xattr.com.apple.provenance'
+tar: Ignoring unknown extended header keyword 'LIBARCHIVE.xattr.com.apple.provenance'
+Tarball extraction completed in 0s
+Code source databricks-air-lab available at /databricks/code_source/databricks-air-lab
+requirements.yaml path: /Workspace/Users/forrest.murray@databricks.com/.air/cli_launch/air-lab-exec-probe/exec-probe_9fed2685eeb44fe7/requirements.yaml
+uv not found in base environment; attempting to install it...
+uv installed.
+Installing dependencies from requirements.yaml...
+No dependencies found in requirements.yaml
+Dependency installation completed in 6s
+================================
+Environment setup completed at Thu Jul 23 01:11:00 AM UTC 2026
+Environment setup time: 6s
+================================
+PROBE:uname=Linux main.host.local 6.1.176-220.360.amzn2023.x86_64 #1 SMP PREEMPT_DYNAMIC Thu Jul  2 14:45:57 UTC 2026 x86_64 x86_64 x86_64 GNU/Linux
+PROBE:os=PRETTY_NAME="Ubuntu 24.04.4 LTS"
+PROBE:glibc=ldd (Ubuntu GLIBC 2.39-0ubuntu8.7) 2.39
+PROBE:nproc=16
+PROBE:java=/usr/bin/java
+PROBE:gcc=/usr/bin/gcc
+PROBE:code_source_path=/databricks/code_source/databricks-air-lab
+PROBE:snapshot_mount=rw,relatime,seclabel,lowerdir=/platform_disk/overlaybd-snapshots/snapshots/26/block/mountpoint,upperdir=/platform_disk/overlaybd-snapshots/snapshots/29/fs,workdir=/platform_disk/overlaybd-snapshots/snapshots/29/work
+PROBE:tmp_mount=rw,relatime,seclabel
+-rwxr-xr-x. 1 502 staff 109 Jul 23 00:27 /databricks/code_source/databricks-air-lab/experiments/multi-language/probe/exec_test.sh
+exec-ok
+PROBE:snapshot_script_exec=ok
+PROBE:snapshot_binary_exec=ok
+PROBE:tmp_binary_exec=ok
+PROBE:egress:https://repo1.maven.org/maven2/=200
+PROBE:egress:https://api.adoptium.net/v3/info/available_releases=200
+PROBE:gpu=GPU 0: NVIDIA A10G (UUID: GPU-9f076177-b0bf-443f-2a6f-8c487e907732)
+PROBE:done=true
+================================
+Execution Summary
+================================
+Total time: 8s
+User code execution time: 2s
+Completed at Thu Jul 23 01:11:02 AM UTC 2026
+================================
