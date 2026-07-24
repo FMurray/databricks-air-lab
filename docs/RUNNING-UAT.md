@@ -51,8 +51,17 @@ air run --file workloads/<workload>.yaml -p mkazia-lw2
   in the team channel before pool-scale sweeps.
 - Never put tokens/secrets in workload YAML `command:` or dump env in job logs. Secrets go in
   secret scopes (scope `air_lab` exists).
-- Known workspace blockers (2026-07-24): target catalog storage 403s from serverless (no Delta
-  writes until the bucket policy is fixed); no SP for the OTEL/Zerobus pipeline yet; Databricks
-  Apps disabled (no Training Hub). Details: `docs/06-uat-suite.md`.
-- First GPU run of the day may fail with a generic "Gen AI Compute Task" INTERNAL_ERROR
-  (observed platform flake here; a straight resubmit succeeded). Retry once before escalating.
+- **Known workspace blockers (2026-07-24)** — details + receipts in `docs/06-uat-suite.md`:
+  1. Serverless compute can't reach the workspace's S3 buckets or PyPI (network hardening).
+     Consequences until fixed: NO run logs anywhere (`air logs` empty), `environment.
+     dependencies` (pip) fails the run, MLflow artifact uploads hang, runs can show
+     TIMEDOUT/INTERNAL_ERROR even when your code succeeded.
+  2. Target catalog storage 403s from serverless SQL (no Delta writes).
+  3. No SP yet for the OTEL/Zerobus pipeline; Databricks Apps disabled (no Training Hub).
+- **Receipt pattern while logs are broken**: report results via MLflow params/metrics — the
+  tracking API works. `mlflow.start_run(run_id=os.environ["MLFLOW_RUN_ID"])` then
+  `mlflow.log_param("result", ...)`. Wrap any artifact/storage call in `signal.alarm` so a
+  blocked upload fails fast instead of hanging your run to its timeout.
+- A generic "Gen AI Compute Task" INTERNAL_ERROR means *your code exited non-zero OR a
+  platform error* — they're indistinguishable (verified with a deliberate `exit 1`). With
+  logs broken, use the params pattern above to see what actually happened.
