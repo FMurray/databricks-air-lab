@@ -18,8 +18,11 @@
 # COMMAND ----------
 
 # Cell 1 — where am I running?
-import torch
-gpu = torch.cuda.get_device_name(0) if torch.cuda.is_available() else "none (CPU serverless)"
+try:
+    import torch
+    gpu = torch.cuda.get_device_name(0) if torch.cuda.is_available() else "none (CPU serverless)"
+except ImportError:
+    gpu = "none (CPU serverless, no torch)"
 print(f"GPU: {gpu}")
 
 # COMMAND ----------
@@ -69,6 +72,30 @@ try:
 except Exception as e:
     PYPI = f"{type(e).__name__}"
     print(f"pypi.org: {PYPI}: {e}  → pip dependencies cannot install")
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ## Cell 5 — reproduce on the **CLI path** (the one multinode training uses)
+# MAGIC
+# MAGIC This notebook covers the *notebook-job* GPU path. Distributed/multi-node training uses the
+# MAGIC **AIR CLI** path (Gen AI compute task) — same stall, verified run `683173786603437`. To
+# MAGIC reproduce it yourself (laptop, ~5 min):
+# MAGIC
+# MAGIC ```bash
+# MAGIC uv tool install databricks-air
+# MAGIC databricks auth login --host https://fe-sandbox-mkazia-lw2.cloud.databricks.com --profile mkazia-lw2
+# MAGIC # from a copy of this folder (Workspace UI → ⋮ → Export → Source), repo root:
+# MAGIC air run --file workloads/cli-egress-probe.example.yaml -p mkazia-lw2
+# MAGIC ```
+# MAGIC
+# MAGIC **Read the result in MLflow** (run logs are the very thing that's broken, so the probe
+# MAGIC reports via params): Experiments → `air-lab-cli-egress-probe` → newest run → Params:
+# MAGIC `tcp_root_storage = OK`, `artifact_upload = FAIL ... 60s`, `probe_done = yes`.
+# MAGIC
+# MAGIC ⚠️ **Then cancel the job run** (Job runs tab): the hung log-shipping can keep the run
+# MAGIC alive past its `timeout_minutes` — one probe ran ~6 h before manual cancel. Params land
+# MAGIC within ~3 min of start; nothing after that is useful.
 
 # COMMAND ----------
 
