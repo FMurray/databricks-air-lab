@@ -27,9 +27,10 @@ platform/py-version tags are right), prints `RESULT` lines, and logs MLflow para
 
 ## Sharp edges
 
-- `vendor/` is gitignored (binaries) but IS included in the CLI's plain-tar snapshot —
-  regenerate with `vendor_deps.sh` after cloning; pin the python version there to the AIR
-  env's (v5 → check `python_version` param from a probe run if in doubt).
+- `vendor/` is **committed** (5.3MB, small test deps): the CLI's snapshot tar RESPECTS
+  .gitignore (verified run 619243740765768 — an ignored vendor/ silently vanishes from the
+  snapshot). Committed = handoff-ready. Node python is 3.12 (verified); re-run
+  `vendor_deps.sh` only to change packages or python version.
 - Watch snapshot size with heavy deps (torch-adjacent = hundreds of MB → use variant B).
 - Customer production analog: internal mirror (Artifactory) replaces the vendor step;
   the PYTHONPATH/volume mechanics are identical.
