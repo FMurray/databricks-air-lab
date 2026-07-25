@@ -10,3 +10,4 @@ experiments/docker-otel-zerobus/vendor/
 experiments/**/run-*.log
 experiments/**/preflight-*.log
 !workloads/probes/
+experiments/env-flexibility/vendored-wheels/vendor/

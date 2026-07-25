@@ -1,0 +1,31 @@
+# UAT W-vendor variant A: dependencies vendored into the code snapshot (workspace filesystem
+# path) — the no-PyPI dependency story without Docker. Prereq on a fresh clone:
+#   ./experiments/env-flexibility/vendored-wheels/vendor_deps.sh
+# (vendor/ is gitignored but rides the CLI's plain-tar snapshot.)
+experiment_name: air-lab-vendored-wheels
+
+environment:
+  version: "5"   # v4 job-plane egress broken on hardened ws — see docs/06
+  dependencies: []   # the whole point: nothing from PyPI
+
+env_variables:
+  VENDOR_PATH: vendored-into-snapshot
+
+compute:
+  num_accelerators: 1
+  accelerator_type: GPU_1xA10
+
+code_source:
+  type: snapshot
+  snapshot:
+    root_path: ..
+    include_paths:
+      - experiments/env-flexibility/vendored-wheels/
+
+command: |
+  export PYTHONPATH="$CODE_SOURCE_PATH/experiments/env-flexibility/vendored-wheels/vendor:$PYTHONPATH"
+  python $CODE_SOURCE_PATH/experiments/env-flexibility/vendored-wheels/verify_deps.py
+
+max_retries: 0
+timeout_minutes: 15
+mlflow_run_name: vendored-wheels-snapshot
