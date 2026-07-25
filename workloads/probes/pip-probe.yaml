@@ -1,0 +1,12 @@
+experiment_name: air-lab-pip-probe
+environment:
+  version: "4"
+  dependencies:
+    - emoji
+compute:
+  num_accelerators: 1
+  accelerator_type: GPU_1xA10
+command: python -c "import emoji; print('RESULT pip_egress=OK emoji', emoji.__version__)"
+max_retries: 0
+timeout_minutes: 15
+mlflow_run_name: pip-probe

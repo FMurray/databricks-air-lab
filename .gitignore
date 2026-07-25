@@ -9,3 +9,4 @@ experiments/docker-otel-zerobus/vendor/
 .mkdocs-site/
 experiments/**/run-*.log
 experiments/**/preflight-*.log
+!workloads/probes/

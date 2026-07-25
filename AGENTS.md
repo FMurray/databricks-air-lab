@@ -32,6 +32,11 @@ scripts/assets referenced by relative path.
 
 ## Conventions
 
+- **No local tmp artifacts — ever.** Every test asset (probe YAMLs, diagnostic notebooks,
+  helper scripts) is checked into the repo the moment it's used, so any teammate can pick up
+  the work without this machine. Diagnostic workloads live in `workloads/probes/`;
+  notebook sources in `utils/verification/`. If it ran against a workspace, it's in git.
+
 - **Show, don't characterize — every result claim carries its receipt.** Product is Preview/Beta;
   docs lag; findings feed a live customer engagement. A result is "verified" only with run id +
   workspace + date and the quoted output that backs it; MLflow (local, synced to managed) is the

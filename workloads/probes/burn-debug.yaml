@@ -1,0 +1,27 @@
+experiment_name: air-lab-burn-debug
+environment:
+  version: "4"
+  dependencies: []
+compute:
+  num_accelerators: 1
+  accelerator_type: GPU_1xA10
+env_variables:
+  BURN_SECONDS: "30"
+code_source:
+  type: snapshot
+  snapshot:
+    root_path: ../..
+    include_paths:
+      - experiments/node-acceptance/
+# capture stdout ourselves and ship as MLflow artifact: log delivery is broken on this ws,
+# and user-code exit != 0 is indistinguishable from platform error without it
+command: |
+  set +e
+  python $CODE_SOURCE_PATH/experiments/node-acceptance/burn.py > /tmp/burn-out.log 2>&1
+  EXITCODE=$?
+  tail -50 /tmp/burn-out.log
+  python -c "import mlflow, os; mlflow.start_run(run_id=os.environ['MLFLOW_RUN_ID']); mlflow.log_artifact('/tmp/burn-out.log')"
+  exit $EXITCODE
+max_retries: 0
+timeout_minutes: 20
+mlflow_run_name: burn-debug

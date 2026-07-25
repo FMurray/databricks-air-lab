@@ -2,18 +2,26 @@
 # MAGIC %md
 # MAGIC # REPRO: GPU-plane storage egress stall (fe-sandbox-mkazia-lw2)
 # MAGIC
-# MAGIC **How to run:** compute dropdown → **Serverless GPU** → Environment panel → Accelerator
-# MAGIC **A10**, Base environment **AI v4** → Apply. Then **Run all** (~2 min).
+# MAGIC **The issue is specific to JOB-SUBMITTED GPU runs.** Same code, three outcomes
+# MAGIC (all verified 2026-07-24/25):
 # MAGIC
-# MAGIC **What you'll see on GPU:** cell 2 (TCP connect to the workspace root-storage bucket)
-# MAGIC **succeeds**, but cell 3 (an actual ~30-byte MLflow artifact upload to that same bucket)
-# MAGIC **hangs and times out after 60s**. Run the identical notebook on plain serverless (CPU)
-# MAGIC and cell 3 completes in <1s. So the GPU plane's egress path stalls data transfer to the
-# MAGIC workspace's own S3 — a connection is allowed, payload never lands.
+# MAGIC | How the GPU run is launched | Artifact upload to workspace root storage |
+# MAGIC |---|---|
+# MAGIC | Interactive notebook (Serverless GPU attached) | ✅ OK in 0.8s |
+# MAGIC | Notebook **job** (`compute.hardware_accelerator`) | ❌ stalls, 60s timeout |
+# MAGIC | **AIR CLI Gen-AI task — what multinode training uses** | ❌ stalls, 60s timeout |
 # MAGIC
-# MAGIC **Why it matters:** the AIR launcher ships run logs to this same bucket → every AIR GPU
-# MAGIC run has NO logs (`air logs` empty, no MLflow log artifacts) and runs can hang to
-# MAGIC TIMEDOUT after user code succeeds. Full write-up: `docs/06-uat-suite.md` in this folder.
+# MAGIC **Healthy control:** attach Serverless GPU (A10, AI v4) and **Run all** — everything
+# MAGIC passes, including cell 3 (TCP ✅, upload ✅). That proves the bucket and the GPU env are fine.
+# MAGIC
+# MAGIC **Reproduce the failure:** run **cell 6** below — it submits THIS notebook as a GPU
+# MAGIC *job* and prints the verdict (`upload=REPRODUCED after 60s`). Or use the CLI path (cell 5).
+# MAGIC
+# MAGIC **Why it matters:** the AIR launcher ships run logs to this same bucket → every job-
+# MAGIC submitted GPU run (i.e. every CLI training run, incl. all multinode) has NO logs
+# MAGIC (`air logs` empty, no MLflow log artifacts), and hung log-shipping can keep runs alive
+# MAGIC past `timeout_minutes` (observed: 12-min probe ran ~6h until manual cancel — billing
+# MAGIC risk). Full write-up: `docs/06-uat-suite.md` in this folder.
 
 # COMMAND ----------
 
@@ -96,6 +104,49 @@ except Exception as e:
 # MAGIC ⚠️ **Then cancel the job run** (Job runs tab): the hung log-shipping can keep the run
 # MAGIC alive past its `timeout_minutes` — one probe ran ~6 h before manual cancel. Params land
 # MAGIC within ~3 min of start; nothing after that is useful.
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ## Cell 6 — one-click repro: submit THIS notebook as a GPU **job** and read the verdict
+# MAGIC Interactive runs are healthy (see above); the job path is what breaks. This cell
+# MAGIC submits the notebook via the Jobs API with `hardware_accelerator: GPU_1xA10`, waits
+# MAGIC (~4–6 min incl. provisioning), and prints the child's verdict. Expect
+# MAGIC `upload=REPRODUCED after 60s` until the egress fix lands — then this flips to `upload=OK`.
+
+# COMMAND ----------
+
+import json as _json
+import time as _t
+
+_ctx = dbutils.notebook.entry_point.getDbutils().notebook().getContext()
+_tags = _json.loads(_ctx.toJson()).get("tags", {})
+if "jobId" in _tags or "runId" in _tags or "jobRunId" in _tags:
+    # we ARE the job-submitted child — never self-submit again (would recurse)
+    print("running as a job — skipping self-submission; verdict comes from the exit cell below")
+else:
+    from databricks.sdk import WorkspaceClient
+    _w = WorkspaceClient()
+    _path = _ctx.notebookPath().get()
+    _run = _w.api_client.do("POST", "/api/2.2/jobs/runs/submit", body={
+        "run_name": "repro-gpu-egress-jobpath",
+        "tasks": [{"task_key": "repro", "notebook_task": {"notebook_path": _path},
+                   "compute": {"hardware_accelerator": "GPU_1xA10"},
+                   "environment_key": "e", "timeout_seconds": 900}],
+        "environments": [{"environment_key": "e",
+                          "spec": {"environment_version": "4", "dependencies": []}}],
+    })
+    print(f"submitted job run {_run['run_id']} on GPU_1xA10 — polling (~4-6 min)...")
+    while True:
+        _t.sleep(30)
+        _r = _w.api_client.do("GET", f"/api/2.2/jobs/runs/get?run_id={_run['run_id']}")
+        _state = _r["state"]["life_cycle_state"]
+        print("  ", _state)
+        if _state in ("TERMINATED", "INTERNAL_ERROR", "SKIPPED"):
+            break
+    _out = _w.api_client.do("GET", f"/api/2.2/jobs/runs/get-output?run_id={_r['tasks'][0]['run_id']}")
+    print("\nJOB-PATH VERDICT:", _out.get("notebook_output", {}).get("result", "(no output)"))
+    print("(compare with your interactive run above: upload OK — same code, same GPU type)")
 
 # COMMAND ----------
 
