@@ -4,7 +4,7 @@
 experiment_name: air-lab-gpu-burn
 
 environment:
-  version: "5"   # v4 job-plane egress broken on hardened ws — see docs/06
+  version: "5"   # engagement standard (2026-07-24): v5 everywhere — ships job-plane logs; NO torch preinstalled (runs 366126592157969 ff.), GPU stack must come from the snapshot
   dependencies: []   # pynvml vendored in experiments/node-acceptance/vendor/ (no-PyPI workspaces)
 
 env_variables:

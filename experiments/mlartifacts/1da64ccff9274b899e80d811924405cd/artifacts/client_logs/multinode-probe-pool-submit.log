@@ -1,0 +1,12 @@
+02:30:57 Submitting experiment: air-lab-multinode-probe
+02:30:57 air: Uploading yaml configuration files…
+02:30:58 Repository /Users/forrest.murray/databricks-air-lab has uncommitted changes — 
+02:30:58 they will be included in the plain tar snapshot.
+02:30:58 No git: ref specified — packaging working tree as plain tar (no SHA caching)
+02:30:58 air: Packaging code snapshot…
+02:31:00 Creating workload via Jobs API for experiment: air-lab-multinode-probe
+02:31:01 Submitted workload with Job Run ID: 968264353316767
+02:31:01 View job run at: 
+02:31:01 https://fe-sandbox-mkazia-lw2.cloud.databricks.com/jobs/runs/968264353316767?o=7
+02:31:01 474656734648830
+02:31:03 Monitoring job and streaming logs...
