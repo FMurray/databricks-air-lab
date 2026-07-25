@@ -94,7 +94,7 @@ except Exception as e:
 # MAGIC uv tool install databricks-air
 # MAGIC databricks auth login --host https://fe-sandbox-mkazia-lw2.cloud.databricks.com --profile mkazia-lw2
 # MAGIC # from a copy of this folder (Workspace UI → ⋮ → Export → Source), repo root:
-# MAGIC air run --file workloads/cli-egress-probe.example.yaml -p mkazia-lw2
+# MAGIC air run --file workloads/probes/cli-egress-probe.example.yaml -p mkazia-lw2
 # MAGIC ```
 # MAGIC
 # MAGIC **Read the result in MLflow** (run logs are the very thing that's broken, so the probe
