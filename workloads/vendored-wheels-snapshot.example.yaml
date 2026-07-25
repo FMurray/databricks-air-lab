@@ -23,6 +23,7 @@ code_source:
       - experiments/env-flexibility/vendored-wheels/
 
 command: |
+  echo "--- snapshot contents:"; ls -la $CODE_SOURCE_PATH/experiments/env-flexibility/vendored-wheels/ || true
   export PYTHONPATH="$CODE_SOURCE_PATH/experiments/env-flexibility/vendored-wheels/vendor:$PYTHONPATH"
   python $CODE_SOURCE_PATH/experiments/env-flexibility/vendored-wheels/verify_deps.py
 
