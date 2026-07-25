@@ -1,7 +1,19 @@
 # Vendored dependencies UAT — no-PyPI workspaces (W-vendor)
 
 The hardened/customer workspaces block PyPI **by design** (no `environment.dependencies`).
-This family proves the two supported dependency-delivery paths, GA surface only (no Docker):
+
+**Check the documented path FIRST — workspace default package repositories (GA):** an admin
+points the workspace at an internal mirror (Artifactory etc.) via secret scope
+`databricks-package-management` (keys `pip-index-url`, `pip-extra-index-urls`, `pip-cert`;
+auth embedded in URL; UI: Settings → Compute → Default Package Repositories). Serverless
+notebooks and jobs inherit it automatically — `environment.dependencies` then just works.
+docs: /aws/en/admin/workspace-settings/default-python-packages. ⚠️ Unverified whether the
+AIR Gen-AI env build inherits it (needs a workspace admin to set it + rerun
+`workloads/probes/pip-probe.yaml`; if the error changes from PyPI DNS to the custom index,
+it's inherited). For the customer: this is the production answer.
+
+This family proves the two **zero-admin fallback** paths (also the fully air-gapped story),
+GA surface only (no Docker):
 
 | Variant | Delivery | Workload | Status gate |
 |---|---|---|---|

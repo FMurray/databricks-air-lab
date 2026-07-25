@@ -36,6 +36,9 @@ network posture better than our open sandboxes). Profile: `mkazia-lw2`. Catalog:
 | 11 | Env flexibility: vLLM in std env | `vllm-smoke.example.yaml` | 1×A10 dry → 1×H100 | 🆕 built 2026-07-24; needs HF egress (probe reports) |
 | 12 | Classic ML: XGBoost GPU (hang repro) | `xgboost-gpu.example.yaml` | 1×A10 control → 1×H100 | 🆕 built 2026-07-24 |
 | 13 | FM: LoRA fine-tune | `lora-finetune.example.yaml` | 1×A10 dry → 8×H100 | 🆕 built 2026-07-24; needs HF egress |
+| 14 | Deps: vendored (snapshot) | `vendored-wheels-snapshot.example.yaml` | 1×A10 | ✅ run 846540776169482 — emoji+xxhash (compiled) via committed vendor/ + PYTHONPATH, verdict PASS |
+| 15 | Deps: vendored (UC volume) | `vendored-wheels-ucvolume.example.yaml` | 1×A10 | ⛔ staged; gated on catalog bucket fix (#1) |
+| 16 | Deps: workspace default package repo (documented GA path) | admin setting, `probes/pip-probe.yaml` re-test | — | 📋 needs workspace admin: scope `databricks-package-management` → internal index; verify AIR env build inherits |
 
 ## Admin prerequisites on the target (owner asks)
 
