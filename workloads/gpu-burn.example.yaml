@@ -1,12 +1,11 @@
 # UAT A1: GPU burn + health per node. Default = cheap A10 dry-run; acceptance sweep uses
 # the H100 override below, submitted once per pool node in parallel.
-#   --override compute.accelerator_type=GPU_8xH100 env_variables.EXPECT_GPUS=8 env_variables.BURN_SECONDS=900
+#   --override compute.accelerator_type=GPU_8xH100 compute.num_accelerators=8 env_variables.EXPECT_GPUS=8 env_variables.BURN_SECONDS=900
 experiment_name: air-lab-gpu-burn
 
 environment:
-  version: "4"
-  dependencies:
-    - nvidia-ml-py
+  version: "5"   # v4 job-plane egress broken on hardened ws — see docs/06
+  dependencies: []   # pynvml vendored in experiments/node-acceptance/vendor/ (no-PyPI workspaces)
 
 env_variables:
   EXPECT_GPUS: "1"

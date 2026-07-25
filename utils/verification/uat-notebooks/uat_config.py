@@ -4,7 +4,7 @@
 # Each check notebook is executed as a one-time serverless notebook job per shape, with the
 # accelerator pinned explicitly via the Jobs API:
 #   tasks[].compute.hardware_accelerator: GPU_1xA10 | GPU_1xH100 | GPU_8xH100
-#   environments[].spec.environment_version: "4"  (AIR env; 4 or 5 valid)
+#   environments[].spec.environment_version: "5" — v4 job-plane egress is broken on this ws (docs/06)
 # "CPU" means plain serverless (no compute block).
 #
 # NB (2026-07-24): keep dependencies [] until the PyPI-egress blocker is fixed — any pip
@@ -19,7 +19,7 @@
 # use workloads/multinode-*.yaml and workloads/nccl-allreduce.example.yaml.
 
 UAT_CONFIG = {
-    "environment_version": "4",
+    "environment_version": "5",
     "dependencies": [],
     "checks": [
         {
