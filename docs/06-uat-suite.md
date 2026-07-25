@@ -28,7 +28,7 @@ network posture better than our open sandboxes). Profile: `mkazia-lw2`. Catalog:
 | 3 | Multi-language / JVM (DJL) | `djl-train.yaml` | 1×A10 | ⏸ gated on #1 (egress + exec findings) |
 | 4 | Classic ML (TabICL) | `tabicl-bench.yaml` → `tabicl-memprobe` | 1×A10 → 1×H100 | ⏸ gated on #1 |
 | 5 | Multinode probe (cheap) | `multinode-probe.yaml` + A10 override | 2×(1×A10) | ✅ run 128835177125736 — 2-node coordination verified |
-| 6 | Multinode at scale | `multinode-correctness`, `fsdp-multinode` | 2×(8×H100) | 📋 staged; submit deliberately only (cost) |
+| 6 | Multinode at scale | `multinode-probe` ✅, `multinode-correctness`, `fsdp-multinode` | 2×(8×H100) | ✅ probe on reserved pool: run 968264353316767 (2026-07-24) — 16 ranks/2 nodes, busbw ~332 GB/s, submit→SUCCESS 2 min; correctness/FSDP next |
 | 7 | Training Hub app | `apps/training-hub/` | Apps | ⛔ blocked: Apps disabled for the org |
 | 8 | Billing/visibility SQL | `utils/billing/`, `utils/visibility/` | warehouse | ✅ runnable (system tables readable); telemetry joins wait on #2 |
 | 9 | Node acceptance: burn + health | `gpu-burn.example.yaml` | 1×A10 dry → 8×H100/node | 🆕 built 2026-07-24; dry-run gated on #1 |
@@ -46,61 +46,40 @@ network posture better than our open sandboxes). Profile: `mkazia-lw2`. Catalog:
 2. **Service principal**: SCIM create is admin-only; SPs from other workspaces are
    `invalid_client` here. Blocks #2 auth. Secret scope `air_lab` is ready to receive creds.
 3. **Enable Databricks Apps** for the org. Blocks #7.
-4. **ROOT CAUSE (unified) — serverless compute cannot reach the workspace's S3 / PyPI.**
-   Direct evidence, run 906184622669132 (2026-07-24): in-workload `mlflow.log_artifact` fails
-   `HTTPSConnectionPool(host='mkazia-lw2-workspace-root-storage.s3-fips.us-east-1.amazonaws.com')
-   Max retries exceeded` — connection-level, from a GPU node, captured via MLflow params (the
-   tracking API works). One network misconfiguration produces all of these symptoms:
-   - **No logs on any AIR run** (`air logs` empty, zero MLflow log artifacts): the launcher
-     ships log chunks to that same root-storage bucket.
-   - **Runs TIMEDOUT even after user code completes**: launcher log-shipping hangs in cleanup
-     (probe logged `probe_done=yes`, then the run sat until timeout).
-   - **pip `dependencies` fail** (run 219665188914633 with just `[emoji]`): PyPI egress blocked
-     from env build. ⚠️ Reframed 2026-07-24: this is likely **by design** — the workspace
-     mirrors the customer's no-PyPI posture (their production uses an internal mirror).
-     Treat as a constraint, not a bug: vendor wheels into the `code_source` snapshot
-     (`uv pip install --target vendor --python-platform x86_64-unknown-linux-gnu ...`, then
-     `PYTHONPATH=$CODE_SOURCE_PATH/vendor`) — same pattern as the Docker cross-builds.
-     Affects gpu-burn(+NVML), xgboost, tabicl, vllm, lora until they're converted.
-   - **Catalog bucket 403 from serverless SQL** (ask #1) — same hardening theme.
-   Fix is network-side (bucket policies / egress rules must allowlist the serverless data
-   plane); nothing is user-fixable. Until then: use **MLflow params/metrics as the receipt
-   channel** (tracking API is healthy) and wrap any artifact/storage call in a
-   `signal.alarm` timeout so runs fail fast instead of hanging to TIMEDOUT.
-   **Plane differential (driver run 791366682924044, identical code CPU vs GPU_1xA10):**
-   - CPU serverless: `mlflow.log_artifact` → **OK in 0.4s**; root-storage TCP 443 ✅.
-   - GPU node: root-storage **TCP 443 connects ✅ but the artifact upload times out (>60s)**
-     — the block is not a plain connection deny; it behaves like stateful egress/proxy
-     filtering that stalls data transfer from the GPU plane. Same pattern explains AIR
-     launcher log-shipping hanging (log blackout + post-success TIMEDOUTs).
-   - `pypi.org`: DNS `Temporary failure in name resolution` on BOTH planes → the pip blocker
-     is an egress/DNS allowlist.
-   Point the fix at: GPU-plane egress path to workspace root storage (proxy/firewall rules,
-   not just bucket policy), plus DNS/egress allowlist for PyPI on both planes.
-   **Self-contained repro: `/Workspace/Shared/databricks-air-lab/REPRO-GPU-EGRESS`** — attach
-   Serverless GPU (A10, AI v4), Run-all, ~2 min. Verified verdicts: A10 →
-   `upload=REPRODUCED after 60s` (run 845924716536114); plain serverless →
-   `upload=OK in 10.3s` (run 786560643819370).
+4. **RESOLVED (mitigation) / CAVEAT — AIR env v4 breaks job-submitted GPU egress; pin v5.**
+   Final diagnosis 2026-07-25 after full A/B isolation: GPU runs submitted as **jobs**
+   (notebook jobs AND AIR CLI Gen-AI tasks) cannot upload to the workspace root-storage
+   bucket when the environment is **version 4**. **Version 5 works.** Interactive GPU
+   notebooks are unaffected either way. Trigger method (run-now vs runs/submit) is NOT a
+   factor (isolated: run-now + v4 fails, runs/submit + v5 works).
 
-   **Complete path matrix (identical tcp/upload/pypi checks, 2026-07-24):**
+   | GPU run | env v4 | env v5 |
+   |---|---|---|
+   | Interactive notebook | ✅ 0.8s | ✅ |
+   | Notebook job (`hardware_accelerator`) | ❌ 60s stall ×5 runs | ✅ 11.5s (run 733701251559072) |
+   | AIR CLI Gen-AI task (multinode's path) | ❌ stall (run 683173786603437) | ✅ 0.4s + **`air logs` streams content — first time on this ws** (run 20867331866373) |
 
-   | Submission path | TCP→root storage | Artifact upload | Runs/receipts |
-   |---|---|---|---|
-   | CPU notebook job | ✅ | ✅ 0.4–10.3s | 874257167081455, 786560643819370 |
-   | GPU notebook job (`hardware_accelerator`) | ✅ | ❌ 60s stall | 845924716536114, 220831566025796 (+1) |
-   | **GPU CLI Gen-AI task (multinode's path)** | ✅ 0.00s | ❌ 60s stall | 683173786603437 (params receipt) |
-   | GPU interactive notebook | — | reported OK by user (unconfirmed cell-1) | — |
+   **Mitigation applied:** every repo workload YAML + notebook env spec pins
+   `version: "5"` / `environment_version: "5"`. A/B repro:
+   `/Workspace/Shared/databricks-air-lab/REPRO-GPU-EGRESS` cell 6 (submits v4+v5 children,
+   prints both verdicts) or CLI: `air run --file workloads/probes/cli-egress-probe.example.yaml
+   -p <profile>` (healthy v5 default; `--override environment.version=4` reproduces).
 
-   Verdict: **both job-submitted GPU paths are broken identically**; the fix target is the
-   job-plane GPU egress to workspace root storage. PyPI DNS fails everywhere — but that's
-   likely by design (customer-realistic no-PyPI posture); vendor wheels instead.
+   **Still report to eng/oncall**: (a) v4's job-plane egress is broken here while v5's works
+   — v4 is a currently-valid env version and other tenants will hit this blind (no logs =
+   undebuggable); (b) **timeout enforcement inconsistency**: one hung v4 run sailed ~6h past
+   `timeout_minutes: 12` before manual cancel (run 683173786603437, billing hazard), others
+   enforced correctly. Note: most "post-success hang" observations were OUR probes' missing
+   `mlflow.end_run()` (metrics-monitor thread keeps python alive) — fixed in
+   `workloads/probes/`; the 6h timeout-defeat stands regardless.
 
-   ⚠️ **Runaway-run hazard**: run 683173786603437 (`timeout_minutes: 12`) logged
-   `probe_done=yes` within minutes, then hung in launcher cleanup for **~6 hours** until
-   manually cancelled — the hung log-shipping defeated the run timeout. Earlier runs DID
-   enforce their timeouts (burn-debug ×2 → TIMEDOUT), so enforcement is inconsistent.
-   Until the egress fix: check long-RUNNING AIR runs manually; don't trust timeout_minutes
-   to bound spend on this workspace.
+   **Related constraints (unchanged):**
+   - PyPI unreachable from all planes (DNS) — **by design** (customer-realistic no-PyPI
+     posture). Vendor wheels via `code_source` snapshot or UC volume (UAT track for both
+     variants pending); `dependencies: []` until then. Affects gpu-burn(+NVML), xgboost,
+     tabicl, vllm, lora.
+   - Receipt discipline: MLflow params/metrics are the durable channel;
+     `signal.alarm` around storage calls; `mlflow.end_run()` always.
 
 ## Deploy procedure (per workspace)
 

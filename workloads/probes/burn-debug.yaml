@@ -1,6 +1,6 @@
 experiment_name: air-lab-burn-debug
 environment:
-  version: "4"
+  version: "5"   # v4 job-plane egress broken on hardened ws — see docs/06
   dependencies: []
 compute:
   num_accelerators: 1

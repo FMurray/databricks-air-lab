@@ -4,7 +4,7 @@
 experiment_name: air-lab-gpu-burn
 
 environment:
-  version: "4"
+  version: "5"   # v4 job-plane egress broken on hardened ws — see docs/06
   dependencies: []
 
 env_variables:

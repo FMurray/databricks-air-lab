@@ -79,10 +79,10 @@ air run --file workloads/<workload>.yaml -p mkazia-lw2
 - Never put tokens/secrets in workload YAML `command:` or dump env in job logs. Secrets go in
   secret scopes (scope `air_lab` exists).
 - **Known workspace blockers (2026-07-24)** — details + receipts in `docs/06-uat-suite.md`:
-  1. Serverless compute can't reach the workspace's S3 buckets or PyPI (network hardening).
-     Consequences until fixed: NO run logs anywhere (`air logs` empty), `environment.
-     dependencies` (pip) fails the run, MLflow artifact uploads hang, runs can show
-     TIMEDOUT/INTERNAL_ERROR even when your code succeeded.
+  1. **Pin environment version 5** — env v4 breaks job-submitted GPU egress here (no run logs,
+     artifact hangs, misleading TIMEDOUT/INTERNAL_ERROR). Repo YAMLs are pinned already;
+     verify any hand-written YAML has `version: "5"`. PyPI is unreachable by design —
+     vendor wheels, keep `dependencies: []`.
   2. Target catalog storage 403s from serverless SQL (no Delta writes).
   3. No SP yet for the OTEL/Zerobus pipeline; Databricks Apps disabled (no Training Hub).
 - **Receipt pattern while logs are broken**: report results via MLflow params/metrics — the
