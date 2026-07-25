@@ -56,7 +56,12 @@ network posture better than our open sandboxes). Profile: `mkazia-lw2`. Catalog:
    - **Runs TIMEDOUT even after user code completes**: launcher log-shipping hangs in cleanup
      (probe logged `probe_done=yes`, then the run sat until timeout).
    - **pip `dependencies` fail** (run 219665188914633 with just `[emoji]`): PyPI egress blocked
-     from env build. Blocks gpu-burn(+NVML), xgboost, tabicl, vllm, lora.
+     from env build. ⚠️ Reframed 2026-07-24: this is likely **by design** — the workspace
+     mirrors the customer's no-PyPI posture (their production uses an internal mirror).
+     Treat as a constraint, not a bug: vendor wheels into the `code_source` snapshot
+     (`uv pip install --target vendor --python-platform x86_64-unknown-linux-gnu ...`, then
+     `PYTHONPATH=$CODE_SOURCE_PATH/vendor`) — same pattern as the Docker cross-builds.
+     Affects gpu-burn(+NVML), xgboost, tabicl, vllm, lora until they're converted.
    - **Catalog bucket 403 from serverless SQL** (ask #1) — same hardening theme.
    Fix is network-side (bucket policies / egress rules must allowlist the serverless data
    plane); nothing is user-fixable. Until then: use **MLflow params/metrics as the receipt
@@ -76,6 +81,26 @@ network posture better than our open sandboxes). Profile: `mkazia-lw2`. Catalog:
    Serverless GPU (A10, AI v4), Run-all, ~2 min. Verified verdicts: A10 →
    `upload=REPRODUCED after 60s` (run 845924716536114); plain serverless →
    `upload=OK in 10.3s` (run 786560643819370).
+
+   **Complete path matrix (identical tcp/upload/pypi checks, 2026-07-24):**
+
+   | Submission path | TCP→root storage | Artifact upload | Runs/receipts |
+   |---|---|---|---|
+   | CPU notebook job | ✅ | ✅ 0.4–10.3s | 874257167081455, 786560643819370 |
+   | GPU notebook job (`hardware_accelerator`) | ✅ | ❌ 60s stall | 845924716536114, 220831566025796 (+1) |
+   | **GPU CLI Gen-AI task (multinode's path)** | ✅ 0.00s | ❌ 60s stall | 683173786603437 (params receipt) |
+   | GPU interactive notebook | — | reported OK by user (unconfirmed cell-1) | — |
+
+   Verdict: **both job-submitted GPU paths are broken identically**; the fix target is the
+   job-plane GPU egress to workspace root storage. PyPI DNS fails everywhere — but that's
+   likely by design (customer-realistic no-PyPI posture); vendor wheels instead.
+
+   ⚠️ **Runaway-run hazard**: run 683173786603437 (`timeout_minutes: 12`) logged
+   `probe_done=yes` within minutes, then hung in launcher cleanup for **~6 hours** until
+   manually cancelled — the hung log-shipping defeated the run timeout. Earlier runs DID
+   enforce their timeouts (burn-debug ×2 → TIMEDOUT), so enforcement is inconsistent.
+   Until the egress fix: check long-RUNNING AIR runs manually; don't trust timeout_minutes
+   to bound spend on this workspace.
 
 ## Deploy procedure (per workspace)
 
