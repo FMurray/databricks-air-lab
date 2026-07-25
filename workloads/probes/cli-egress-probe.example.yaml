@@ -1,6 +1,6 @@
 experiment_name: air-lab-cli-egress-probe
 environment:
-  version: "4"
+  version: "5"   # v4 job-plane egress broken on hardened ws — see docs/06
   dependencies: []
 compute:
   num_accelerators: 1
@@ -36,6 +36,7 @@ command: |
   except Exception as e:
       mlflow.log_param("pypi_egress", ("FAIL %s %s" % (type(e).__name__, e))[:200])
   mlflow.log_param("probe_done", "yes")
+  mlflow.end_run()  # REQUIRED: without it the metrics-monitor thread keeps python alive -> run idles to timeout
   PYEOF
 max_retries: 0
 timeout_minutes: 12
