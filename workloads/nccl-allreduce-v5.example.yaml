@@ -1,0 +1,27 @@
+# UAT A2 on env v5 (no torch): ctypes-NCCL all-reduce across nodes using the image's own
+# CUDA 12.9 + libnccl 2.29.7. Default = cheap 2-node A10 plumbing dry-run.
+# Scale (quota permitting):
+#   --override compute.accelerator_type=GPU_8xH100 compute.num_accelerators=128   # 16 nodes
+#   --override compute.accelerator_type=GPU_8xH100 compute.num_accelerators=32    # 4 nodes
+experiment_name: air-lab-nccl-allreduce
+
+environment:
+  version: "5"   # engagement standard; libnccl/cublas/cudart come from the image
+  dependencies: []
+
+compute:
+  num_accelerators: 2
+  accelerator_type: GPU_1xA10
+
+code_source:
+  type: snapshot
+  snapshot:
+    root_path: ..
+    include_paths:
+      - experiments/node-acceptance/
+
+command: python $CODE_SOURCE_PATH/experiments/node-acceptance/nccl_allreduce_ctypes.py
+
+max_retries: 0
+timeout_minutes: 30
+mlflow_run_name: nccl-allreduce-v5
