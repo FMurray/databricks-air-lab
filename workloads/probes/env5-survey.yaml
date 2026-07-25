@@ -1,6 +1,6 @@
 # Probe: what does env v5 provide on the Gen-AI task path (python stack, CUDA libs)?
 # v5 ships logs — read results with: air logs <run_id> -p <profile>
-experiment_name: air-lab-gpu-burn
+experiment_name: air-lab-env-diagnostics
 
 environment:
   version: "5"

@@ -1,4 +1,4 @@
-experiment_name: air-lab-pip-probe
+experiment_name: air-lab-env-diagnostics
 environment:
   version: "5"   # v4 job-plane egress broken on hardened ws — see docs/06
   dependencies:

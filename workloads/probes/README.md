@@ -1,7 +1,9 @@
 # Diagnostic probes (AIR CLI workloads)
 
 Tiny, cheap (1×A10 or less), single-purpose workloads used to isolate platform behavior.
-Run: `air run --file workloads/probes/<probe>.yaml -p <profile>`. Every probe here backs a
+Run: `air run --file workloads/probes/<probe>.yaml -p <profile>`. All probes log to ONE
+MLflow experiment — **`air-lab-env-diagnostics`** — so environment/diagnostic runs never
+pollute the real workload-family experiments (run names distinguish the probes). Every probe here backs a
 receipt in `docs/06-uat-suite.md` — keep them runnable; they're the re-verification suite
 after any workspace-side fix.
 
