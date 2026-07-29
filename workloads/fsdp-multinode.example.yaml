@@ -1,33 +1,64 @@
-# Multi-node FSDP fine-tune — the CLI-only path (2 nodes × 8xH100).
-# Schema source of truth: `air -h config` and `air -h config.<section>`
+# Real FSDP2 training loop on AIR (BR-4) — four assertion-gated proofs.
+# Trainer: experiments/foundation-models/fsdp/train_fsdp.py (self-contained, egress-free).
+# Success = rank-0 emits FSDP_BR4_COMPLETE (Proofs 1+2+3 = BR-4 acceptance); FSDP_SUITE8_COMPLETE
+# adds Proof 4 (checkpoint/resume, suite #8). Pre-registered success criteria + local pre-flight
+# output: experiments/foundation-models/NOTES.md. Schema source of truth: `air -h config`.
+#
+# Shape ladder (escalate deliberately — see plans/train-fsdp.md):
+#   rung 1  GPU_1xA10  world=1  — env builds with deps []; runtime torch/NCCL + fully_shard + DCP
+#           API resolve; loop + single-writer checkpoint round-trip. Sharding/reduce proofs are
+#           VACUOUS at world=1 (necessary API gate, not sufficient). Override:
+#             --override compute.num_accelerators=1 compute.accelerator_type=GPU_1xA10
+#   rung 2  GPU_8xH100 1 node world=8 — THE headline: sharding, reduce-scatter, convergence,
+#           collective DCP first real at world>=2. Emits FSDP_BR4_COMPLETE. As configured below.
+#   rung 3  2x GPU_8xH100 world=16 — FSDP survives the inter-node fabric (EFA). Override:
+#             --override compute.num_accelerators=16
+#           Check node 1: `air logs <id> --node 1`.
+#   rung 4  (stretch) DDP-OOM/FSDP-fit counterfactual — see the memprobe override at the bottom.
 experiment_name: air-lab-fsdp-multinode
 
 environment:
-  version: "4"
-  dependencies:
-    - torch
-    - transformers
-    - datasets
-  env_variables:
-    HF_HOME: /tmp/hf
-  secrets:
-    HF_TOKEN: air_lab/hf_token
+  version: "5"          # MANDATORY: v4 silently breaks GPU jobs (07); v5 ships FSDP2 + DCP
+                        # state_dict API + the root-storage log-shipping fix. Target FSDP2
+                        # directly — if fully_shard is absent on v5, that is a finding to report.
+  dependencies: []      # torch is preinstalled; the trainer is self-contained (no PyPI/HF egress).
 
 compute:
-  num_accelerators: 16          # must be whole-node multiple (8) => 2 nodes
+  num_accelerators: 8           # rung 2 headline (1 node). whole-node multiples of 8 only.
   accelerator_type: GPU_8xH100
 
 code_source:
   type: snapshot
   snapshot:
-    root_path: .
+    root_path: ..               # relative to THIS YAML's dir, not CWD
     include_paths:
-      - src/
+      - experiments/foundation-models/fsdp/
 
-# TODO(open-q #3): confirm which rank/master env vars are injected for torchrun
-command: torchrun --nproc_per_node=8 $CODE_SOURCE_PATH/src/train_fsdp.py
+# Multinode torchrun via injected env (open-q #3 closed; --nproc_per_node alone does NOT span
+# nodes). --max-restarts=0 isolates the platform's max_retries from torchrun's elastic restart.
+command: >-
+  torchrun --nnodes=$NUM_NODES --node_rank=$NODE_RANK
+  --master_addr=$MASTER_ADDR --master_port=$MASTER_PORT
+  --nproc_per_node=$LOCAL_WORLD_SIZE --max-restarts=0
+  $CODE_SOURCE_PATH/experiments/foundation-models/fsdp/train_fsdp.py
+  --steps 300 --batch 16 --lr 3e-4 --mp
 
-max_retries: 2
-timeout_minutes: 240
-usage_policy_name: air-lab      # verify what this emits in system.billing.usage (open-q #5)
-mlflow_run_name: fsdp-multinode-smoke
+# NOTE: append --proof4 --ckpt-dir /Volumes/<cat>/<schema>/<vol>/fsdp-ckpt for suite #8 (Proof 4).
+# The UC-volume path is BR-2-gated; the trainer gates DCP behind a collective probe-write-first
+# and marks Proof 4 blocked-on-BR-2 without failing the BR-4 receipt. Do NOT point --ckpt-dir at
+# /tmp for the max_retries test (open-q #10) — /tmp does not survive a whole-job resubmit.
+
+max_retries: 0                  # rungs 1-3. For the open-q #10 test set to 1 and add
+                                # env FSDP_FAIL_AT_STEP=<n> inline in command (whole-rank exit 137).
+timeout_minutes: 30             # PIN from the A10 step time before H100 spend (~2x est. wall-clock);
+                                # coordinate/announce is not a budget. Name the H100 approver in NOTES.md.
+mlflow_run_name: fsdp-multinode
+# usage_policy_name: omit on e2-demo-field-eng (no air-lab policy → validation fails, open-q #5).
+
+# --- rung 4 (stretch): DDP-OOM / FSDP-fit counterfactual (open-q #17, half-closes it) ---
+# Run BOTH arms; the ddp arm is the control that should CUDA-OOM first, the fsdp arm should fit.
+# State-dominated shape: deep+wide, SHORT seq, small batch (so state, not activations, drives OOM).
+#   fsdp arm:  --override command="torchrun ... train_fsdp.py --memprobe --arm fsdp \
+#                --layers 48 --dim 4096 --heads 32 --seq 16 --batch 1"
+#   ddp arm:   same with --arm ddp
+# Label host-OOM (exit 137, no traceback) vs CUDA-OOM (FSDP_MEMPROBE_CUDA_OOM) in the write-up.
