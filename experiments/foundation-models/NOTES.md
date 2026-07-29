@@ -190,6 +190,116 @@ captured — neither probe prints it, a gap to close in future probes; local pre
 used torch 2.13.0 CPU. Policy decision 2026-07-22: raw logs are NOT committed to the repo
 (anonymization + evidence-strength rationale in the skill); platform holds raw evidence.
 
+## FSDP training loop (BR-4 / suites #4 & #8) — `train_fsdp.py`
+
+Files: `fsdp/train_fsdp.py` (trainer + `--local`) + `workloads/fsdp-multinode.example.yaml`.
+Plan: `plans/train-fsdp.md`. Unblocks suite #4 (FSDP loop) + the checkpoint half of #8; feeds
+open-q #10 (`max_retries` resume) and half-closes open-q #17 (memory envelope / B300).
+
+**What this proves that the platform hasn't:** fabric + numerics are green at 160 GPUs, but only
+with synthetic collectives (`nccl-allreduce`, `distributed_correctness_probe.py` — an all-reduce
+parity check on a *replicated* model). FSDP2 reduces gradients with **reduce-scatter**, a different
+collective on a sharded memory layout the probe never touches. Four properties are unproven, each
+behind its own assertion-gated sentinel (unreachable unless assertions passed — "exited 0" is not
+evidence).
+
+#### Pre-registered success criteria (written BEFORE any GPU submit, 2026-07-28)
+
+Runtime torch build is captured on rung 1 (`FSDP_VERSIONS torch=… nccl=… fully_shard=…`) — the
+sharding assertion + DCP API are version-scoped; local pre-registration used **torch 2.13.0 CPU**.
+
+1. `FSDP_SHARDING_OK world=W full=P local≈P/W …` — per-rank **parameter storage**
+   `sum(p.to_local().numel())` ≈ `full/world` within a **3% padding tolerance** (last dim-0 shard
+   padded to divide evenly). Asserted on persistent param storage, **not** peak memory (FSDP
+   all-gathers full layers transiently → peak ≫ full/world; `max_memory_allocated` logged as
+   observed only). **Wrapping strategy = per-block `fully_shard` + one top-level call** (pinned; it
+   changes the exact ratio). **Vacuous at world=1** (smoke test only). Full open-q #17 envelope
+   logged after the first optimizer step: `param + grad(post-reduce-scatter shard) + optim(m+v)`
+   bytes vs the full-model counterfactual `(P+G+2P)·4B`, with **fp32 master params pinned**
+   (MixedPrecisionPolicy keeps persistent storage at 4+4+8 B; a fully-bf16 model would not).
+2. `FSDP_REDUCE_OK world=W grad_diff=… tol=…` — FSDP model + a single-process reference from an
+   **identical init state_dict** (same seed, same process), **one backward, fp32, AMP off**, global
+   batch split across ranks, mean-reduction loss. Gather each reduce-scattered grad with
+   `p.grad.full_tensor()` (collective) and assert `max|g_full − g_ref| < REDUCE_TOL`. **Tolerance
+   `2e-4`** — looser than the probe's fp64 `1e-9` (cross-rank reduce-scatter+all-gather is not
+   bit-exact; float add-order differs). Compared **after the first backward, before any optimizer
+   step**; the K-step endpoint comparison is **never done** (FSDP+AMP compounds per-step). Vacuous
+   at world=1. The probe's all-reduce parity is **companion** evidence for the *replicated* path,
+   not a substitute.
+3. `FSDP_TRAIN_OK step0=… final=… drop=…` — K steps on the synthetic task; assert loss finite
+   throughout AND final-window (20-step) mean below step-0 by ≥ `LOSS_DROP_MARGIN=0.05` **and**
+   below `EXPECTED_LOSS_CEILING=4.10`. The ceiling is a **loose upper bound** (< `ln(64)=4.159`
+   uniform-init step-0), not an invariant — it shifts with seed/LR/K/precision; bf16-on-H100 ≠
+   fp32-on-CPU, so it transfers only as a generous bound. **Scope: shows the loop converges, NOT
+   that reduction is correct** (a subtly-wrong reduction can still fall — that's Proof 2's job).
+   **Triage rule:** if `FSDP_REDUCE_OK` is green, a Proof 3 miss is **tuning/precision** (re-triage
+   K/LR/precision), *not* a platform fault — do **not** report "FSDP doesn't work on AIR."
+4. `FSDP_CKPT_RESUME_OK fingerprint_match=True resumed_from=loss@N=…` — DCP sharded save/load to a
+   UC volume, two-phase in one run: train N steps, save (**model + optimizer + scheduler**), record
+   `loss@N` + a **fingerprint = sha256 of one fixed gathered param `blocks.0.mlp.0.weight` + its
+   Adam m+v moments**; reconstruct fresh, load, assert fingerprint **bit-identical** AND next-step
+   loss within `1e-4` of the pre-save trajectory. **Fingerprint uses the named `get_state_dict`
+   mapping, not `opt.state[param]`** — FSDP2 reshards params into fresh DTensor objects across
+   fwd/bwd, so an object-identity lookup silently misses the moments (found + fixed in pre-flight;
+   would have made a dropped-moment regression invisible). DCP gated behind a **collective
+   probe-write-first** (every rank writes a solo-timeout-guarded sentinel, all-reduce MIN the flag,
+   branch collectively — never per-rank-abort a save mid-flight, which desyncs the PG → TIMEDOUT).
+   Under a UC-volume 403 (BR-2): `FSDP_CKPT_PROBE_FAILED` → Proof 4 = `blocked-on-BR-2`, which does
+   **not** fail BR-4.
+
+**Completion lines (keep BR-4 separate from the checkpoint proof):**
+- `FSDP_BR4_COMPLETE` — Proofs 1+2+3. **THE BR-4 acceptance receipt.**
+- `FSDP_SUITE8_COMPLETE` — all four. `FSDP_SUITE8_BLOCKED` if Proof 4 is `blocked-on-BR-2` (BR-4
+  receipt still stands).
+
+**Synthetic task (pinned — no RNG in data, pure function of global step).** Next token =
+`(x[t-1] + x[t-2]) mod 64` (Fibonacci-mod, `TASK_VOCAB=64 TASK_WINDOW=2 TASK_COEFFS=(1,1)
+TASK_BIAS=0`); the first 2 tokens of row *r* at step *s* are seeded `(gid·131 + i·17 + 5) mod 64`
+with `gid = s·1_000_003 + row_start + r`. Genuine context dependence (exercises attention/MLP, no
+position→token shortcut) and, being a pure function of global step, **resume regenerates the
+identical batch for step N with no sampler to checkpoint** (precondition for Proof 4). Model init
+uses RNG (`INIT_SEED=1234`), so init on **CPU under the seed then `.to(device)`** for the training
+model + the Proof-2 reference (CPU/CUDA RNG streams differ); rung-4 stress model is the exception
+(meta/sharded init, to avoid host-OOM before sharding). Default shape: `L2 d256 h4 seq64 vocab64`.
+
+**Local CPU/gloo pre-flight — ✅ RUN 2026-07-28 (this Mac, torch 2.13.0, `uv run --with torch
+--with numpy`).** Exact command + verbatim output:
+```
+$ python3 train_fsdp.py --local --steps 300 --local-world 2 --proof4 --ckpt-steps 20
+FSDP_VERSIONS torch=2.13.0 nccl=None cuda=None fully_shard=True world=2 device=cpu
+FSDP_REDUCE_OK world=2 grad_diff=2.421e-08 tol=2.0e-04 global_batch=16
+FSDP_SHARDING_OK world=2 full=1629248 local=814624 ratio=1.0000 mem=0.00GB state_local=0.0121GB state_full=0.0243GB [param=3258496 grad=3258496 optim=6516992 bytes]
+[step 0] loss=4.3302
+[step 299] loss=0.0441
+FSDP_TRAIN_OK step0=4.3302 final=0.0467 drop=4.2835 ceiling=4.1 steps=300
+FSDP_BR4_COMPLETE proofs=1,2,3 (sharding+reduce+convergence)
+FSDP_CKPT_RESUME_OK fingerprint_match=True resumed_from=loss@20=3.867697 (post=3.867697)
+FSDP_SUITE8_COMPLETE proofs=1,2,3,4 (adds checkpoint/resume)
+```
+**What `--local` actually exercised (the load-bearing rung-0 question):** FSDP2 `fully_shard`
+**does run under CPU/gloo at world≥2** — verified at world=2 (ratio 1.0000) and world=4
+(`local=407312 = full/4`, ratio 1.0000). So the CPU pre-flight de-risks real sharding,
+reduce-scatter (grad_diff 2.4e-8 ≪ 2e-4), convergence (4.33→0.047; step-0 4.33 ≈ `ln(64)=4.159`
+sanity anchor), and collective DCP save/resume (fingerprint bit-match, loss continuity 3.867697 →
+3.867697). One macOS-only quirk: `fully_shard`'s device auto-detect trips on
+`torch.mps.is_initialized`; passing an explicit `init_device_mesh("cpu", …)` dodges it (Linux/CUDA
+unaffected). **Caveat:** this is CPU/gloo, not H100/NCCL — the fp32 tolerances, the DCP-on-real-
+multi-GB-shard behavior, and peak-memory (rung 4) are still first-real on GPU. Rung 1's API gate is
+**necessary but not sufficient** (world=1 → sharding/reduce vacuous).
+
+**Open-q #17 envelope (from the local numbers, to reframe on GPU):** at world=2, `state_local ≈
+state_full/2` (0.0121 ≈ 0.0243/2) — sharding roughly halves the persistent train-state footprint
+(param+grad+optim = 4+4+8 = 16 B/param, of which params are only 1/4; measuring params alone
+under-counts ~3×). This is *persistent* state; the customer's OOM/B300 question is governed by
+**peak** memory (transient all-gathered layer + activations), which rung 4's DDP-OOM/FSDP-fit
+counterfactual addresses — and even that only proves "sharding defers OOM for a state-dominated
+model of size X," **not** the customer FM (egress-gated). #17 stays half-open.
+
+**Still to pin before H100 spend:** `K` (300 reaches loss ≪ ceiling on CPU; confirm/adjust for the
+bf16-on-H100 regime), rung-2 wall-clock from the A10 step time → `timeout_minutes` ≈ 2×, and the
+**H100 spend approver** (TBD — name here before submitting rung 2/3). Raw logs not committed
+(policy); platform + local MLflow archive hold evidence.
+
 #### AIR CLI schema findings (v0.1.0, verified via --dry-run 2026-07-17)
 
 - `environment.env_variables` **rejected** ("Unknown field"; only dependencies/docker_image/version).
