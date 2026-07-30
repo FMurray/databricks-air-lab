@@ -1,0 +1,28 @@
+# M1: sustained fabric soak — 2 nodes x 8xH100, 1GB all-reduces for 10 min, drift + counters
+# M3 (RDMA hw-counter receipts) is embedded: deltas print per node + land in MLflow metrics.
+experiment_name: air-lab-rdma-stress
+
+environment:
+  version: "5"
+  dependencies: []
+
+env_variables:
+  STRESS_SECONDS: "600"
+  BUF_MB: "1024"
+
+compute:
+  num_accelerators: 16
+  accelerator_type: GPU_8xH100
+
+code_source:
+  type: snapshot
+  snapshot:
+    root_path: ..
+    include_paths:
+      - experiments/node-acceptance/
+
+command: python $CODE_SOURCE_PATH/experiments/node-acceptance/nccl_allreduce_ctypes.py
+
+max_retries: 0
+timeout_minutes: 45
+mlflow_run_name: rdma-m1-soak

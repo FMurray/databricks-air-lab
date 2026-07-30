@@ -35,9 +35,43 @@ GPU_8xH100`), and prints one aggregated got-vs-expected matrix.
   that filename is a live Databricks convention that overrides the folder's notebook
   environments and broke the CPU driver when we tried it.)
 
+### Verify 20-node pool readiness (one notebook, one widget)
+
+Open `uat/DRIVER`, set widget **`pool` = `on`** (leave `shapes` at its default), Run-all.
+That arms `uat/checks/pool-readiness`, which submits — via the vendored `air` CLI, so the
+CLI-only rule for distributed holds — a 20×(8×H100) burn sweep plus a 2-node NCCL fabric
+probe, and verdicts purely from MLflow receipts: `burn=PASS` per node, **GPU-UUID
+distinctness** (did we really touch 20 physical nodes), quota refusals classified, fabric
+sentinel + busbw. ~15–20 min at defaults; one `pool_ready: true/false` row in the matrix.
+**This takes the whole pool — announce in the team channel first.** With `pool` left `off`
+the check is a free SKIP row. Knobs (edit `uat_config.py` params): `pool_nodes`,
+`burn_seconds` (900 = A1 acceptance grade), `fabric_nodes` (up to 16).
+
 The AIR *submission-path* workloads below still require the `air` CLI — and per the ground
 rules, **all distributed multi-node runs are CLI-only** (no shapes beyond one node in the
-notebook suite by design).
+notebook suite by design; `pool-readiness` fronts the CLI rather than using notebook shapes).
+
+## Dependencies without PyPI — two recipes
+
+**Run a workload that needs extra Python packages (vendored wheels):**
+1. On your laptop, from repo root: `./experiments/env-flexibility/vendored-wheels/vendor_deps.sh`
+   (edit `PACKAGES=(...)` in the script first; uv cross-targets linux/amd64 py3.12 from any host).
+2. Make sure the `vendor/` dir is **committed / not gitignored** — the CLI's snapshot tar
+   silently drops gitignored paths (verified).
+3. In your workload YAML: `dependencies: []`, include your experiment dir in `include_paths`,
+   and prefix the command with
+   `export PYTHONPATH="$CODE_SOURCE_PATH/<your-dir>/vendor:$PYTHONPATH"`.
+4. Submit as usual. Working example (verified PASS): `workloads/vendored-wheels-snapshot.example.yaml`.
+   Full detail + UC-volume and default-package-repo alternatives:
+   `experiments/env-flexibility/vendored-wheels/README.md`.
+
+**Use the air CLI from a notebook (no laptop needed) — vendored CLI wheels:**
+1. In any serverless notebook cell:
+   `%pip install --no-index --find-links /Workspace/Shared/databricks-air-lab/uat/wheels databricks-air`
+2. `air run --file /Workspace/Shared/databricks-air-lab/workloads/<x>.yaml` (auth is ambient
+   in the notebook). Working example: `uat/checks/air-cli-from-notebook`.
+   NB: the wheels live in **workspace files** (not a UC volume — volumes are blocked until the
+   catalog-bucket fix); rebuild instructions: `uat/wheels/README.md` in the workspace mirror.
 
 ## Run a UAT workload
 
@@ -49,7 +83,7 @@ air run --file workloads/<workload>.yaml -p mkazia-lw2
 |---|---|---|
 | Runtime probe | `air run --file workloads/exec-probe.yaml -p mkazia-lw2` | 1×A10, ~10 min |
 | A1 GPU burn (dry) | `... --file workloads/gpu-burn.example.yaml ...` | 1×A10 |
-| A1 GPU burn (acceptance, per node) | add `--override compute.accelerator_type=GPU_8xH100 env_variables.EXPECT_GPUS=8 env_variables.BURN_SECONDS=900` | 8×H100 — coordinate first |
+| A1 GPU burn (acceptance, per node) | add `--override compute.accelerator_type=GPU_8xH100 compute.num_accelerators=8 env_variables.EXPECT_GPUS=8 env_variables.BURN_SECONDS=900` | 8×H100 — coordinate first |
 | A2 all-reduce (dry) | `... --file workloads/nccl-allreduce.example.yaml --override compute.accelerator_type=GPU_1xA10 compute.num_accelerators=2` | 2×A10 |
 | A2 all-reduce (NVLink / fabric) | default YAML (8×H100) / `--override compute.num_accelerators=16` | H100 — coordinate first |
 | W3 LoRA (dry) | `... --file workloads/lora-finetune.example.yaml ...` | 1×A10; needs HF egress |
@@ -79,10 +113,10 @@ air run --file workloads/<workload>.yaml -p mkazia-lw2
 - Never put tokens/secrets in workload YAML `command:` or dump env in job logs. Secrets go in
   secret scopes (scope `air_lab` exists).
 - **Known workspace blockers (2026-07-24)** — details + receipts in `docs/06-uat-suite.md`:
-  1. Serverless compute can't reach the workspace's S3 buckets or PyPI (network hardening).
-     Consequences until fixed: NO run logs anywhere (`air logs` empty), `environment.
-     dependencies` (pip) fails the run, MLflow artifact uploads hang, runs can show
-     TIMEDOUT/INTERNAL_ERROR even when your code succeeded.
+  1. **Pin environment version 5** — env v4 breaks job-submitted GPU egress here (no run logs,
+     artifact hangs, misleading TIMEDOUT/INTERNAL_ERROR). Repo YAMLs are pinned already;
+     verify any hand-written YAML has `version: "5"`. PyPI is unreachable by design —
+     vendor wheels, keep `dependencies: []`.
   2. Target catalog storage 403s from serverless SQL (no Delta writes).
   3. No SP yet for the OTEL/Zerobus pipeline; Databricks Apps disabled (no Training Hub).
 - **Receipt pattern while logs are broken**: report results via MLflow params/metrics — the

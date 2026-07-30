@@ -4,7 +4,7 @@
 # Each check notebook is executed as a one-time serverless notebook job per shape, with the
 # accelerator pinned explicitly via the Jobs API:
 #   tasks[].compute.hardware_accelerator: GPU_1xA10 | GPU_1xH100 | GPU_8xH100
-#   environments[].spec.environment_version: "4"  (AIR env; 4 or 5 valid)
+#   environments[].spec.environment_version: "5" — v4 job-plane egress is broken on this ws (docs/06)
 # "CPU" means plain serverless (no compute block).
 #
 # NB (2026-07-24): keep dependencies [] until the PyPI-egress blocker is fixed — any pip
@@ -19,7 +19,7 @@
 # use workloads/multinode-*.yaml and workloads/nccl-allreduce.example.yaml.
 
 UAT_CONFIG = {
-    "environment_version": "4",
+    "environment_version": "5",
     "dependencies": [],
     "checks": [
         {
@@ -29,10 +29,30 @@ UAT_CONFIG = {
             "timeout_minutes": 15,
         },
         {
+            "path": "checks/air-cli-from-notebook",
+            # CPU: the CLI needs no GPU; submit mode makes the check itself submit one
+            # 1xA10 envvar-probe (12-min workload timeout) and poll it to terminal.
+            "shapes": ["CPU"],
+            "timeout_minutes": 30,
+            "params": {"air_mode": "submit"},
+        },
+        {
             "path": "checks/gpu-smoke",
             "shapes": ["GPU_1xA10", "GPU_1xH100", "GPU_8xH100"],
             "timeout_minutes": 25,
             "expect_gpus": {"GPU_1xA10": 1, "GPU_1xH100": 1, "GPU_8xH100": 8},
+        },
+        {
+            "path": "checks/pool-readiness",
+            # One-notebook 20-node readiness: burn sweep (receipts + UUID distinctness)
+            # + NCCL fabric probe, all submitted via the vendored air CLI (UAT #17 path).
+            # DEFAULT IS A NO-COST SKIP: flip confirm_pool to "yes" (and coordinate in the
+            # team channel) for the real sweep. Distributed still goes through the CLI —
+            # this check merely fronts it from a CPU notebook.
+            "shapes": ["CPU"],
+            "timeout_minutes": 90,
+            "params": {"confirm_pool": "no", "pool_nodes": "20",
+                       "burn_seconds": "300", "fabric_nodes": "2"},
         },
     ],
 }
