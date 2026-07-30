@@ -18,6 +18,11 @@ How each workload family maps onto AIR's surface, what to test, and where the sh
 **Customer angle:** the customer's tabular FM (TabICL-class) is *memory-bound* not compute-bound — whole
 dataset in GPU memory, attention blow-up OOMs. Test: activation checkpointing / FlashAttention / sequence
 sharding on H100 before conceding "needs B300". Also Mistral-class rapid fine-tuning for an ops team.
+New (2026-07-30): a customer security team is modeling an authentication use case on **transaction
+foundation models** (PRAGMA-style — see NVIDIA's public Revolut case study: transformer pretrained
+LLM-style on tokenized transaction sequences; their 1B-param variant trained on 64×H100/8 nodes).
+Maps directly onto the multi-node CLI path + FSDP/checkpoint rungs already in this family; expect a
+heavy CPU tokenization/dataloader stage (exercise the dataloader-bound rung, not just FLOPs).
 
 **Experiments:** `experiments/foundation-models/`
 
