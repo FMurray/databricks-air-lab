@@ -70,6 +70,12 @@ Consequences you must respect:
   `BLOCKED`/`SKIPPED`/`N/A`, caps the verdict at `ACCEPTED WITH CAVEATS`. A run can't claim a proof
   it didn't perform.
 - **Traceback retained, never swallowed** — fenced under `FOR SUPPORT` on any FAIL.
+- **Sentinels stay pass-gated; the report never relaxes them.** `record-don't-raise` applies to the
+  report *row*, not to the machine sentinels (`FSDP_BR4_COMPLETE`, `*_OK`, …) — those still print
+  only when the property actually held (gate on `PASS`, not `PASS or N/A`). This is the seam with
+  the `experiment-verification` skill, whose rule is `assert-don't-observe`: that skill governs how
+  evidence is *produced*; this one governs how the verdict is *presented in-run*. If the report and
+  a sentinel ever disagree, the sentinel is right and the report gate is the bug.
 
 ## When done
 

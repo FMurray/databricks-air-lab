@@ -130,8 +130,12 @@ def render_report(checks: "list[Check]", run_id: str, profile: str, shape: str,
 #         scope = "smoke" if world == 1 else "acceptance"
 #         shape = f"world={world}, {mesh_dev}"
 #         try:
+#             # run_id: prefer MLFLOW_RUN_ID (AIR-injected — the join key a confirmer uses to
+#             # find this run), fall back to the display name, then "local".
+#             run_id = (os.environ.get("MLFLOW_RUN_ID")
+#                       or os.environ.get("MLFLOW_RUN_NAME") or "local")
 #             exit_code = render_report(
-#                 checks, run_id=os.environ.get("MLFLOW_RUN_NAME", "local"),
+#                 checks, run_id=run_id,
 #                 profile=("local-cpu" if args.local else "air"),
 #                 shape=shape, scope=scope, runtime=runtime_str,
 #                 sentinels=" ".join(sentinels))

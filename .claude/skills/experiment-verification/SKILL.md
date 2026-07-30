@@ -30,7 +30,10 @@ as "mostly working" is the thing this skill exists to prevent.
 
 - **Assert, don't observe.** Probes verify their own claims and print a distinctive sentinel
   that is unreachable unless the assertions passed (`MULTINODE_PROBE_OK`). "Exited 0" is not
-  evidence of the property you care about.
+  evidence of the property you care about. (This governs how evidence is *produced*; the
+  `acceptance-report` skill governs how the in-run verdict is *presented* to a confirmer — its
+  `record-don't-raise` rule relaxes the report row but keeps sentinels pass-gated, so the two
+  don't conflict.)
 - **Write success criteria in NOTES.md before submitting** — what the run should demonstrate and
   what output will show it. This keeps "success" from being defined after seeing the results.
 - **Pre-flight locally when feasible** (single-process/CPU mode) before spending GPU money;
