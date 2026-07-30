@@ -28,14 +28,67 @@ network posture better than our open sandboxes). Profile: `mkazia-lw2`. Catalog:
 | 3 | Multi-language / JVM (DJL) | `djl-train.yaml` | 1×A10 | ⏸ gated on #1 (egress + exec findings) |
 | 4 | Classic ML (TabICL) | `tabicl-bench.yaml` → `tabicl-memprobe` | 1×A10 → 1×H100 | ⏸ gated on #1 |
 | 5 | Multinode probe (cheap) | `multinode-probe.yaml` + A10 override | 2×(1×A10) | ✅ run 128835177125736 — 2-node coordination verified |
-| 6 | Multinode at scale | `multinode-correctness`, `fsdp-multinode` | 2×(8×H100) | 📋 staged; submit deliberately only (cost) |
+| 6 | Multinode at scale | `multinode-probe` ✅, `multinode-correctness`, `fsdp-multinode` | 2×(8×H100) | ✅ probe on reserved pool: run 968264353316767 (2026-07-24) — 16 ranks/2 nodes, busbw ~332 GB/s, submit→SUCCESS 2 min; correctness/FSDP next |
 | 7 | Training Hub app | `apps/training-hub/` | Apps | ⛔ blocked: Apps disabled for the org |
 | 8 | Billing/visibility SQL | `utils/billing/`, `utils/visibility/` | warehouse | ✅ runnable (system tables readable); telemetry joins wait on #2 |
-| 9 | Node acceptance: burn + health | `gpu-burn.example.yaml` | 1×A10 dry → 8×H100/node | 🆕 built 2026-07-24; dry-run gated on #1 |
+| 9 | Node acceptance: burn + health | `gpu-burn.example.yaml` | 1×A10 dry → 8×H100/node | ✅ **A1 COMPLETE 2026-07-25: 20/20 pool nodes PASS** — 160 distinct GPU UUIDs, 0 ECC / 0 throttle, 641–774 TFLOPS/GPU; peak 19 concurrent nodes; receipts + allocation map in `experiments/node-acceptance/NOTES.md` |
+| 9b | RDMA / fabric stress (5 methods) | `rdma-m1-soak`…`rdma-m5-parambench` + `experiments/rdma-stress/` | 2–16×(8×H100) | 🧪 staged 2026-07-25; M3 counter exposure on H100 + 16-node soak pending (coordinate before firing) |
 | 10 | Node acceptance: all-reduce bench | `nccl-allreduce.example.yaml` | 2×A10 dry → 8/16×H100 | 🆕 built 2026-07-24; dry-run gated on #1 |
 | 11 | Env flexibility: vLLM in std env | `vllm-smoke.example.yaml` | 1×A10 dry → 1×H100 | 🆕 built 2026-07-24; needs HF egress (probe reports) |
 | 12 | Classic ML: XGBoost GPU (hang repro) | `xgboost-gpu.example.yaml` | 1×A10 control → 1×H100 | 🆕 built 2026-07-24 |
 | 13 | FM: LoRA fine-tune | `lora-finetune.example.yaml` | 1×A10 dry → 8×H100 | 🆕 built 2026-07-24; needs HF egress |
+| 14 | Deps: vendored (snapshot) | `vendored-wheels-snapshot.example.yaml` | 1×A10 | ✅ run 846540776169482 — emoji+xxhash (compiled) via committed vendor/ + PYTHONPATH, verdict PASS |
+| 15 | Deps: vendored (UC volume) | `vendored-wheels-ucvolume.example.yaml` | 1×A10 | ⛔ staged; gated on catalog bucket fix (#1) |
+| 16 | Deps: workspace default package repo (documented GA path) | admin setting, `probes/pip-probe.yaml` re-test | — | 📋 needs workspace admin: scope `databricks-package-management` → internal index; verify AIR env build inherits |
+| 17 | air CLI from a notebook (zero local setup) | `uat/checks/air-cli-from-notebook` + vendored CLI wheels | CPU (submits 1×A10) | ✅ 2026-07-30 — all probes pass via DRIVER (check run 11760699227540); notebook-submitted envvar-probe → SUCCESS (AIR run 677147480932865) |
+
+### #17 success criteria (written before first run, 2026-07-30)
+
+Question: can a tester drive the AIR CLI entirely from a serverless notebook (no local machine)?
+Check = `uat/checks/air-cli-from-notebook` via the DRIVER (CPU shape, `air_mode=submit`). The
+CLI installs from `/Shared/databricks-air-lab/uat/wheels` (vendored workspace-side, not
+committed — see `utils/verification/uat-notebooks/wheels/README.md`; **databricks-air 1.0.0**
+— NB: 1.0.0 released ~7/30, all prior findings are v0.1.x-scoped); auth = notebook context token
+via `DATABRICKS_HOST`/`DATABRICKS_TOKEN` (local pre-flight of that auth mode: ✅ both 0.1.0 and
+1.0.0 dry-run, 2026-07-30). PASS requires all four probes ✅ in the exit JSON:
+
+- `cli_install` — `air --version` exits 0 from the %pip-installed console script
+- `context_auth_env` — context token exported (trivially ✅; real auth proof is the submit)
+- `air_dry_run` — exit 0 + dry-run sentinel, run from the FUSE-mirrored repo
+  (NB 1.0.0 dry-run skips upload AND submission — it proves config plumbing only, hence:)
+- `air_submit` + `air_submitted_run` — real `air run` of `probes/envvar-probe.yaml` from
+  `/Workspace/Shared/databricks-air-lab` (snapshot upload from FUSE = the genuinely novel leg),
+  run_id parsed, polled to `SUCCESS` within 15 min
+
+Expected failure modes worth distinguishing: %pip resolve failure (wheel set incomplete →
+vendor gap), `air_submit` auth error (context token not honored by CLI → needs PAT/secret
+path), snapshot upload error from FUSE (CLI can't tar workspace files → CLI-from-notebook dead
+without a git clone step).
+
+**✅ VERIFIED 2026-07-30, fe-sandbox-mkazia-lw2 — all criteria met on first DRIVER run**
+(driver job 505966573941984 → check run 11760699227540, `air_mode=submit`):
+
+```
+cli_install        ✅ .../pythonEnv-.../bin/air -> v1.0.0
+context_auth_env   ✅ host=https://fe-sandbox-mkazia-lw2.cloud.databricks.com
+air_dry_run        ✅ exit=0
+air_submit         ✅ exit=0; run_id=677147480932865
+air_submitted_run  ✅ run 677147480932865 -> SUCCESS
+```
+
+The notebook-submitted workload (`probes/envvar-probe.yaml`, 1×A10, snapshot uploaded from the
+FUSE mirror) ran to SUCCESS; archived locally as MLflow run `f6563955aead41379ccbb08f7435c231`
+(source `fd9313843f5b4055b1548e0713296188`). Follow-up run with a pre-%pip probe (job
+685034087490453) answered the bundling question: **the CLI is NOT preinstalled in the
+serverless runtime** — `cli_not_preinstalled ✅ pre-%pip: which(air)=None module=False
+py3.12.3` — vendored wheels (or an admin-set default package repo) are required. The check now
+asserts this every run, so it flags if a future runtime starts bundling the CLI.
+
+⚠️ Anomaly from the same DRIVER run, needs follow-up: `gpu-smoke@GPU_1xA10` (job run
+975022265079249) reported `gpu_available=⏭️ skipped_no_gpu` — the same Jobs API
+`hardware_accelerator` path returned a healthy A10 on 2026-07-24 (run 832802492734599). Not
+re-tested; could be env v5 notebook-job GPU attach, pool contention, or check logic — do not
+conclude GPU notebook jobs are broken from one skip, but re-run before the window.
 
 ## Admin prerequisites on the target (owner asks)
 
@@ -46,36 +99,40 @@ network posture better than our open sandboxes). Profile: `mkazia-lw2`. Catalog:
 2. **Service principal**: SCIM create is admin-only; SPs from other workspaces are
    `invalid_client` here. Blocks #2 auth. Secret scope `air_lab` is ready to receive creds.
 3. **Enable Databricks Apps** for the org. Blocks #7.
-4. **ROOT CAUSE (unified) — serverless compute cannot reach the workspace's S3 / PyPI.**
-   Direct evidence, run 906184622669132 (2026-07-24): in-workload `mlflow.log_artifact` fails
-   `HTTPSConnectionPool(host='mkazia-lw2-workspace-root-storage.s3-fips.us-east-1.amazonaws.com')
-   Max retries exceeded` — connection-level, from a GPU node, captured via MLflow params (the
-   tracking API works). One network misconfiguration produces all of these symptoms:
-   - **No logs on any AIR run** (`air logs` empty, zero MLflow log artifacts): the launcher
-     ships log chunks to that same root-storage bucket.
-   - **Runs TIMEDOUT even after user code completes**: launcher log-shipping hangs in cleanup
-     (probe logged `probe_done=yes`, then the run sat until timeout).
-   - **pip `dependencies` fail** (run 219665188914633 with just `[emoji]`): PyPI egress blocked
-     from env build. Blocks gpu-burn(+NVML), xgboost, tabicl, vllm, lora.
-   - **Catalog bucket 403 from serverless SQL** (ask #1) — same hardening theme.
-   Fix is network-side (bucket policies / egress rules must allowlist the serverless data
-   plane); nothing is user-fixable. Until then: use **MLflow params/metrics as the receipt
-   channel** (tracking API is healthy) and wrap any artifact/storage call in a
-   `signal.alarm` timeout so runs fail fast instead of hanging to TIMEDOUT.
-   **Plane differential (driver run 791366682924044, identical code CPU vs GPU_1xA10):**
-   - CPU serverless: `mlflow.log_artifact` → **OK in 0.4s**; root-storage TCP 443 ✅.
-   - GPU node: root-storage **TCP 443 connects ✅ but the artifact upload times out (>60s)**
-     — the block is not a plain connection deny; it behaves like stateful egress/proxy
-     filtering that stalls data transfer from the GPU plane. Same pattern explains AIR
-     launcher log-shipping hanging (log blackout + post-success TIMEDOUTs).
-   - `pypi.org`: DNS `Temporary failure in name resolution` on BOTH planes → the pip blocker
-     is an egress/DNS allowlist.
-   Point the fix at: GPU-plane egress path to workspace root storage (proxy/firewall rules,
-   not just bucket policy), plus DNS/egress allowlist for PyPI on both planes.
-   **Self-contained repro: `/Workspace/Shared/databricks-air-lab/REPRO-GPU-EGRESS`** — attach
-   Serverless GPU (A10, AI v4), Run-all, ~2 min. Verified verdicts: A10 →
-   `upload=REPRODUCED after 60s` (run 845924716536114); plain serverless →
-   `upload=OK in 10.3s` (run 786560643819370).
+4. **RESOLVED (mitigation) / CAVEAT — AIR env v4 breaks job-submitted GPU egress; pin v5.**
+   Final diagnosis 2026-07-25 after full A/B isolation: GPU runs submitted as **jobs**
+   (notebook jobs AND AIR CLI Gen-AI tasks) cannot upload to the workspace root-storage
+   bucket when the environment is **version 4**. **Version 5 works.** Interactive GPU
+   notebooks are unaffected either way. Trigger method (run-now vs runs/submit) is NOT a
+   factor (isolated: run-now + v4 fails, runs/submit + v5 works).
+
+   | GPU run | env v4 | env v5 |
+   |---|---|---|
+   | Interactive notebook | ✅ 0.8s | ✅ |
+   | Notebook job (`hardware_accelerator`) | ❌ 60s stall ×5 runs | ✅ 11.5s (run 733701251559072) |
+   | AIR CLI Gen-AI task (multinode's path) | ❌ stall (run 683173786603437) | ✅ 0.4s + **`air logs` streams content — first time on this ws** (run 20867331866373) |
+
+   **Mitigation applied:** every repo workload YAML + notebook env spec pins
+   `version: "5"` / `environment_version: "5"`. A/B repro:
+   `/Workspace/Shared/databricks-air-lab/REPRO-GPU-EGRESS` cell 6 (submits v4+v5 children,
+   prints both verdicts) or CLI: `air run --file workloads/probes/cli-egress-probe.example.yaml
+   -p <profile>` (healthy v5 default; `--override environment.version=4` reproduces).
+
+   **Still report to eng/oncall**: (a) v4's job-plane egress is broken here while v5's works
+   — v4 is a currently-valid env version and other tenants will hit this blind (no logs =
+   undebuggable); (b) **timeout enforcement inconsistency**: one hung v4 run sailed ~6h past
+   `timeout_minutes: 12` before manual cancel (run 683173786603437, billing hazard), others
+   enforced correctly. Note: most "post-success hang" observations were OUR probes' missing
+   `mlflow.end_run()` (metrics-monitor thread keeps python alive) — fixed in
+   `workloads/probes/`; the 6h timeout-defeat stands regardless.
+
+   **Related constraints (unchanged):**
+   - PyPI unreachable from all planes (DNS) — **by design** (customer-realistic no-PyPI
+     posture). Vendor wheels via `code_source` snapshot or UC volume (UAT track for both
+     variants pending); `dependencies: []` until then. Affects gpu-burn(+NVML), xgboost,
+     tabicl, vllm, lora.
+   - Receipt discipline: MLflow params/metrics are the durable channel;
+     `signal.alarm` around storage calls; `mlflow.end_run()` always.
 
 ## Deploy procedure (per workspace)
 

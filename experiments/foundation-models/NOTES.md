@@ -299,6 +299,51 @@ model of size X," **not** the customer FM (egress-gated). #17 stays half-open.
 bf16-on-H100 regime), rung-2 wall-clock from the A10 step time → `timeout_minutes` ≈ 2×, and the
 **H100 spend approver** (TBD — name here before submitting rung 2/3). Raw logs not committed
 (policy); platform + local MLflow archive hold evidence.
+#### Multinode probe on the reserved pool — pre-registered success criteria (written BEFORE submit, 2026-07-24)
+
+Context: 20 dedicated H100 nodes now attached to fe-sandbox-mkazia-lw2 (UAT plan phase 1;
+docs/private/uat-plan-2026-07.md). First distributed test against the pool:
+`workloads/multinode-probe.yaml` as-is (2 nodes × 8xH100), CLI-only per the engagement rule.
+2×A10 plumbing dry-run on this workspace already ✅ (run 128835177125736, 2026-07-24).
+
+Probe change for this workspace's log blackout (docs/06-uat-suite.md root cause): stdout is
+unretrievable here, so `allreduce_probe.py` now also writes a rank-0 MLflow receipt
+(params: `probe_sentinel`, `world_size`, `nodes_seen` via all_gather_object across ranks,
+torch/NCCL versions — closes the version-capture gap from 2026-07-22; metrics: allreduce
+ms/iter, algbw, busbw), wrapped in `signal.alarm(120)` so a blocked tracking call can't hang
+the run. Receipt is written after all asserts + barrier, so it is unreachable on failure.
+
+Success = ALL of:
+1. Run state SUCCESS (2×8xH100, timeout 30 min, max_retries 0).
+2. MLflow receipt present: `probe_sentinel=MULTINODE_PROBE_OK`, `world_size=16`,
+   `nodes_seen=0,1` (both node ranks checked in — not a single-node fallback).
+3. Bandwidth metrics recorded. Expectation from e2-demo-field-eng baseline (run
+   505819227973807): busbw in the hundreds of GB/s (~359 GB/s there). Smoke-grade number —
+   health signal for the pool fabric, not a customer-deck benchmark.
+4. Scheduling latency (UAT A3): submit→RUNNING wall time recorded from client-side timestamps.
+   No pass bar — this sets customer expectations for the reserved pool.
+
+Failure modes distinguishable even with no logs: INTERNAL_ERROR + no receipt = crash before
+rank-0 receipt (indistinguishable user/platform per the exit-1 differential); SUCCESS + no
+receipt = MLflow receipt path broken (probe still passed its asserts); receipt with
+`nodes_seen=0` only = torchrun fell back to single node.
+
+**RESULTS — ✅ VERIFIED 2026-07-24 (2026-07-25T02:31Z), run 968264353316767,
+fe-sandbox-mkazia-lw2, 2×8xH100 reserved pool.** MLflow run 509fb5d84831447f96fd031c61f4c8f9
+(experiment air-lab-multinode-probe; local archive run 1da64ccff9274b899e80d811924405cd,
+submit log under client_logs/). Claim→evidence (receipt = MLflow params/metrics, quoted
+verbatim; stdout unretrievable on this workspace as expected):
+
+| Claim | Evidence |
+|---|---|
+| All 16 ranks across both nodes ran and passed asserts | params `probe_sentinel=MULTINODE_PROBE_OK`, `world_size=16`, `nodes_seen=0,1` (all_gather_object across ranks — receipt unreachable on any assert failure) |
+| H100 pool hardware + stack | params `gpu_name=NVIDIA H100 80GB HBM3`, `torch_version=2.7.1+cu126`, `nccl_version=2.26.2` (version gap from 2026-07-22 closed) |
+| Fabric healthy (smoke-grade) | metrics `allreduce_256mb_ms=1.52`, `algbw_gbps=177.0` (measured), `busbw_gbps=331.88` (derived: algbw·2(n−1)/n) — same order as e2 baseline 359 GB/s; smoke-grade, not a customer-deck number (nccl-tests for that) |
+| A3 scheduling latency (reserved pool) | submit 02:30:54Z → accepted 02:31:01Z (7 s) → SUCCESS 02:32:54Z; execution_duration 112 s (Jobs API). ~2 min wall total for 2×8xH100 incl. env — measured, single sample |
+| No post-success TIMEDOUT hang | run TERMINATED/SUCCESS at 02:32:54, not held to timeout — differs from the A10-plane log-shipping hangs (docs/06); single observation, not yet a finding |
+
+Log delivery still broken as documented: zero log artifacts in the MLflow run (only the
+receipt + automatic system metrics) — the receipt pattern carried all evidence.
 
 #### AIR CLI schema findings (v0.1.0, verified via --dry-run 2026-07-17)
 

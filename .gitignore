@@ -9,3 +9,7 @@ experiments/docker-otel-zerobus/vendor/
 .mkdocs-site/
 experiments/**/run-*.log
 experiments/**/preflight-*.log
+!workloads/probes/
+# vendored binary wheels stay out of git (deployed to the workspace mirror instead;
+# also keeps them out of air-CLI snapshot tars, which respect .gitignore)
+*.whl

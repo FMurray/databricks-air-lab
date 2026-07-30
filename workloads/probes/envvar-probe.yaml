@@ -1,0 +1,13 @@
+experiment_name: air-lab-env-diagnostics
+environment:
+  version: "5"   # v4 job-plane egress broken on hardened ws — see docs/06
+  dependencies: []
+compute:
+  num_accelerators: 1
+  accelerator_type: GPU_1xA10
+env_variables:
+  PROBE_VALUE: "hello"
+command: python -c "import os; print('RESULT envvar=', os.environ.get('PROBE_VALUE'))"
+max_retries: 0
+timeout_minutes: 12
+mlflow_run_name: envvar-probe

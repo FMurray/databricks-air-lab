@@ -1,0 +1,37 @@
+# Probe: is torch usable on env v5 via the image's databricks-ai environment?
+# (Default v5 interpreter lacks torch; the AI env lives under /opt/databricks-environments
+#  — survey run 96419244890099.) Tries the env's own python, then PYTHONPATH injection.
+experiment_name: air-lab-env-diagnostics
+
+environment:
+  version: "5"
+  dependencies: []
+
+compute:
+  num_accelerators: 1
+  accelerator_type: GPU_1xA10
+
+code_source:
+  type: snapshot
+  snapshot:
+    root_path: ../..
+    include_paths:
+      - experiments/node-acceptance/
+
+command: |
+  set +e
+  ls /opt/databricks-environments/ && ls /opt/databricks-environments/databricks-ai/bin/ | head -20
+  AIPY=/opt/databricks-environments/databricks-ai/bin/python
+  if [ -x "$AIPY" ]; then
+    $AIPY -c "import torch; print('TORCH_V5 via_ai_env version', torch.__version__, 'cuda', torch.cuda.is_available(), torch.cuda.device_count(), 'GPUs')"
+  else
+    echo "TORCH_V5 ai-env python missing"
+  fi
+  PYTHONPATH=/opt/databricks-environments/databricks-ai/lib/python3.12/site-packages \
+    python -c "import torch; print('TORCH_V5 via_pythonpath version', torch.__version__, 'cuda', torch.cuda.is_available())"
+  which torchrun; ls /opt/databricks-environments/databricks-ai/bin/torchrun 2>/dev/null && echo "TORCH_V5 torchrun present in ai env"
+  exit 0
+
+max_retries: 0
+timeout_minutes: 15
+mlflow_run_name: torch-v5-probe

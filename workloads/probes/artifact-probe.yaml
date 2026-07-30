@@ -1,0 +1,31 @@
+experiment_name: air-lab-env-diagnostics
+environment:
+  version: "5"   # v4 job-plane egress broken on hardened ws — see docs/06
+  dependencies: []
+compute:
+  num_accelerators: 1
+  accelerator_type: GPU_1xA10
+# Receipt channel = MLflow params (tracking API works); artifact upload is the thing under test.
+command: |
+  python - <<'PYEOF'
+  import mlflow, os, signal, time
+  mlflow.start_run(run_id=os.environ["MLFLOW_RUN_ID"])
+  mlflow.log_param("probe_alive", "yes")
+  def handler(s, f): raise TimeoutError("artifact upload exceeded 120s")
+  signal.signal(signal.SIGALRM, handler)
+  open("/tmp/receipt.txt", "w").write("artifact probe")
+  t0 = time.time()
+  signal.alarm(120)
+  try:
+      mlflow.log_artifact("/tmp/receipt.txt")
+      mlflow.log_param("artifact_upload", "OK %.1fs" % (time.time() - t0))
+  except Exception as e:
+      mlflow.log_param("artifact_upload", ("FAIL %s %s" % (type(e).__name__, e))[:450])
+  finally:
+      signal.alarm(0)
+  mlflow.log_param("probe_done", "yes")
+  mlflow.end_run()  # REQUIRED: without it the metrics-monitor thread keeps python alive -> run idles to timeout
+  PYEOF
+max_retries: 0
+timeout_minutes: 12
+mlflow_run_name: artifact-probe
