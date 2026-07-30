@@ -46,7 +46,8 @@ network posture better than our open sandboxes). Profile: `mkazia-lw2`. Catalog:
 
 Question: can a tester drive the AIR CLI entirely from a serverless notebook (no local machine)?
 Check = `uat/checks/air-cli-from-notebook` via the DRIVER (CPU shape, `air_mode=submit`). The
-CLI installs from `utils/verification/uat-notebooks/wheels/` (vendored, **databricks-air 1.0.0**
+CLI installs from `/Shared/databricks-air-lab/uat/wheels` (vendored workspace-side, not
+committed — see `utils/verification/uat-notebooks/wheels/README.md`; **databricks-air 1.0.0**
 — NB: 1.0.0 released ~7/30, all prior findings are v0.1.x-scoped); auth = notebook context token
 via `DATABRICKS_HOST`/`DATABRICKS_TOKEN` (local pre-flight of that auth mode: ✅ both 0.1.0 and
 1.0.0 dry-run, 2026-07-30). PASS requires all four probes ✅ in the exit JSON:

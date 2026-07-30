@@ -7,8 +7,15 @@ UAT check can `%pip install` it on serverless where PyPI is unreachable by desig
 %pip install --no-index --find-links /Workspace/Shared/databricks-air-lab/uat/wheels databricks-air
 ```
 
-Deploys to `/Shared/databricks-air-lab/uat/wheels` (the suite's workspace home — this
-source dir `utils/verification/uat-notebooks/` is not itself mirrored).
+The wheels are **not committed** (`*.whl` is gitignored — ~12 MB of binaries bloated the
+repo and every air-CLI snapshot tar). The live set lives only in the workspace at
+`/Shared/databricks-air-lab/uat/wheels` (the suite's workspace home — this source dir
+`utils/verification/uat-notebooks/` is not itself mirrored). To rebuild it, re-vendor
+below into this dir, then upload:
+
+```
+databricks workspace import-dir . /Shared/databricks-air-lab/uat/wheels --overwrite -p <profile>
+```
 
 Target: **linux x86_64, CPython 3.12** (serverless env v5). ~12 MB, 27 wheels,
 `databricks-air 1.0.0` (NB: 1.0.0 released ~2026-07-30; earlier repo findings are scoped
