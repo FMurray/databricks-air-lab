@@ -1,0 +1,33 @@
+# UAT scheduling/isolation: node fingerprint + hold. Submit TWO (or more) concurrently and
+# compare MLflow params in experiment air-lab-scheduling-isolation:
+#   same boot_id            => co-located on one node/VM  → isolation questions are live
+#   disjoint gpu_uuids      => GPU-level partitioning (bin-packing) on a shared node
+#   gpu_count_visible > requested => workload can SEE other tenants' GPUs (isolation gap)
+# Pool test (H100): --override compute.accelerator_type=GPU_1xH100 — does a 1-GPU workload
+# claim a whole 8-GPU reserved node? (max concurrency across submits = the answer)
+# User-A/user-B variant: identical command, second submit by a teammate.
+experiment_name: air-lab-scheduling-isolation
+
+environment:
+  version: "5"   # v4 job-plane egress broken on hardened ws — see docs/06
+  dependencies: []
+
+env_variables:
+  HOLD_SECONDS: "180"
+
+compute:
+  num_accelerators: 1
+  accelerator_type: GPU_1xA10
+
+code_source:
+  type: snapshot
+  snapshot:
+    root_path: ..
+    include_paths:
+      - experiments/scheduling-isolation/
+
+command: python $CODE_SOURCE_PATH/experiments/scheduling-isolation/node_fingerprint.py
+
+max_retries: 0
+timeout_minutes: 15
+mlflow_run_name: placement-probe
