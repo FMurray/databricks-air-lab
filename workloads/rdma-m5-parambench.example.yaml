@@ -1,0 +1,25 @@
+# M5: parambench-train-comms (Meta comms bench, in the image's package list). Needs torch:
+# on v5 that's the databricks-ai env interpreter (survey 96419244890099 + torch-v5 probe).
+# Probe-grade single-node first; multi-node wiring only if the probe proves the runner.
+experiment_name: air-lab-rdma-stress
+
+environment:
+  version: "5"
+  dependencies: []
+
+compute:
+  num_accelerators: 1
+  accelerator_type: GPU_1xA10
+
+code_source:
+  type: snapshot
+  snapshot:
+    root_path: ..
+    include_paths:
+      - experiments/rdma-stress/
+
+command: /opt/databricks-environments/databricks-ai/bin/python $CODE_SOURCE_PATH/experiments/rdma-stress/parambench_probe.py
+
+max_retries: 0
+timeout_minutes: 20
+mlflow_run_name: rdma-m5-parambench

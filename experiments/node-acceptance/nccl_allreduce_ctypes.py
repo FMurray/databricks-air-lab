@@ -26,8 +26,29 @@ import pynvml  # native on v5; vendored fallback for v4
 NCCL_FLOAT32 = 7
 NCCL_SUM = 0
 H2D, D2H = 1, 2
-COUNT = 64 * 1024 * 1024  # 256MB fp32
+BUF_MB = int(os.environ.get("BUF_MB", "256"))
+COUNT = BUF_MB * 1024 * 1024 // 4
 ITERS = 10
+STRESS_SECONDS = int(os.environ.get("STRESS_SECONDS", "0"))  # 0 = smoke only
+FABRIC_ONLY = os.environ.get("FABRIC_ONLY", "0") == "1"  # 1 GPU/node -> all bytes cross EFA
+P2P_RING = os.environ.get("P2P_RING", "0") == "1"  # stress uses send/recv ring, not all-reduce
+
+
+def rdma_counters():
+    """Sum byte-ish RDMA hw counters across devices/ports. Receipt that traffic rode the
+    RDMA path, not TCP. Exposure inside the AIR container verified by env5_survey."""
+    import glob as _glob
+    totals = {}
+    for path in _glob.glob("/sys/class/infiniband/*/ports/*/hw_counters/*"):
+        name = path.rsplit("/", 1)[-1]
+        if "byte" not in name and "data" not in name:
+            continue
+        try:
+            with open(path) as f:
+                totals[name] = totals.get(name, 0) + int(f.read().strip())
+        except (OSError, ValueError):
+            pass
+    return totals
 
 
 class NcclUniqueId(ctypes.Structure):
@@ -102,6 +123,8 @@ def main():
 
     pynvml.nvmlInit()
     local = int(os.environ.get("LOCAL_WORLD_SIZE", pynvml.nvmlDeviceGetCount()))
+    if FABRIC_ONLY:
+        local = 1  # one GPU per node: every collective byte crosses the inter-node fabric
     world = num_nodes * local
     uuids = []
     for i in range(local):
@@ -154,6 +177,22 @@ def main():
             ck(cudart.cudaSetDevice(i), "cudaSetDevice")
             ck(cudart.cudaDeviceSynchronize(), "cudaDeviceSynchronize")
 
+    def p2p_ring_all():
+        """Directed link stress: every rank sends its buffer to rank+1 and receives from
+        rank-1 (grouped, in-place into a scratch region = same buffer here; NCCL permits
+        concurrent send/recv within a group). With FABRIC_ONLY, each hop crosses EFA."""
+        ck(nccl.ncclGroupStart(), "ncclGroupStart(p2p)")
+        for i in range(local):
+            ck(cudart.cudaSetDevice(i), "cudaSetDevice")
+            rank = node_rank * local + i
+            peer_tx = (rank + 1) % world
+            peer_rx = (rank - 1) % world
+            ck(nccl.ncclSend(bufs[i], ctypes.c_size_t(COUNT), NCCL_FLOAT32, peer_tx,
+                             comms[i], None), "ncclSend")
+            ck(nccl.ncclRecv(bufs[i], ctypes.c_size_t(COUNT), NCCL_FLOAT32, peer_rx,
+                             comms[i], None), "ncclRecv")
+        ck(nccl.ncclGroupEnd(), "ncclGroupEnd(p2p)")
+
     # correctness: ones all-reduced once -> every element == world
     allreduce_all()
     sync_all()
@@ -177,8 +216,48 @@ def main():
     dt = (time.time() - t0) / ITERS
     algbw = nbytes / dt / 1e9
     busbw = algbw * 2 * (world - 1) / world
-    print(f"NODE {node_rank} all_reduce 256MB x{ITERS}: {dt*1000:.1f} ms/iter, "
+    print(f"NODE {node_rank} all_reduce {BUF_MB}MB x{ITERS}: {dt*1000:.1f} ms/iter, "
           f"algbw {algbw:.1f} GB/s, busbw ~{busbw:.1f} GB/s", flush=True)
+
+    stress_metrics = {}
+    if STRESS_SECONDS > 0:
+        signal.alarm(STRESS_SECONDS + 900)  # re-arm: soak + generous teardown margin
+        c0 = rdma_counters()
+        op = p2p_ring_all if P2P_RING else allreduce_all
+        windows = []  # seconds per 10-iter window
+        iters_done = 0
+        t_start = time.time()
+        while time.time() - t_start < STRESS_SECONDS:
+            w0 = time.time()
+            for _ in range(10):
+                op()
+            sync_all()
+            windows.append(time.time() - w0)
+            iters_done += 10
+        elapsed_s = time.time() - t_start
+        c1 = rdma_counters()
+        sus_algbw = nbytes * iters_done / elapsed_s / 1e9
+        # ring p2p: each rank moves nbytes/iter point-to-point; busbw = algbw (no 2(n-1)/n)
+        sus_busbw = sus_algbw if P2P_RING else sus_algbw * 2 * (world - 1) / world
+        wmin, wmax = min(windows), max(windows)
+        drift_pct = (wmax - wmin) / wmin * 100
+        rdma_delta_gb = {k: (c1[k] - c0.get(k, 0)) / 1e9 for k in c1}
+        # EFA reports 4-byte words for some counters; label raw, interpret in NOTES
+        top = sorted(rdma_delta_gb.items(), key=lambda kv: -abs(kv[1]))[:4]
+        print(f"NODE {node_rank} STRESS {STRESS_SECONDS}s buf={BUF_MB}MB "
+              f"fabric_only={FABRIC_ONLY} p2p_ring={P2P_RING} "
+              f"{iters_done} iters, sustained busbw ~{sus_busbw:.1f} GB/s, "
+              f"window drift {drift_pct:.1f}% (min {wmin*100:.0f}ms/10it max {wmax*100:.0f}ms/10it)",
+              flush=True)
+        print(f"NODE {node_rank} RDMA counter deltas (raw/1e9): {top}", flush=True)
+        stress_metrics = {
+            "stress_sustained_busbw_gbps": sus_busbw,
+            "stress_iters": iters_done,
+            "stress_window_drift_pct": drift_pct,
+            "stress_seconds": elapsed_s,
+        }
+        for k, v in top:
+            stress_metrics[f"rdma_delta_{k}"] = v
 
     for c in comms:
         nccl.ncclCommDestroy(c)
@@ -190,11 +269,15 @@ def main():
                 "world_size": world,
                 "num_nodes": num_nodes,
                 "local_world_size": local,
+                "fabric_only": str(FABRIC_ONLY),
+                "p2p_ring": str(P2P_RING),
+                "buf_mb": BUF_MB,
                 "nccl_version": ver.value,
                 "backend": "ctypes-nccl-v5",
                 "node0_gpu_uuids": ",".join(uuids),
             },
-            metrics={"allreduce_256mb_ms": dt * 1000, "algbw_gbps": algbw, "busbw_gbps": busbw},
+            metrics={"allreduce_smoke_ms": dt * 1000, "algbw_gbps": algbw,
+                     "busbw_gbps": busbw, **stress_metrics},
         )
         print("MULTINODE_NCCL_V5_OK", flush=True)
     signal.alarm(0)

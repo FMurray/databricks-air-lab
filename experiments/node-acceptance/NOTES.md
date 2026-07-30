@@ -116,8 +116,30 @@ node outcome. UUID aggregation at the end gives the allocation map. Superseded b
 
 Eng config change (resource-gatekeeper, `max-num-nodes-gpu-8xh100` 4 → 20 for this
 workspace; propagates ~15–20 min post-merge). Verified live by admission: adaptive driver
-had 5 concurrent admitted at 04:00Z; then **15 more submitted at 04:0x — all admitted →
-20 concurrent 8xH100 node-runs** (measured: zero quota refusals at width 20). That is the
-P1 concurrency receipt and, combined with the earlier max=4 refusals, brackets the quota
-behavior end-to-end. Saturation batch run ids: scratchpad burn-saturation-runids.txt →
-final ids + outcomes recorded in the aggregation below.
+had 5 concurrent admitted at 04:00Z, then 15 more submitted at 04:0x — **19 of 20
+admitted; the 20th (job run 830940860440388, 04:04Z) was quota-refused at the propagation
+edge** (verbatim: "Workspace has exceeded its GPU quota for GPU_8xH100"), leaving a
+one-run receipt of the propagation window itself. Peak measured concurrency: **19×8xH100
+nodes simultaneously**. Combined with the earlier max=4 refusals this brackets the quota
+behavior end-to-end (P1/P2 evidence).
+
+### ✅ A1 NODE ACCEPTANCE COMPLETE — 20/20 nodes PASS (aggregated 2026-07-30)
+
+Aggregation over every receipted 8-GPU node-run in MLflow experiment `air-lab-gpu-burn`
+(all batches 2026-07-24/25: wave 1 v4-torch, v4 stragglers, v5-cublas driver + saturation):
+
+| Claim | Evidence (MLflow receipts, aggregated) |
+|---|---|
+| All 20 physical nodes covered | **160 distinct GPU UUIDs across 31 receipted node-runs** (8/node × 20 nodes; UUID = hardware identity). Nodes 01–10 visited 2–3× by early ≤4-wide waves (scheduler reuse under the old quota); nodes 11–20 first reached by the saturation batch — the quota raise was NECESSARY for full coverage |
+| Every node passes the burn bar | 31/31 receipts `burn=PASS`; **zero HW-throttle samples and zero uncorrected-ECC deltas across all 248 GPU-burn instances** |
+| Performance uniform | per-GPU fp16 matmul 641–774 TFLOPS (measured, MATMUL_N=8192, smoke-grade; spread partly backend: torch-v4 n=7 vs cublas-ctypes-v5 n=24) |
+| Both env paths validated | v4/torch and v5/ctypes-cuBLAS backends both produce PASS receipts on the same bar |
+
+One anomaly: MLflow runs for admission-refused jobs are created but never terminated —
+they sit in status RUNNING with empty params forever (e.g. 165bfe11…, the 04:04 refusal).
+Filter on `gpus_visible` receipts, not MLflow status, when aggregating.
+
+**Multinode-at-scale status:** the 16-node/128-GPU ctypes-NCCL stress run (M1+M3 at max
+scale) was staged but NOT fired on 07-25 (pool drained after the session ended). It is
+one command away (`workloads/rdma-m1-soak.example.yaml` + num_accelerators=128 override)
+— coordinate before firing during the shared UAT window.

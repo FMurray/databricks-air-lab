@@ -31,7 +31,8 @@ network posture better than our open sandboxes). Profile: `mkazia-lw2`. Catalog:
 | 6 | Multinode at scale | `multinode-probe` ✅, `multinode-correctness`, `fsdp-multinode` | 2×(8×H100) | ✅ probe on reserved pool: run 968264353316767 (2026-07-24) — 16 ranks/2 nodes, busbw ~332 GB/s, submit→SUCCESS 2 min; correctness/FSDP next |
 | 7 | Training Hub app | `apps/training-hub/` | Apps | ⛔ blocked: Apps disabled for the org |
 | 8 | Billing/visibility SQL | `utils/billing/`, `utils/visibility/` | warehouse | ✅ runnable (system tables readable); telemetry joins wait on #2 |
-| 9 | Node acceptance: burn + health | `gpu-burn.example.yaml` | 1×A10 dry → 8×H100/node | 🆕 built 2026-07-24; dry-run gated on #1 |
+| 9 | Node acceptance: burn + health | `gpu-burn.example.yaml` | 1×A10 dry → 8×H100/node | ✅ **A1 COMPLETE 2026-07-25: 20/20 pool nodes PASS** — 160 distinct GPU UUIDs, 0 ECC / 0 throttle, 641–774 TFLOPS/GPU; peak 19 concurrent nodes; receipts + allocation map in `experiments/node-acceptance/NOTES.md` |
+| 9b | RDMA / fabric stress (5 methods) | `rdma-m1-soak`…`rdma-m5-parambench` + `experiments/rdma-stress/` | 2–16×(8×H100) | 🧪 staged 2026-07-25; M3 counter exposure on H100 + 16-node soak pending (coordinate before firing) |
 | 10 | Node acceptance: all-reduce bench | `nccl-allreduce.example.yaml` | 2×A10 dry → 8/16×H100 | 🆕 built 2026-07-24; dry-run gated on #1 |
 | 11 | Env flexibility: vLLM in std env | `vllm-smoke.example.yaml` | 1×A10 dry → 1×H100 | 🆕 built 2026-07-24; needs HF egress (probe reports) |
 | 12 | Classic ML: XGBoost GPU (hang repro) | `xgboost-gpu.example.yaml` | 1×A10 control → 1×H100 | 🆕 built 2026-07-24 |

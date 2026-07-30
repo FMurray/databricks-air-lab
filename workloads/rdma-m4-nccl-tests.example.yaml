@@ -1,0 +1,25 @@
+# M4: nccl-tests (the defensible benchmark), built in-run from vendored source with the
+# image's CUDA 12.9 toolchain (no egress needed). Single-node NVLink numbers via -g 8;
+# multi-node needs MPI — the script reports mpirun availability (expected MISSING).
+experiment_name: air-lab-rdma-stress
+
+environment:
+  version: "5"
+  dependencies: []
+
+compute:
+  num_accelerators: 8
+  accelerator_type: GPU_8xH100
+
+code_source:
+  type: snapshot
+  snapshot:
+    root_path: ..
+    include_paths:
+      - experiments/rdma-stress/
+
+command: bash $CODE_SOURCE_PATH/experiments/rdma-stress/build_and_run_nccl_tests.sh
+
+max_retries: 0
+timeout_minutes: 40
+mlflow_run_name: rdma-m4-nccl-tests
