@@ -43,6 +43,10 @@ import hashlib
 import os
 import signal
 import sys
+import textwrap
+import traceback as _tb
+from dataclasses import dataclass, field
+from datetime import datetime, timezone
 
 import torch
 import torch.nn as nn
@@ -77,6 +81,117 @@ EXPECTED_LOSS_CEILING = 4.10         # < ln(VOCAB)=4.159 (uniform-init step-0); 
 LOSS_DROP_MARGIN = 0.05              # final-window mean must be below step-0 by at least this
 REDUCE_TOL = 2e-4                    # Proof 2 fp32 gathered-grad tolerance (looser than probe's 1e-9 fp64)
 SMOOTH_WINDOW = 20                   # steps in the final smoothing window for convergence
+
+
+# ==========================================================================================
+# Acceptance report — see the acceptance-report skill (.claude/skills/acceptance-report). One
+# `Check` record per proof, a single workload-agnostic renderer, exit code derived LAST. Checks
+# RECORD an outcome (status + measured value); they do not assert-and-raise, so the report always
+# renders — including on failure. Machine sentinels (FSDP_*_OK, FSDP_BR4_COMPLETE, …) are kept
+# as-is above/around the checks for grep/receipts; this report is a plain-English layer on top
+# of them.
+# ==========================================================================================
+WORKLOAD = "FSDP2 TRAINING (BR-4)"
+
+# Status enum — exactly these five (template §"Status enum").
+PASS = "PASS"
+FAIL = "FAIL"
+BLOCKED = "BLOCKED"
+SKIPPED = "SKIPPED"
+NA = "N/A-at-this-scale"
+
+
+@dataclass
+class Check:
+    """One acceptance check. `status` is one of the five enum values; `traceback` is retained
+    (never swallowed) and fenced under the verdict when the run has any FAIL."""
+    name: str
+    status: str
+    measured: str
+    threshold: str
+    what_why: str
+    sufficient: str
+    likely_means: str = ""
+    traceback: str = ""
+
+
+def _fail_from_exc(name, threshold, what_why, likely_means, exc) -> Check:
+    """Turn an exception into a FAIL record (principle 1: record, don't re-raise) so the report
+    still renders and the verdict/exit code can be derived from it. Trace is kept verbatim."""
+    return Check(name=name, status=FAIL, measured=f"raised {type(exc).__name__}: {exc}",
+                 threshold=threshold, what_why=what_why,
+                 sufficient="A raised exception means the property could not be established.",
+                 likely_means=likely_means, traceback="".join(_tb.format_exception(exc)))
+
+
+def _wrap(text: str, indent: str = "               ") -> str:
+    """Wrap a long field to ~92 cols, hanging-indented under its dotted label."""
+    body = textwrap.fill(text, width=96, initial_indent="", subsequent_indent=indent)
+    return body
+
+
+def render_report(checks: list[Check], run_id: str, profile: str, shape: str,
+                  scope: str, runtime: str, sentinels: str) -> int:
+    """Render every check identically and DERIVE the exit code last. Returns the exit code:
+    any FAIL ⇒ 1; BLOCKED / SKIPPED / N/A alone ⇒ 0. Verdict is generated from scope + statuses
+    so a run cannot claim a proof it did not perform (smoke ⇒ capped at ACCEPTED WITH CAVEATS)."""
+    when = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%SZ")
+    W = 70
+    out = []
+    out.append("=" * 20 + f" {WORKLOAD} ACCEPTANCE REPORT " + "=" * 20)
+    out.append(f"Run {run_id}   Profile {profile}   Shape {shape} ( {scope} )")
+    out.append(f"Runtime {runtime}   When {when}")
+    out.append("")
+    out.append(_wrap("Attests to what rank 0 observed. On multi-node the CLI streams node 0 "
+                     "only (`air logs <id> --node N`). If this report is absent, treat it as a "
+                     "failure.", indent="  "))
+    out.append("-" * W)
+
+    has_fail = False
+    for i, c in enumerate(checks, 1):
+        if c.status == FAIL:
+            has_fail = True
+        out.append(f"CHECK {i} — {c.name}")
+        out.append(f"  Status ....... {c.status}")
+        out.append(f"  Measured ..... {c.measured}   Threshold: {c.threshold}")
+        out.append(f"  What & why ... {_wrap(c.what_why)}")
+        out.append(f"  Sufficient ... {_wrap(c.sufficient)}")
+        out.append("-" * W)
+
+    # Verdict — derived from scope + statuses (never a parallel narrative).
+    softs = [c for c in checks if c.status in (BLOCKED, SKIPPED, NA)]
+    if has_fail:
+        verdict, exit_code = "NOT ACCEPTED", 1
+        vline = "One or more checks did not clear their threshold at this shape."
+    elif scope == "smoke" or softs:
+        verdict, exit_code = "ACCEPTED WITH CAVEATS", 0
+        capped = "smoke scope (single-process): distributed properties are vacuous here" \
+            if scope == "smoke" else \
+            "some checks were blocked / skipped / not applicable at this scale"
+        vline = f"Every check that ran passed, but {capped} — see the rows above."
+    else:
+        verdict, exit_code = "ACCEPTED", 0
+        vline = f"All checks passed at {shape}."
+    out.append(f"VERDICT: {verdict}")
+    out.append(f"  {vline}   Sentinels: {sentinels}   Exit: {exit_code}")
+
+    # On FAIL — plain English first, then the raw trace (template §"On FAIL"). Never swallowed.
+    if has_fail:
+        out.append("")
+        out.append("WHAT THIS LIKELY MEANS")
+        for i, c in enumerate(checks, 1):
+            if c.status == FAIL:
+                out.append(_wrap(f"CHECK {i} failed: {c.measured} did not meet "
+                                 f"{c.threshold}. {c.likely_means}", indent="  "))
+        out.append("")
+        out.append("FOR SUPPORT — raw traceback")
+        for i, c in enumerate(checks, 1):
+            if c.status == FAIL and c.traceback:
+                out.append(f"  [CHECK {i} — {c.name}]")
+                out.append(c.traceback.rstrip())
+
+    print("\n" + "\n".join(out), flush=True)
+    return exit_code
 
 
 # ==========================================================================================
@@ -192,11 +307,11 @@ def build_stress_model_sharded(args, mesh):
 # ==========================================================================================
 # Proof 1 — sharding is real (FSDP_SHARDING_OK).
 # ==========================================================================================
-def proof1_sharding(model, world: int, device, opt) -> bool:
-    """Assert per-rank PARAMETER STORAGE ≈ total/world (not peak memory — FSDP all-gathers full
-    layers transiently, so peak ≫ full/world). Log the full training-state envelope (open-q #17)
+def proof1_sharding(model, world: int, device, opt) -> Check:
+    """Per-rank PARAMETER STORAGE ≈ total/world (not peak memory — FSDP all-gathers full layers
+    transiently, so peak ≫ full/world). Also logs the full training-state envelope (open-q #17)
     after moments exist: params + grads (post-reduce-scatter shard) + optimizer state, vs the
-    full-model counterfactual (P+G+2P)·4B."""
+    full-model counterfactual (P+G+2P)·4B. Records a Check; the OK sentinel prints only on PASS."""
     local = sum(p.to_local().numel() for p in model.parameters())
     full = sum(p.full_tensor().numel() for p in model.parameters())   # collective — all ranks
     ratio = local / (full / world)
@@ -223,21 +338,37 @@ def proof1_sharding(model, world: int, device, opt) -> bool:
     local_state_b = local_param_b + local_grad_b + local_optim_b
     mem_gb = (torch.cuda.max_memory_allocated() / 2**30) if device.type == "cuda" else 0.0
 
-    if dist.get_rank() == 0:
-        tag = " (VACUOUS: world=1, smoke test only)" if vacuous else ""
-        assert ok, f"sharding ratio {ratio:.4f} outside tol {tol} (local={local} full/W={full/world:.0f})"
+    if dist.get_rank() == 0 and ok and not vacuous:
         print(f"FSDP_SHARDING_OK world={world} full={full} local={local} ratio={ratio:.4f} "
               f"mem={mem_gb:.2f}GB state_local={local_state_b/2**30:.4f}GB "
               f"state_full={full_state_b/2**30:.4f}GB "
-              f"[param={local_param_b} grad={local_grad_b} optim={local_optim_b} bytes]{tag}",
+              f"[param={local_param_b} grad={local_grad_b} optim={local_optim_b} bytes]",
               flush=True)
-    return ok
+
+    status = NA if vacuous else (PASS if ok else FAIL)
+    measured = (f"per-rank storage = {local_state_b/2**30:.4f} GB vs full-model "
+                f"{full_state_b/2**30:.4f} GB; shard ratio {ratio:.4f} of full/world "
+                f"(params {local}/{full})")
+    return Check(
+        name="Parameters, gradients and optimizer state are actually sharded",
+        status=status,
+        measured=measured,
+        threshold=f"shard ratio within {tol:.0%} of 1.0 (each rank holds ≈1/{world} of the model)",
+        what_why="This is the property that makes FSDP different from DDP: each GPU keeps only "
+                 "its slice of the model, gradients and Adam moments. Without it, every GPU holds "
+                 "the whole model and a large model that should fit will run out of memory.",
+        sufficient=f"A ratio near 1.0 means storage really is split {world} ways; DDP or a broken "
+                   f"wrap would show ratio ≈ {world} (the full model on every rank). At world=1 "
+                   "there is nothing to split, so this is N/A, not a pass.",
+        likely_means="The model was not sharded — most often fully_shard failed to apply or the "
+                     "device mesh has the wrong size. Send the FSDP_VERSIONS line and this report.",
+    )
 
 
 # ==========================================================================================
 # Proof 2 — gradient reduction (reduce-scatter) is correct (FSDP_REDUCE_OK).
 # ==========================================================================================
-def proof2_reduce(args, mesh, device, world: int) -> bool:
+def proof2_reduce(args, mesh, device, world: int) -> Check:
     """Build an FSDP model and a single-process reference from an IDENTICAL init (same seed,
     same process — no cross-rank RNG issue). One backward, fp32, AMP off, mean-reduction loss
     on a global batch split across ranks. Gather each reduce-scattered grad with full_tensor()
@@ -270,12 +401,29 @@ def proof2_reduce(args, mesh, device, world: int) -> bool:
 
     vacuous = world == 1
     ok = max_diff < REDUCE_TOL
-    if rank == 0:
-        tag = " (VACUOUS: world=1, reduce-scatter is a no-op)" if vacuous else ""
-        assert ok, f"reduce-scatter grad diff {max_diff:.3e} exceeds tol {REDUCE_TOL:.1e}"
+    if rank == 0 and ok and not vacuous:
         print(f"FSDP_REDUCE_OK world={world} grad_diff={max_diff:.3e} tol={REDUCE_TOL:.1e} "
-              f"global_batch={global_b}{tag}", flush=True)
-    return ok
+              f"global_batch={global_b}", flush=True)
+
+    status = NA if vacuous else (PASS if ok else FAIL)
+    return Check(
+        name="Gradients are combined correctly across GPUs (reduce-scatter)",
+        status=status,
+        measured=f"largest gradient difference vs a single-process reference = {max_diff:.3e} "
+                 f"(global batch {global_b})",
+        threshold=f"max gradient difference < {REDUCE_TOL:.1e}",
+        what_why="Each GPU computes gradients on its own slice of the batch; FSDP must sum-and-"
+                 "split them so every rank ends up with the correct averaged gradient. If this is "
+                 "even slightly wrong, training looks like it runs but silently learns the wrong "
+                 "thing — the hardest kind of bug to notice.",
+        sufficient=f"Matching a trusted single-process gradient to within {REDUCE_TOL:.1e} means "
+                   "the collective is numerically correct, not just non-crashing. A failure shows "
+                   "as a difference above the tolerance. At world=1 the reduce-scatter is a no-op, "
+                   "so this is N/A, not a pass.",
+        likely_means="The gradient reduce-scatter produced wrong values — possibly a runtime/NCCL "
+                     "mismatch or a wrapping bug. Do NOT trust training numbers from this run; "
+                     "send this report and the FSDP_VERSIONS line to support.",
+    )
 
 
 # ==========================================================================================
@@ -285,12 +433,26 @@ def proof2_reduce(args, mesh, device, world: int) -> bool:
 def train_loop(model, opt, sched, args, mesh, device, world, start_step, mlf, ckpt_dir):
     """Run steps [start_step, args.steps). Emits Proof 1 after the first optimizer step (moments
     allocated), logs the loss curve to MLflow, optionally checkpoints for the max_retries test,
-    and (if FSDP_FAIL_AT_STEP is set) hard-exits to exercise platform resume (open-q #10)."""
+    and (if FSDP_FAIL_AT_STEP is set) hard-exits to exercise platform resume (open-q #10).
+
+    Returns (train_check, sharding_check) — the convergence Check and the Proof-1 record it
+    captured mid-loop. A non-finite loss is recorded as a FAIL (no raise) so the report renders."""
     rank = dist.get_rank()
     losses = []
-    proof1_ok = None
+    sharding_check = None
     fail_at = int(os.environ.get("FSDP_FAIL_AT_STEP", "-1"))
     save_every = args.save_every
+
+    train_name = "The training loop runs a real step and the loss goes down"
+    train_thresh = (f"final-window mean below step-0 by ≥ {LOSS_DROP_MARGIN} AND below "
+                    f"ceiling {EXPECTED_LOSS_CEILING}")
+    train_what = ("A full forward → backward → optimizer step on the sharded model, repeated, "
+                  "must actually reduce the loss. This is the end-to-end proof that a model can "
+                  "be trained on this platform, not just that the pieces initialize.")
+    train_likely = ("Loss did not fall as expected. If the reduce-scatter check passed, this is "
+                    "almost always tuning/precision (learning rate, steps, mixed precision) — NOT "
+                    "a platform fault; do not report 'FSDP doesn't work on AIR'. Re-triage K/LR "
+                    "before escalating.")
 
     step0_loss = None
     for step in range(start_step, args.steps):
@@ -302,14 +464,23 @@ def train_loop(model, opt, sched, args, mesh, device, world, start_step, mlf, ck
         if sched is not None:
             sched.step()
         lv = loss.item()
-        assert lv == lv and lv != float("inf"), f"non-finite loss at step {step}: {lv}"   # NaN/inf guard
         losses.append(lv)
         if step0_loss is None:
             step0_loss = lv
 
         # Proof 1 fires once, after the first step so Adam moments exist for the envelope.
-        if proof1_ok is None:
-            proof1_ok = proof1_sharding(model, world, device, opt)
+        if sharding_check is None:
+            sharding_check = proof1_sharding(model, world, device, opt)
+
+        if lv != lv or lv == float("inf"):                 # NaN/inf guard — record, don't raise
+            train_check = Check(
+                name=train_name, status=FAIL,
+                measured=f"non-finite loss at step {step}: {lv}", threshold=train_thresh,
+                what_why=train_what,
+                sufficient="A finite, falling loss is required; NaN/inf means the step diverged.",
+                likely_means="The loss became NaN or inf — usually too high a learning rate or a "
+                             "mixed-precision overflow. Lower --lr or drop --mp and retry.")
+            return train_check, sharding_check
 
         if rank == 0:
             if mlf:
@@ -333,16 +504,26 @@ def train_loop(model, opt, sched, args, mesh, device, world, start_step, mlf, ck
     drop = step0_loss - final
     ok = (final < step0_loss - LOSS_DROP_MARGIN) and (final < EXPECTED_LOSS_CEILING)
     if rank == 0:
-        # Triage note: if Proof 2 was green, a miss here is tuning/precision, NOT a platform fault.
-        assert ok, (f"convergence miss: step0={step0_loss:.4f} final={final:.4f} "
-                    f"ceiling={EXPECTED_LOSS_CEILING} margin={LOSS_DROP_MARGIN} — if FSDP_REDUCE_OK "
-                    f"passed, re-triage K/LR/precision, do NOT report 'FSDP doesn't work on AIR'")
+        if ok:
+            print(f"FSDP_TRAIN_OK step0={step0_loss:.4f} final={final:.4f} drop={drop:.4f} "
+                  f"ceiling={EXPECTED_LOSS_CEILING} steps={args.steps}", flush=True)
         if mlf:
             mlf.log_metric("final_window_loss", final)
             mlf.log_param("expected_loss_ceiling", EXPECTED_LOSS_CEILING)
-        print(f"FSDP_TRAIN_OK step0={step0_loss:.4f} final={final:.4f} drop={drop:.4f} "
-              f"ceiling={EXPECTED_LOSS_CEILING} steps={args.steps}", flush=True)
-    return ok
+
+    train_check = Check(
+        name=train_name,
+        status=PASS if ok else FAIL,
+        measured=f"loss step0={step0_loss:.4f} → final-window={final:.4f} (drop {drop:.4f}) "
+                 f"over {args.steps} steps",
+        threshold=train_thresh,
+        what_why=train_what,
+        sufficient=f"A drop of {drop:.4f} below the {LOSS_DROP_MARGIN} margin and a final loss "
+                   f"under the {EXPECTED_LOSS_CEILING} ceiling means the optimizer step is doing "
+                   "real work. A failure looks like a flat or rising loss curve.",
+        likely_means=train_likely,
+    )
+    return train_check, sharding_check
 
 
 # ==========================================================================================
@@ -422,14 +603,15 @@ def _fingerprint(model, opt, fp_name: str) -> str:
     return hashlib.sha256(b"".join(parts)).hexdigest()
 
 
-def proof4_checkpoint_resume(args, mesh, device, world, ckpt_dir) -> str:
+def proof4_checkpoint_resume(args, mesh, device, world, ckpt_dir) -> Check:
     """Two-phase within one run: (1) train N steps, save (probe-gated), record loss@N +
     fingerprint (params + optimizer moments); (2) reconstruct a fresh FSDP model + optimizer +
-    scheduler, load, assert the fingerprint is bit-identical and that the step-N loss matches the
+    scheduler, load, check the fingerprint is bit-identical and that the step-N loss matches the
     pre-save trajectory (next-step loss, not a cold-start value). Data is a pure function of
-    global step, so the resumed step feeds the identical batch — the assertion is well-posed.
+    global step, so the resumed step feeds the identical batch — the comparison is well-posed.
 
-    Returns "ok", "blocked-on-BR-2", or raises on a real checkpoint fault."""
+    Returns a Check: PASS ("ok"), BLOCKED (probe failed, blocked-on-BR-2), or FAIL (a real
+    checkpoint fault — fingerprint/loss mismatch or a raised exception, captured by the caller)."""
     import numpy  # noqa: F401 — required by .numpy() in _fingerprint; fail loud here if absent
     import torch.distributed.checkpoint as dcp
     from torch.distributed.checkpoint.state_dict import get_state_dict, set_state_dict
@@ -455,8 +637,21 @@ def proof4_checkpoint_resume(args, mesh, device, world, ckpt_dir) -> str:
     fp_name = "blocks.0.mlp.0.weight"                      # a fixed sharded param that always trains
     fp_pre = _fingerprint(m, opt, fp_name)
 
+    p4_name = "A checkpoint saves and resumes exactly where it left off"
+    p4_thresh = "params + optimizer moments bit-identical AND resume loss within 1e-4"
+    p4_what = ("Long jobs must survive interruption. On resume the model, gradients moments and "
+               "scheduler must come back bit-for-bit; otherwise a 'resumed' run silently restarts "
+               "from worse weights and wastes the compute already spent.")
+
     if not collective_dcp_save(m, opt, sched, n, save_dir, world, device):
-        return "blocked-on-BR-2"
+        return Check(
+            name=p4_name, status=BLOCKED,
+            measured="checkpoint probe-write failed (UC-volume 403)",
+            threshold=p4_thresh, what_why=p4_what,
+            sufficient="Blocked by an external precondition (BR-2 UC-volume write permission), "
+                       "not a fault in checkpoint/resume itself. The BR-4 receipt still stands.",
+            likely_means="The checkpoint directory could not be written — a permissions/BR-2 "
+                         "block on the UC volume, not a training failure.")
 
     # Phase 2: fresh model+opt+sched, load, assert bit-identical + trajectory continuity.
     m2 = wrap_fsdp(build_model(args, device), mesh, mp=False)
@@ -480,15 +675,28 @@ def proof4_checkpoint_resume(args, mesh, device, world, ckpt_dir) -> str:
         loss_at_n_post = batch_loss(m2, tok_n).item()
 
     fp_match = fp_pre == fp_post
-    loss_match = abs(loss_at_n_post - loss_at_n_pre) < 1e-4
+    loss_diff = abs(loss_at_n_post - loss_at_n_pre)
+    loss_match = loss_diff < 1e-4
     ok = fp_match and loss_match
-    if rank == 0:
-        assert fp_match, f"fingerprint mismatch: params/moments not bit-identical after resume"
-        assert loss_match, (f"resume loss {loss_at_n_post:.6f} != pre-save {loss_at_n_pre:.6f} — "
-                            f"optimizer/scheduler state likely dropped (moments reset → spike)")
+    if rank == 0 and ok:
         print(f"FSDP_CKPT_RESUME_OK fingerprint_match={fp_match} "
               f"resumed_from=loss@{n}={loss_at_n_pre:.6f} (post={loss_at_n_post:.6f})", flush=True)
-    return "ok"
+
+    return Check(
+        name=p4_name,
+        status=PASS if ok else FAIL,
+        measured=f"params/moments bit-identical={fp_match}; resume loss {loss_at_n_post:.6f} vs "
+                 f"pre-save {loss_at_n_pre:.6f} (diff {loss_diff:.2e})",
+        threshold=p4_thresh,
+        what_why=p4_what,
+        sufficient="A matching fingerprint proves the weights AND Adam moments round-tripped "
+                   "exactly; the matching next-step loss proves the trajectory continues rather "
+                   "than restarting. A failure shows as a fingerprint mismatch or a loss spike "
+                   "on resume.",
+        likely_means="Checkpoint saved but resume did not reproduce the pre-save state — usually "
+                     "optimizer/scheduler state was dropped so the moments reset and the loss "
+                     "spikes. Capture this report and the save/load lines for support.",
+    )
 
 
 # ==========================================================================================
@@ -570,12 +778,14 @@ def worker(rank: int, world: int, args):
     device = torch.device("cpu" if args.local else "cuda")
     mesh = init_device_mesh(mesh_dev, (world,))            # explicit mesh dodges a macOS auto-detect bug
 
+    nccl = None
+    try:
+        nccl = torch.cuda.nccl.version()
+    except Exception:                                      # noqa: BLE001 — no CUDA locally
+        pass
+    runtime_str = (f"torch {torch.__version__}, nccl {nccl}, cuda {torch.version.cuda}, "
+                   f"fully_shard={callable(fully_shard)}")
     if rank == 0:
-        nccl = None
-        try:
-            nccl = torch.cuda.nccl.version()
-        except Exception:                                  # noqa: BLE001 — no CUDA locally
-            pass
         # Version-scoped: the sharding assertion + DCP API are pinned to the runtime build.
         print(f"FSDP_VERSIONS torch={torch.__version__} nccl={nccl} cuda={torch.version.cuda} "
               f"fully_shard={callable(fully_shard)} world={world} device={mesh_dev}", flush=True)
@@ -584,16 +794,25 @@ def worker(rank: int, world: int, args):
         memprobe(rank, world, args, mesh, device)
         dist.barrier()
         dist.destroy_process_group()
-        return
+        return 0
 
     mlf = open_mlflow(rank)
     ckpt_dir = args.ckpt_dir
 
-    results = {}
+    # Each proof RECORDS a Check (template principle 1); exceptions become FAIL records so the
+    # report always renders. Collectives run on every rank; only rank 0 renders the report.
     # Proof 2 first — a fresh model, one backward, before training mutates anything.
-    results["reduce"] = proof2_reduce(args, mesh, device, world)
+    try:
+        reduce_check = proof2_reduce(args, mesh, device, world)
+    except Exception as e:                                 # noqa: BLE001
+        reduce_check = _fail_from_exc(
+            "Gradients are combined correctly across GPUs (reduce-scatter)",
+            f"max gradient difference < {REDUCE_TOL:.1e}",
+            "FSDP must sum-and-split per-rank gradients so every rank gets the correct average.",
+            "The reduce-scatter proof raised before producing a number — check FSDP_VERSIONS "
+            "for a runtime/NCCL mismatch and send this report to support.", e)
 
-    # Proofs 1 + 3 — the training model + loop (Proof 1 emitted after the first step).
+    # Proofs 1 + 3 — the training model + loop (Proof 1 recorded after the first step).
     model = wrap_fsdp(build_model(args, device), mesh, mp=args.mp)
     opt = torch.optim.AdamW(model.parameters(), lr=args.lr)
     sched = torch.optim.lr_scheduler.StepLR(opt, step_size=max(1, args.steps // 3), gamma=0.5)
@@ -609,30 +828,77 @@ def worker(rank: int, world: int, args):
         mlf.log_param("world", world)
         mlf.log_param("shape", f"L{args.layers}-d{args.dim}-h{args.heads}-s{args.seq}-v{TASK_VOCAB}")
         mlf.log_param("mixed_precision", args.mp)
-    # train_loop emits Proof 1 after its first step and Proof 3 at the end. Proof 1's assertion
-    # raises inside the loop on failure, so reaching here means it passed.
-    results["train"] = train_loop(model, opt, sched, args, mesh, device, world, start_step, mlf, ckpt_dir)
-    results["sharding"] = True
+    train_check, sharding_check = train_loop(
+        model, opt, sched, args, mesh, device, world, start_step, mlf, ckpt_dir)
 
-    # Completion line for BR-4 (Proofs 1+2+3 only). THE acceptance receipt.
-    br4 = results["sharding"] and results["reduce"] and results["train"]
+    # Completion line for BR-4 (Proofs 1+2+3 only). THE acceptance receipt — emitted when all
+    # three cleared their threshold (N/A at world=1 counts as "did not fail" for the receipt).
+    def _ok(c):  # PASS, or N/A-at-this-scale (vacuous) — anything but an outright FAIL
+        return c.status in (PASS, NA)
+    br4 = _ok(sharding_check) and _ok(reduce_check) and train_check.status == PASS
     if rank == 0 and br4:
         print("FSDP_BR4_COMPLETE proofs=1,2,3 (sharding+reduce+convergence)", flush=True)
 
-    # Proof 4 (suite #8) — may be blocked-on-BR-2 without failing BR-4.
-    ckpt_status = "skipped"
+    checks = [sharding_check, reduce_check, train_check]
+    sentinels = ["FSDP_BR4_COMPLETE" if br4 else "FSDP_BR4_INCOMPLETE"]
+
+    # Proof 4 (suite #8) — may be BLOCKED (blocked-on-BR-2) without failing BR-4.
     if args.proof4 and ckpt_dir:
-        ckpt_status = proof4_checkpoint_resume(args, mesh, device, world, ckpt_dir)
-        results["ckpt"] = ckpt_status == "ok"
-    if rank == 0:
-        if ckpt_status == "ok" and br4:
-            print("FSDP_SUITE8_COMPLETE proofs=1,2,3,4 (adds checkpoint/resume)", flush=True)
-        elif ckpt_status == "blocked-on-BR-2":
-            print("FSDP_SUITE8_BLOCKED proof4=blocked-on-BR-2 (BR-4 receipt stands via "
-                  "FSDP_BR4_COMPLETE)", flush=True)
+        try:
+            ckpt_check = proof4_checkpoint_resume(args, mesh, device, world, ckpt_dir)
+        except Exception as e:                             # noqa: BLE001
+            ckpt_check = _fail_from_exc(
+                "A checkpoint saves and resumes exactly where it left off",
+                "params + optimizer moments bit-identical AND resume loss within 1e-4",
+                "On resume the model and optimizer state must come back bit-for-bit or a resumed "
+                "job silently restarts from worse weights.",
+                "Checkpoint save or load raised — capture this report and the DCP save/load lines "
+                "for support.", e)
+        checks.append(ckpt_check)
+        if rank == 0:
+            if ckpt_check.status == PASS and br4:
+                print("FSDP_SUITE8_COMPLETE proofs=1,2,3,4 (adds checkpoint/resume)", flush=True)
+                sentinels.append("FSDP_SUITE8_COMPLETE")
+            elif ckpt_check.status == BLOCKED:
+                print("FSDP_SUITE8_BLOCKED proof4=blocked-on-BR-2 (BR-4 receipt stands via "
+                      "FSDP_BR4_COMPLETE)", flush=True)
+                sentinels.append("FSDP_SUITE8_BLOCKED")
+    elif args.proof4:
+        checks.append(Check(
+            name="A checkpoint saves and resumes exactly where it left off",
+            status=SKIPPED, measured="no --ckpt-dir provided",
+            threshold="params + optimizer moments bit-identical AND resume loss within 1e-4",
+            what_why="Checkpoint/resume lets a long job survive interruption without losing "
+                     "progress.",
+            sufficient="Deliberately not run this invocation: --proof4 was set but no checkpoint "
+                       "directory was given, so there is nowhere to save.",
+            likely_means=""))
 
     dist.barrier()
+
+    # Render the plain-English acceptance report from the records (rank 0 only) and derive the
+    # exit code last. Guard so the renderer itself can never swallow the report.
+    exit_code = 0
+    if rank == 0:
+        scope = "smoke" if world == 1 else "acceptance"
+        shape = f"world={world}, {mesh_dev}"
+        try:
+            exit_code = render_report(
+                checks, run_id=os.environ.get("MLFLOW_RUN_NAME", "local"),
+                profile=("local-cpu" if args.local else "air"),
+                shape=shape, scope=scope, runtime=runtime_str,
+                sentinels=" ".join(sentinels))
+        except Exception:                                  # noqa: BLE001 — never lose the verdict
+            _tb.print_exc()
+            exit_code = 1
+
     dist.destroy_process_group()
+    # Exit code is derived from the rendered verdict (rank 0 only). sys.exit so it propagates in
+    # BOTH launch paths: torchrun reads the process exit; mp.spawn (--local) re-raises a non-zero
+    # child exit. Non-rank-0 procs exit 0 (only rank 0 rendered the verdict).
+    if rank == 0 and exit_code:
+        sys.exit(exit_code)
+    return exit_code
 
 
 def _maybe_resume(rank, model, opt, sched, ckpt_dir, args, device) -> int:
@@ -711,13 +977,20 @@ def main():
         if args.ckpt_dir is None and args.proof4:
             args.ckpt_dir = "/tmp/fsdp_local_ckpt"
         import torch.multiprocessing as mp
-        mp.spawn(worker, args=(args.local_world, args), nprocs=args.local_world, join=True)
+        # mp.spawn re-raises a non-zero child exit as an exception; rank 0's exit code (from the
+        # rendered verdict) surfaces via that. Treat a clean join as success.
+        try:
+            mp.spawn(worker, args=(args.local_world, args), nprocs=args.local_world, join=True)
+        except Exception:                                  # noqa: BLE001
+            _tb.print_exc()
+            return 1
+        return 0
     else:
         # torchrun-launched: RANK/WORLD_SIZE/LOCAL_RANK from env.
         rank = int(os.environ["RANK"])
         world = int(os.environ["WORLD_SIZE"])
-        worker(rank, world, args)
+        return worker(rank, world, args) or 0
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())
