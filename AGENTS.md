@@ -27,6 +27,7 @@ scripts/assets referenced by relative path.
 |---|---|
 | `experiment-verification` | **BEFORE any `air run` and before writing results into NOTES.md/docs/** — evidence standards, receipts, archiving, promotion pipeline |
 | `air-otel-telemetry` | wiring logs/metrics/GPU telemetry from AIR workloads into Delta via Zerobus OTLP; debugging "export OK but zero rows" |
+| `acceptance-report` | adding/changing the plain-English CHECK/VERDICT report a workload prints; carries the canonical renderer to copy (never import) |
 
 (Add new skills for any procedure you had to figure out twice.)
 
