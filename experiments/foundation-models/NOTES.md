@@ -193,8 +193,8 @@ used torch 2.13.0 CPU. Policy decision 2026-07-22: raw logs are NOT committed to
 ## FSDP training loop (BR-4 / suites #4 & #8) — `train_fsdp.py`
 
 Files: `fsdp/train_fsdp.py` (trainer + `--local`) + `workloads/fsdp-multinode.example.yaml`.
-Plan: `plans/train-fsdp.md`. Unblocks suite #4 (FSDP loop) + the checkpoint half of #8; feeds
-open-q #10 (`max_retries` resume) and half-closes open-q #17 (memory envelope / B300).
+Unblocks suite #4 (FSDP loop) + the checkpoint half of #8; feeds open-q #10 (`max_retries`
+resume) and half-closes open-q #17 (memory envelope / B300).
 
 **What this proves that the platform hasn't:** fabric + numerics are green at 160 GPUs, but only
 with synthetic collectives (`nccl-allreduce`, `distributed_correctness_probe.py` — an all-reduce
