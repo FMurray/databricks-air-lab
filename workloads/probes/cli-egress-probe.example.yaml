@@ -1,0 +1,48 @@
+experiment_name: air-lab-env-diagnostics
+environment:
+  version: "5"   # v4 job-plane egress broken on hardened ws — see docs/06
+  dependencies: []
+compute:
+  num_accelerators: 1
+  accelerator_type: GPU_1xA10
+# Same three checks as REPRO-GPU-EGRESS, from a CLI-submitted Gen AI task.
+# Receipts via MLflow params (log delivery is dead on this path).
+command: |
+  python - <<'PYEOF'
+  import mlflow, os, signal, socket, time, urllib.request
+  mlflow.start_run(run_id=os.environ["MLFLOW_RUN_ID"])
+  HOST = "mkazia-lw2-workspace-root-storage.s3-fips.us-east-1.amazonaws.com"
+  try:
+      t0 = time.time()
+      socket.create_connection((HOST, 443), timeout=15).close()
+      mlflow.log_param("tcp_root_storage", "OK %.2fs" % (time.time() - t0))
+  except Exception as e:
+      mlflow.log_param("tcp_root_storage", ("FAIL %s %s" % (type(e).__name__, e))[:400])
+  def _alarm(s, f): raise TimeoutError("upload exceeded 60s")
+  signal.signal(signal.SIGALRM, _alarm)
+  open("/tmp/receipt.txt", "w").write("cli egress probe")
+  signal.alarm(60)
+  try:
+      t0 = time.time()
+      mlflow.log_artifact("/tmp/receipt.txt")
+      mlflow.log_param("artifact_upload", "OK %.1fs" % (time.time() - t0))
+  except Exception as e:
+      mlflow.log_param("artifact_upload", ("FAIL %s %s" % (type(e).__name__, e))[:400])
+  finally:
+      signal.alarm(0)
+  try:
+      with urllib.request.urlopen("https://pypi.org/simple/", timeout=15) as r:
+          mlflow.log_param("pypi_egress", "HTTP %d" % r.status)
+  except Exception as e:
+      mlflow.log_param("pypi_egress", ("FAIL %s %s" % (type(e).__name__, e))[:200])
+  try:
+      import torch
+      mlflow.log_param("torch", "OK %s cuda=%s" % (torch.__version__, torch.cuda.is_available()))
+  except ImportError:
+      mlflow.log_param("torch", "MISSING")
+  mlflow.log_param("probe_done", "yes")
+  mlflow.end_run()  # REQUIRED: without it the metrics-monitor thread keeps python alive -> run idles to timeout
+  PYEOF
+max_retries: 0
+timeout_minutes: 12
+mlflow_run_name: cli-egress-probe

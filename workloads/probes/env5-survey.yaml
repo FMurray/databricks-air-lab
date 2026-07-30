@@ -1,0 +1,24 @@
+# Probe: what does env v5 provide on the Gen-AI task path (python stack, CUDA libs)?
+# v5 ships logs — read results with: air logs <run_id> -p <profile>
+experiment_name: air-lab-env-diagnostics
+
+environment:
+  version: "5"
+  dependencies: []
+
+compute:
+  num_accelerators: 1
+  accelerator_type: GPU_1xA10
+
+code_source:
+  type: snapshot
+  snapshot:
+    root_path: ../..
+    include_paths:
+      - experiments/node-acceptance/
+
+command: python $CODE_SOURCE_PATH/experiments/node-acceptance/env5_survey.py
+
+max_retries: 0
+timeout_minutes: 15
+mlflow_run_name: env5-survey

@@ -33,12 +33,28 @@ scripts/assets referenced by relative path.
 
 ## Conventions
 
+- **No local tmp artifacts — ever.** Every test asset (probe YAMLs, diagnostic notebooks,
+  helper scripts) is checked into the repo the moment it's used, so any teammate can pick up
+  the work without this machine. Diagnostic workloads live in `workloads/probes/`;
+  notebook sources in `utils/verification/`. If it ran against a workspace, it's in git.
+- **Ask testers where they want evidence delivered** before a verification round: Google Doc,
+  Slack, or MLflow (the default when nobody says otherwise). Google Doc links are
+  customer-identifying and must NEVER be committed to the repo — they live in `docs/private/`
+  or stay in the delivery channel itself; committed docs reference receipts by run id +
+  MLflow experiment only.
+
 - **Show, don't characterize — every result claim carries its receipt.** Product is Preview/Beta;
   docs lag; findings feed a live customer engagement. A result is "verified" only with run id +
   workspace + date and the quoted output that backs it; MLflow (local, synced to managed) is the
   evidence layer for raw output — the repo commits code, predictions, and conclusions, not data.
   Full standard (assertion-based probes, measured/derived/inferred labeling, observation traps,
   pre/post-run checklists): `.claude/skills/experiment-verification/SKILL.md`.
+- **Every MLflow experiment carries a description.** The Description panel (`mlflow.note.content`
+  tag) is the audit trail teammates see first: what it tests, how to reproduce it, pass criteria,
+  observed results with run IDs. Repro pointers are **workspace links** into the
+  `/Workspace/Shared/databricks-air-lab` mirror (readers are in the MLflow UI, not on your
+  machine), and CLI-submitted experiments say so explicitly — most experiments here have no
+  notebook source. Full contract: `.claude/skills/experiment-verification/SKILL.md`.
 - Workload YAMLs: `workloads/*.example.yaml` are committed templates; live copies (workspace
   specifics) are gitignored siblings without `.example`.
 - Experiments: one dir per family under `experiments/`, findings in its `NOTES.md`; facts that

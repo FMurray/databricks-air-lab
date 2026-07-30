@@ -1,0 +1,29 @@
+# M2a: RDMA isolated from NVLink — 1 GPU/node communicator across 4 nodes, all bytes on EFA
+# M3 (RDMA hw-counter receipts) is embedded: deltas print per node + land in MLflow metrics.
+experiment_name: air-lab-rdma-stress
+
+environment:
+  version: "5"
+  dependencies: []
+
+env_variables:
+  STRESS_SECONDS: "600"
+  BUF_MB: "1024"
+  FABRIC_ONLY: "1"
+
+compute:
+  num_accelerators: 32
+  accelerator_type: GPU_8xH100
+
+code_source:
+  type: snapshot
+  snapshot:
+    root_path: ..
+    include_paths:
+      - experiments/node-acceptance/
+
+command: python $CODE_SOURCE_PATH/experiments/node-acceptance/nccl_allreduce_ctypes.py
+
+max_retries: 0
+timeout_minutes: 45
+mlflow_run_name: rdma-m2a-fabric-only
