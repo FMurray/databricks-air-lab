@@ -49,7 +49,8 @@ for check in CFG["checks"]:
             "task_key": "check",
             "notebook_task": {
                 "notebook_path": f"{HERE}/{check['path']}",
-                "base_parameters": {"expect_gpus": str(check.get("expect_gpus", {}).get(shape, ""))},
+                "base_parameters": {"expect_gpus": str(check.get("expect_gpus", {}).get(shape, "")),
+                                    **check.get("params", {})},
             },
             "environment_key": "uat_env",
             "timeout_seconds": check["timeout_minutes"] * 60,

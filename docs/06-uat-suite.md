@@ -40,6 +40,54 @@ network posture better than our open sandboxes). Profile: `mkazia-lw2`. Catalog:
 | 14 | Deps: vendored (snapshot) | `vendored-wheels-snapshot.example.yaml` | 1×A10 | ✅ run 846540776169482 — emoji+xxhash (compiled) via committed vendor/ + PYTHONPATH, verdict PASS |
 | 15 | Deps: vendored (UC volume) | `vendored-wheels-ucvolume.example.yaml` | 1×A10 | ⛔ staged; gated on catalog bucket fix (#1) |
 | 16 | Deps: workspace default package repo (documented GA path) | admin setting, `probes/pip-probe.yaml` re-test | — | 📋 needs workspace admin: scope `databricks-package-management` → internal index; verify AIR env build inherits |
+| 17 | air CLI from a notebook (zero local setup) | `uat/checks/air-cli-from-notebook` + vendored CLI wheels | CPU (submits 1×A10) | ✅ 2026-07-30 — all probes pass via DRIVER (check run 11760699227540); notebook-submitted envvar-probe → SUCCESS (AIR run 677147480932865) |
+
+### #17 success criteria (written before first run, 2026-07-30)
+
+Question: can a tester drive the AIR CLI entirely from a serverless notebook (no local machine)?
+Check = `uat/checks/air-cli-from-notebook` via the DRIVER (CPU shape, `air_mode=submit`). The
+CLI installs from `utils/verification/uat-notebooks/wheels/` (vendored, **databricks-air 1.0.0**
+— NB: 1.0.0 released ~7/30, all prior findings are v0.1.x-scoped); auth = notebook context token
+via `DATABRICKS_HOST`/`DATABRICKS_TOKEN` (local pre-flight of that auth mode: ✅ both 0.1.0 and
+1.0.0 dry-run, 2026-07-30). PASS requires all four probes ✅ in the exit JSON:
+
+- `cli_install` — `air --version` exits 0 from the %pip-installed console script
+- `context_auth_env` — context token exported (trivially ✅; real auth proof is the submit)
+- `air_dry_run` — exit 0 + dry-run sentinel, run from the FUSE-mirrored repo
+  (NB 1.0.0 dry-run skips upload AND submission — it proves config plumbing only, hence:)
+- `air_submit` + `air_submitted_run` — real `air run` of `probes/envvar-probe.yaml` from
+  `/Workspace/Shared/databricks-air-lab` (snapshot upload from FUSE = the genuinely novel leg),
+  run_id parsed, polled to `SUCCESS` within 15 min
+
+Expected failure modes worth distinguishing: %pip resolve failure (wheel set incomplete →
+vendor gap), `air_submit` auth error (context token not honored by CLI → needs PAT/secret
+path), snapshot upload error from FUSE (CLI can't tar workspace files → CLI-from-notebook dead
+without a git clone step).
+
+**✅ VERIFIED 2026-07-30, fe-sandbox-mkazia-lw2 — all criteria met on first DRIVER run**
+(driver job 505966573941984 → check run 11760699227540, `air_mode=submit`):
+
+```
+cli_install        ✅ .../pythonEnv-.../bin/air -> v1.0.0
+context_auth_env   ✅ host=https://fe-sandbox-mkazia-lw2.cloud.databricks.com
+air_dry_run        ✅ exit=0
+air_submit         ✅ exit=0; run_id=677147480932865
+air_submitted_run  ✅ run 677147480932865 -> SUCCESS
+```
+
+The notebook-submitted workload (`probes/envvar-probe.yaml`, 1×A10, snapshot uploaded from the
+FUSE mirror) ran to SUCCESS; archived locally as MLflow run `f6563955aead41379ccbb08f7435c231`
+(source `fd9313843f5b4055b1548e0713296188`). Follow-up run with a pre-%pip probe (job
+685034087490453) answered the bundling question: **the CLI is NOT preinstalled in the
+serverless runtime** — `cli_not_preinstalled ✅ pre-%pip: which(air)=None module=False
+py3.12.3` — vendored wheels (or an admin-set default package repo) are required. The check now
+asserts this every run, so it flags if a future runtime starts bundling the CLI.
+
+⚠️ Anomaly from the same DRIVER run, needs follow-up: `gpu-smoke@GPU_1xA10` (job run
+975022265079249) reported `gpu_available=⏭️ skipped_no_gpu` — the same Jobs API
+`hardware_accelerator` path returned a healthy A10 on 2026-07-24 (run 832802492734599). Not
+re-tested; could be env v5 notebook-job GPU attach, pool contention, or check logic — do not
+conclude GPU notebook jobs are broken from one skip, but re-run before the window.
 
 ## Admin prerequisites on the target (owner asks)
 
