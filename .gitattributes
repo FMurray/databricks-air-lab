@@ -1,0 +1,4 @@
+# Keep the local receipts store (internal workspace refs) out of "Download ZIP" /
+# git archive — the customer-sharing path. Stays tracked in git for the team.
+experiments/mlflow.db export-ignore
+experiments/mlartifacts/ export-ignore
