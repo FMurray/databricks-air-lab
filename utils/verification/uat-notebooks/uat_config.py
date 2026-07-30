@@ -29,6 +29,14 @@ UAT_CONFIG = {
             "timeout_minutes": 15,
         },
         {
+            "path": "checks/air-cli-from-notebook",
+            # CPU: the CLI needs no GPU; submit mode makes the check itself submit one
+            # 1xA10 envvar-probe (12-min workload timeout) and poll it to terminal.
+            "shapes": ["CPU"],
+            "timeout_minutes": 30,
+            "params": {"air_mode": "submit"},
+        },
+        {
             "path": "checks/gpu-smoke",
             "shapes": ["GPU_1xA10", "GPU_1xH100", "GPU_8xH100"],
             "timeout_minutes": 25,
