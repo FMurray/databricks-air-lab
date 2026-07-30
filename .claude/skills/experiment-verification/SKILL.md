@@ -65,6 +65,83 @@ free-floating text. Browse with `mlflow ui --backend-store-uri sqlite:///experim
   (local working copies are fine); raw output belongs in MLflow.
 - Retrieval for anything not yet in MLflow: `air logs <run_id> [--node N] -p <profile>`.
 
+## Every experiment carries a description (reproducibility contract)
+
+An MLflow experiment with no description is an orphan: a teammate opening the workspace UI sees
+a name like `air-lab-envvar-probe` and a pile of runs with no way to rerun or trust any of it.
+Set the description when the experiment is created (in practice: right after the first
+submission), and update **Observed** whenever a headline result changes.
+
+**Contract — four parts, in this order:**
+
+1. **What it tests** — one or two sentences, the finding/purpose first. State the submission
+   path explicitly: only notebook-sourced experiments have a notebook behind them; most here are
+   **"submitted via the `air` CLI from a local repo checkout"** — say so, or a teammate will
+   hunt for a notebook that doesn't exist.
+2. **Repro** — the driving asset, linked (see link rules below): the `*.example.yaml` template +
+   the script it invokes for CLI workloads, the workspace notebook for notebook experiments.
+   Plus shape (`GPU_1xA10`, …), environment version, and any env vars that matter. One-off
+   inline `air run` diagnostics with no committed YAML must say exactly that and link the run
+   table that documents them (e.g. `docs/06-uat-suite.md`).
+3. **Pass** — the success criteria / sentinel, where they exist.
+4. **Observed** — results with run IDs and dates, failures included, workspace-scoped
+   ("on this workspace…" vs "on an open workspace…").
+
+**Link rules:** readers are in the MLflow UI, so repro pointers are **workspace links** into the
+repo mirror (`/Workspace/Shared/databricks-air-lab`), never local paths. Markdown renders in the
+Description panel. The only format verified to open (2026-07-24, fe-sandbox-mkazia-lw2, human
+click-tested) is the **object-ID route**:
+
+```
+FILE       https://<host>/editor/files/<object_id>?o=<workspace_id>
+NOTEBOOK   https://<host>/editor/notebooks/<object_id>?o=<workspace_id>
+DIRECTORY  https://<host>/browse/folders/<object_id>?o=<workspace_id>
+```
+
+Get the ID + type from `databricks api get /api/2.0/workspace/get-status?path=<url-encoded-path>`
+(doubles as the existence check). Both path-style forms **404** on this workspace UI:
+`https://<host>/Workspace/<path>` and the legacy hash `https://<host>/?o=…#workspace/<path>`.
+Trap: the air CLI (v0.1.x) writes a default run description ("Workload configuration:
+[training_config.yaml](/Workspace/…)") whose href is the config's **FUSE mount path** on the
+compute node — correct as a filesystem path, 404 as a UI link. Product bug, raised with AIR
+eng; don't hand-patch CLI-written run tags — the YAML itself is reachable via
+`get-status` on the same path.
+Object IDs change if a re-sync deletes/recreates the object — spot-check description links after
+syncing the mirror. When unsure a link is right, have a human open it before shipping it.
+
+Only committed content is mirrored — live YAMLs (non-`.example`) are not there; link the
+`.example.yaml` template and say "copy + fill in workspace fields"; re-sync the mirror if the
+asset is new.
+
+**Exact-submission provenance:** every `air run` uploads its launch dir to
+`/Users/<submitter>/.air/cli_launch/<experiment_name>/<run-name>_<id>/` — `training_config.yaml`
+(the exact YAML as submitted), `requirements.yaml`, `command.sh`, and `git_diff.patch`. Link the
+experiment's launch folder from the description as the authoritative record of what was
+submitted (caveat: it lives under the submitter's user dir, so teammates may need access
+granted, or mirror the configs to `/Shared`). ⚠️ **`git_diff.patch` is a privacy trap**: it
+captures your full uncommitted diff at submission time, which can include content that was
+later anonymized or was never meant to leave `docs/private/` context. Never mirror or share
+launch dirs without scanning them (customer identifiers, tokens) — and remember they exist at
+all: submitting from a dirty tree publishes that dirt to the workspace.
+
+**Setting it** — the description is the `mlflow.note.content` experiment tag; setting it again
+overwrites:
+
+```
+databricks api post /api/2.0/mlflow/experiments/set-experiment-tag --profile <profile> \
+  --json '{"experiment_id": "<id>", "key": "mlflow.note.content", "value": "<markdown>"}'
+```
+
+Audit a workspace for undescribed experiments:
+
+```
+databricks api post /api/2.0/mlflow/experiments/search --profile <profile> \
+  --json '{"max_results": 100}' | jq -r '.experiments[]
+  | select(((.tags // []) | map(select(.key == "mlflow.note.content")) | length) == 0) | .name'
+```
+
+Descriptions are workspace-visible: the anonymization rule applies (no customer identifiers).
+
 ## Label what kind of number it is
 
 - **Measured** — read directly from output. Quote it.
@@ -104,6 +181,8 @@ free-floating text. Browse with `mlflow ui --backend-store-uri sqlite:///experim
 
 - [ ] Quoted output + run identity in NOTES.md; claim→evidence table for headline results
 - [ ] MLflow run ID recorded; artifacts attached if the raw output needs to outlive job-run retention
+- [ ] Experiment description (`mlflow.note.content`) set/updated — what-it-tests + Repro
+      (workspace links, submission path stated) + Pass + Observed
 - [ ] Run archived to the local store (`utils/verification/archive_run.py`, `--extra` for
       client-side logs); local archive run ID added next to the claim in NOTES.md
 - [ ] Multi-node claims checked on every node
