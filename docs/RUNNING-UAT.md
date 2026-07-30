@@ -51,6 +51,28 @@ The AIR *submission-path* workloads below still require the `air` CLI — and pe
 rules, **all distributed multi-node runs are CLI-only** (no shapes beyond one node in the
 notebook suite by design; `pool-readiness` fronts the CLI rather than using notebook shapes).
 
+## Dependencies without PyPI — two recipes
+
+**Run a workload that needs extra Python packages (vendored wheels):**
+1. On your laptop, from repo root: `./experiments/env-flexibility/vendored-wheels/vendor_deps.sh`
+   (edit `PACKAGES=(...)` in the script first; uv cross-targets linux/amd64 py3.12 from any host).
+2. Make sure the `vendor/` dir is **committed / not gitignored** — the CLI's snapshot tar
+   silently drops gitignored paths (verified).
+3. In your workload YAML: `dependencies: []`, include your experiment dir in `include_paths`,
+   and prefix the command with
+   `export PYTHONPATH="$CODE_SOURCE_PATH/<your-dir>/vendor:$PYTHONPATH"`.
+4. Submit as usual. Working example (verified PASS): `workloads/vendored-wheels-snapshot.example.yaml`.
+   Full detail + UC-volume and default-package-repo alternatives:
+   `experiments/env-flexibility/vendored-wheels/README.md`.
+
+**Use the air CLI from a notebook (no laptop needed) — vendored CLI wheels:**
+1. In any serverless notebook cell:
+   `%pip install --no-index --find-links /Workspace/Shared/databricks-air-lab/uat/wheels databricks-air`
+2. `air run --file /Workspace/Shared/databricks-air-lab/workloads/<x>.yaml` (auth is ambient
+   in the notebook). Working example: `uat/checks/air-cli-from-notebook`.
+   NB: the wheels live in **workspace files** (not a UC volume — volumes are blocked until the
+   catalog-bucket fix); rebuild instructions: `uat/wheels/README.md` in the workspace mirror.
+
 ## Run a UAT workload
 
 ```bash
