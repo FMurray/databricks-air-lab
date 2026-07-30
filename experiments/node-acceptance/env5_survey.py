@@ -53,6 +53,28 @@ print(f"SURVEY n_dists={len(dists)}", flush=True)
 for i in range(0, len(dists), 20):
     print("SURVEY dists:", ",".join(dists[i:i + 20]), flush=True)
 
+# torch hunt: other interpreters / site-packages on the image (the launched interpreter
+# lacking torch does NOT prove the image does — challenge from review, settle it here)
+for pat in ["/databricks/*/bin/python*", "/opt/*/bin/python*", "/usr/bin/python3*",
+            "/opt/conda/envs/*/bin/python*", "/local_disk0/*/bin/python*"]:
+    hits = sorted(set(glob.glob(pat)))
+    print(f"SURVEY pythons {pat} -> {hits[:6]}", flush=True)
+for pat in ["/databricks/**/site-packages/torch/version.py",
+            "/opt/**/site-packages/torch/version.py",
+            "/usr/lib/python3*/dist-packages/torch/version.py",
+            "/local_disk0/**/torch/version.py"]:
+    hits = glob.glob(pat, recursive=True)
+    print(f"SURVEY torch-hunt {pat} -> {hits[:4]}", flush=True)
+r = subprocess.run(["find", "/databricks", "/opt", "-maxdepth", "6", "-name", "torch",
+                    "-type", "d"], capture_output=True, text=True, timeout=120)
+print(f"SURVEY find-torch-dirs: {r.stdout.strip().splitlines()[:6]}", flush=True)
+
+# RDMA counter exposure (receipt channel for fabric stress)
+ib = glob.glob("/sys/class/infiniband/*")
+print(f"SURVEY infiniband devices: {ib[:8]}", flush=True)
+ctr = glob.glob("/sys/class/infiniband/*/ports/*/hw_counters/*")
+print(f"SURVEY hw_counters n={len(ctr)} sample={[c.rsplit('/',1)[-1] for c in ctr[:12]]}", flush=True)
+
 print(f"SURVEY MLFLOW_RUN_ID={'set' if os.environ.get('MLFLOW_RUN_ID') else 'unset'}", flush=True)
 try:
     from mlflow.tracking import MlflowClient
