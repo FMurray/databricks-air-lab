@@ -18,7 +18,7 @@ Completion lines:
   FSDP_BR4_COMPLETE     — Proofs 1+2+3. THE BR-4 acceptance line.
   FSDP_SUITE8_COMPLETE  — all four (adds the checkpoint proof = suite #8).
 
-Design (see plans/train-fsdp.md for the full rationale):
+Design:
   * Self-contained + egress-free: depends on preinstalled `torch` only (`dependencies: []`),
     builds its model in-code, and generates synthetic deterministic data on-device from a
     closed-form formula (no RNG in data, no downloads). Runnable now, without the pkg repo.
@@ -93,7 +93,7 @@ SMOOTH_WINDOW = 20                   # steps in the final smoothing window for c
 # ==========================================================================================
 WORKLOAD = "FSDP2 TRAINING (BR-4)"
 
-# Status enum — exactly these five (template §"Status enum").
+# Status enum — exactly these five (see format spec §"Status enum").
 PASS = "PASS"
 FAIL = "FAIL"
 BLOCKED = "BLOCKED"
@@ -126,11 +126,10 @@ def _fail_from_exc(name, threshold, what_why, likely_means, exc) -> Check:
 
 def _wrap(text: str, indent: str = "               ") -> str:
     """Wrap a long field to ~92 cols, hanging-indented under its dotted label."""
-    body = textwrap.fill(text, width=96, initial_indent="", subsequent_indent=indent)
-    return body
+    return textwrap.fill(text, width=96, initial_indent="", subsequent_indent=indent)
 
 
-def render_report(checks: list[Check], run_id: str, profile: str, shape: str,
+def render_report(checks: "list[Check]", run_id: str, profile: str, shape: str,
                   scope: str, runtime: str, sentinels: str) -> int:
     """Render every check identically and DERIVE the exit code last. Returns the exit code:
     any FAIL ⇒ 1; BLOCKED / SKIPPED / N/A alone ⇒ 0. Verdict is generated from scope + statuses
@@ -175,7 +174,7 @@ def render_report(checks: list[Check], run_id: str, profile: str, shape: str,
     out.append(f"VERDICT: {verdict}")
     out.append(f"  {vline}   Sentinels: {sentinels}   Exit: {exit_code}")
 
-    # On FAIL — plain English first, then the raw trace (template §"On FAIL"). Never swallowed.
+    # On FAIL — plain English first, then the raw trace (format spec §"On FAIL"). Never swallowed.
     if has_fail:
         out.append("")
         out.append("WHAT THIS LIKELY MEANS")
@@ -472,7 +471,7 @@ def train_loop(model, opt, sched, args, mesh, device, world, start_step, mlf, ck
         if sharding_check is None:
             sharding_check = proof1_sharding(model, world, device, opt)
 
-        if lv != lv or lv == float("inf"):                 # NaN/inf guard — record, don't raise
+        if lv != lv or abs(lv) == float("inf"):            # NaN/±inf guard — record, don't raise
             train_check = Check(
                 name=train_name, status=FAIL,
                 measured=f"non-finite loss at step {step}: {lv}", threshold=train_thresh,
@@ -704,17 +703,42 @@ def proof4_checkpoint_resume(args, mesh, device, world, ckpt_dir) -> Check:
 # the root-storage artifact-upload path that caused the `07` TIMEDOUT saga; confirm reachability
 # on the target before relying on it. Degrades to stdout when mlflow is absent (local).
 # ==========================================================================================
+class _MlflowReceipt:
+    """Thin adapter over MlflowClient bound to the AIR-injected run. Same call sites as the fluent
+    API (`log_metric`/`log_param`) so the training loop is unchanged. The client API — NOT
+    `mlflow.start_run(run_id=…)` — is deliberate: resuming the launcher-owned run transitions its
+    status and failed SILENTLY on the job plane (see burn.py / nccl_allreduce_ctypes.py, the repo's
+    receipt pattern). It also avoids the fluent API spinning up a stray local run when there is no
+    tracking run to attach to."""
+    def __init__(self, client, run_id: str):
+        self._c = client
+        self._run_id = run_id
+
+    def log_metric(self, key, value, step=None):
+        self._c.log_metric(self._run_id, key, value, step=step if step is not None else 0)
+
+    def log_param(self, key, value):
+        self._c.log_param(self._run_id, key, value)
+
+
 def open_mlflow(rank: int):
     if rank != 0:
         return None
+    run_id = os.environ.get("MLFLOW_RUN_ID")
+    if not run_id:
+        # No AIR-injected run to attach to (e.g. --local). Do NOT let the fluent API start a stray
+        # local run just to log into — skip and fall back to stdout.
+        print("[rank0] MLFLOW_RUN_ID unset — logging to stdout only", flush=True)
+        return None
     try:
-        import mlflow
+        from mlflow.tracking import MlflowClient
     except ImportError:
         print("[rank0] mlflow not installed — logging to stdout only", flush=True)
         return None
     try:
-        mlflow.log_param("mlflow_tracking_reachable", "checking")
-        return mlflow
+        client = MlflowClient()
+        client.log_param(run_id, "mlflow_tracking_reachable", "yes")
+        return _MlflowReceipt(client, run_id)
     except Exception as e:                                 # noqa: BLE001
         print(f"[rank0] mlflow tracking endpoint NOT reachable: {e} — stdout only", flush=True)
         return None
@@ -831,11 +855,13 @@ def worker(rank: int, world: int, args):
     train_check, sharding_check = train_loop(
         model, opt, sched, args, mesh, device, world, start_step, mlf, ckpt_dir)
 
-    # Completion line for BR-4 (Proofs 1+2+3 only). THE acceptance receipt — emitted when all
-    # three cleared their threshold (N/A at world=1 counts as "did not fail" for the receipt).
-    def _ok(c):  # PASS, or N/A-at-this-scale (vacuous) — anything but an outright FAIL
-        return c.status in (PASS, NA)
-    br4 = _ok(sharding_check) and _ok(reduce_check) and train_check.status == PASS
+    # Completion line for BR-4 (Proofs 1+2+3 only). THE acceptance receipt — emitted ONLY when all
+    # three STRICTLY PASS at world>=2. At world=1 sharding + reduce-scatter are vacuous (N/A), so the
+    # receipt must NOT print: anyone grepping the sentinel would read a false acceptance for proofs
+    # the run never performed (format-spec: "a run can't claim a proof it didn't perform"). The
+    # world=1 API-gate run still renders ACCEPTED WITH CAVEATS in the report; it just isn't BR-4.
+    br4 = (world >= 2 and sharding_check.status == PASS
+           and reduce_check.status == PASS and train_check.status == PASS)
     if rank == 0 and br4:
         print("FSDP_BR4_COMPLETE proofs=1,2,3 (sharding+reduce+convergence)", flush=True)
 
@@ -883,8 +909,12 @@ def worker(rank: int, world: int, args):
         scope = "smoke" if world == 1 else "acceptance"
         shape = f"world={world}, {mesh_dev}"
         try:
+            # Prefer MLFLOW_RUN_ID (AIR-injected; the join key a confirmer uses to find this run
+            # in Jobs/MLflow) over the display name; fall back to the name, then "local".
+            run_id = (os.environ.get("MLFLOW_RUN_ID")
+                      or os.environ.get("MLFLOW_RUN_NAME") or "local")
             exit_code = render_report(
-                checks, run_id=os.environ.get("MLFLOW_RUN_NAME", "local"),
+                checks, run_id=run_id,
                 profile=("local-cpu" if args.local else "air"),
                 shape=shape, scope=scope, runtime=runtime_str,
                 sentinels=" ".join(sentinels))

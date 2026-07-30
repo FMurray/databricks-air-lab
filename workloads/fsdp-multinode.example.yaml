@@ -4,17 +4,17 @@
 # adds Proof 4 (checkpoint/resume, suite #8). Pre-registered success criteria + local pre-flight
 # output: experiments/foundation-models/NOTES.md. Schema source of truth: `air -h config`.
 #
-# Shape ladder (escalate deliberately — see plans/train-fsdp.md):
-#   rung 1  GPU_1xA10  world=1  — env builds with deps []; runtime torch/NCCL + fully_shard + DCP
-#           API resolve; loop + single-writer checkpoint round-trip. Sharding/reduce proofs are
-#           VACUOUS at world=1 (necessary API gate, not sufficient). Override:
-#             --override compute.num_accelerators=1 compute.accelerator_type=GPU_1xA10
-#   rung 2  GPU_8xH100 1 node world=8 — THE headline: sharding, reduce-scatter, convergence,
-#           collective DCP first real at world>=2. Emits FSDP_BR4_COMPLETE. As configured below.
-#   rung 3  2x GPU_8xH100 world=16 — FSDP survives the inter-node fabric (EFA). Override:
-#             --override compute.num_accelerators=16
-#           Check node 1: `air logs <id> --node 1`.
-#   rung 4  (stretch) DDP-OOM/FSDP-fit counterfactual — see the memprobe override at the bottom.
+# This config IS the headline multinode run: 2x GPU_8xH100, world=16 (see compute below). It
+# proves FSDP survives the inter-node fabric (EFA) and emits FSDP_BR4_COMPLETE (Proofs 1+2+3;
+# gated on world>=2 so it never prints on a vacuous single-process run). Smaller shapes are
+# deliberate step-downs via --override, not a config to submit by default:
+#   API gate  GPU_1xA10 world=1 — env builds with deps []; runtime torch/NCCL + fully_shard + DCP
+#             API resolve; loop + single-writer checkpoint round-trip. Sharding/reduce proofs are
+#             VACUOUS at world=1 (necessary API gate, NOT the BR-4 receipt — no FSDP_BR4_COMPLETE).
+#               --override compute.num_accelerators=1 compute.accelerator_type=GPU_1xA10
+#   1 node    GPU_8xH100 world=8 — sharding/reduce/convergence real, single-node (no EFA hop):
+#               --override compute.num_accelerators=8
+#   memprobe  (stretch) DDP-OOM/FSDP-fit counterfactual — see the memprobe override at the bottom.
 experiment_name: air-lab-fsdp-multinode
 
 environment:
@@ -24,7 +24,9 @@ environment:
   dependencies: []      # torch is preinstalled; the trainer is self-contained (no PyPI/HF egress).
 
 compute:
-  num_accelerators: 16           # rung 2 headline (1 node). whole-node multiples of 8 only.
+  num_accelerators: 16           # world=16 across 2 nodes (8/node) — the headline multinode run:
+                                 # proves FSDP survives the inter-node fabric (EFA). whole-node
+                                 # multiples of 8 only. Check node 1: `air logs <id> --node 1`.
   accelerator_type: GPU_8xH100
 
 code_source:
