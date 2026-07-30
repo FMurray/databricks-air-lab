@@ -10,10 +10,16 @@ overlapped; `hold_start/end_utc` params prove the overlap). Compare params acros
 
 | Signal | Reading |
 |---|---|
-| same `boot_id` / `machine_id` | co-located on one node/VM |
+| same `boot_id` | co-located on one node/VM — **boot_id is the ONLY reliable node discriminator**: `machine_id` and `hostname` are baked into the container image (verified identical across different boots, runs 884203635921670/1032780469039538) |
 | disjoint `gpu_uuids`, same `boot_id` | GPU-granular bin-packing on a shared node |
 | `gpu_count_visible` > requested GPUs | workload sees other tenants' GPUs — isolation gap |
 | `other_gpu_procs` > 0 at start | foreign compute processes visible via NVML |
+
+**Dry-run receipt (2026-07-30, same-user 2×A10, runs 884203635921670 + 1032780469039538,
+holds overlapped 14:09–14:12Z):** different `boot_id` (separate nodes), each saw exactly its
+own 1 GPU (distinct UUIDs), 0 foreign GPU procs, 16-process PID namespace. Clean isolation
+for this pair — but A10 on-demand placement ≠ reserved-pool bin-packing; the H100-pool and
+cross-user variants are the ones that answer the customer question.
 
 Same-user pairs run today; the **cross-user variant needs a teammate** to submit the second
 probe (identical command) — permissions and isolation may differ by principal.
