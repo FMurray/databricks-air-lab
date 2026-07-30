@@ -42,5 +42,17 @@ UAT_CONFIG = {
             "timeout_minutes": 25,
             "expect_gpus": {"GPU_1xA10": 1, "GPU_1xH100": 1, "GPU_8xH100": 8},
         },
+        {
+            "path": "checks/pool-readiness",
+            # One-notebook 20-node readiness: burn sweep (receipts + UUID distinctness)
+            # + NCCL fabric probe, all submitted via the vendored air CLI (UAT #17 path).
+            # DEFAULT IS A NO-COST SKIP: flip confirm_pool to "yes" (and coordinate in the
+            # team channel) for the real sweep. Distributed still goes through the CLI —
+            # this check merely fronts it from a CPU notebook.
+            "shapes": ["CPU"],
+            "timeout_minutes": 90,
+            "params": {"confirm_pool": "no", "pool_nodes": "20",
+                       "burn_seconds": "300", "fabric_nodes": "2"},
+        },
     ],
 }
