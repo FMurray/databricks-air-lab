@@ -19,6 +19,7 @@
 # COMMAND ----------
 
 dbutils.widgets.text("shapes", "GPU_1xA10", "shapes: comma list | all (8xH100 = real money)")
+dbutils.widgets.text("pool", "off", "pool: on = arm confirm_pool-gated checks (20-node sweep — coordinate first)")
 
 # COMMAND ----------
 
@@ -50,7 +51,13 @@ for check in CFG["checks"]:
             "notebook_task": {
                 "notebook_path": f"{HERE}/{check['path']}",
                 "base_parameters": {"expect_gpus": str(check.get("expect_gpus", {}).get(shape, "")),
-                                    **check.get("params", {})},
+                                    **check.get("params", {}),
+                                    # pool=on arms cost-gated checks (their config default
+                                    # stays "no" so a plain Run-all never takes the pool)
+                                    **({"confirm_pool": "yes"}
+                                       if dbutils.widgets.get("pool").strip() == "on"
+                                       and check.get("params", {}).get("confirm_pool") == "no"
+                                       else {})},
             },
             "environment_key": "uat_env",
             "timeout_seconds": check["timeout_minutes"] * 60,

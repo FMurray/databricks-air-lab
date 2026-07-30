@@ -35,9 +35,21 @@ GPU_8xH100`), and prints one aggregated got-vs-expected matrix.
   that filename is a live Databricks convention that overrides the folder's notebook
   environments and broke the CPU driver when we tried it.)
 
+### Verify 20-node pool readiness (one notebook, one widget)
+
+Open `uat/DRIVER`, set widget **`pool` = `on`** (leave `shapes` at its default), Run-all.
+That arms `uat/checks/pool-readiness`, which submits — via the vendored `air` CLI, so the
+CLI-only rule for distributed holds — a 20×(8×H100) burn sweep plus a 2-node NCCL fabric
+probe, and verdicts purely from MLflow receipts: `burn=PASS` per node, **GPU-UUID
+distinctness** (did we really touch 20 physical nodes), quota refusals classified, fabric
+sentinel + busbw. ~15–20 min at defaults; one `pool_ready: true/false` row in the matrix.
+**This takes the whole pool — announce in the team channel first.** With `pool` left `off`
+the check is a free SKIP row. Knobs (edit `uat_config.py` params): `pool_nodes`,
+`burn_seconds` (900 = A1 acceptance grade), `fabric_nodes` (up to 16).
+
 The AIR *submission-path* workloads below still require the `air` CLI — and per the ground
 rules, **all distributed multi-node runs are CLI-only** (no shapes beyond one node in the
-notebook suite by design).
+notebook suite by design; `pool-readiness` fronts the CLI rather than using notebook shapes).
 
 ## Run a UAT workload
 
