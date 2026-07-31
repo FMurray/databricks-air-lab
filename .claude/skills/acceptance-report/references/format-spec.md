@@ -10,15 +10,33 @@ This file is the **format spec** — what a report looks like. For the procedure
 a workload, see `../SKILL.md`; the report code is `renderer.py`. Read alongside
 `docs/about-receipts.md` (the evidence markers) and the `experiment-verification` skill.
 
+## Preconditions (read before trusting a report — or its absence)
+
+- **stdout must actually ship.** The report's primary sink is rank-0 stdout, which reaches
+  `air logs` only on environments with working job-plane log delivery — **env v5 on the current
+  target; env v4 is a verified total blackout** (docs/06). On a blackout env a healthy run
+  produces no readable report; "absent report ⇒ failure" inverts.
+- **Logs expire** (~60-day job-run retention). The stdout report has no durability past that.
+- Both are why the renderer **dual-sinks the verdict to MLflow** (below): the receipt is the
+  durable, blackout-proof leg. Disambiguation rule: *receipt present but no stdout report* =
+  logs didn't ship (env/delivery problem); *neither present* = the run died before the verdict.
+
 ## Principles
 
 1. **Always renders — including on failure.** Checks *record* an outcome; they do not
    `assert`-and-raise. The runner renders from the records, then derives the exit code last.
 2. **Derived from what was measured** — never a parallel narrative that can drift from the result.
 3. **stdout on rank 0, behind a banner.** It's the one sink `air logs`/`--watch` reliably returns
-   (UC volumes are BR-2-blocked, `/tmp` doesn't survive resubmit). A file is optional, not primary.
+   *when log delivery works* (see Preconditions; UC volumes are BR-2-blocked, `/tmp` doesn't
+   survive resubmit). A file is optional, not primary.
 4. **Honest about scope.** A check vacuous at the current scale says so; the report attests only to
    what rank 0 saw (if another node dies the job may hang and this report may never print).
+5. **Dual-sinked.** After printing, the renderer writes `acceptance_verdict`, `acceptance_exit`,
+   `acceptance_test_id`, and one `acceptance_check_<n>` param per check to the run's MLflow run
+   (client API on `MLFLOW_RUN_ID`, alarm-guarded, best-effort; skips cleanly when unset locally).
+6. **Joined to the results registry.** `test_id` on the VERDICT line is the id from
+   `utils/verification/results/registry.py` — the same key names the registry row, the shared
+   results-sheet row, and the MLflow receipt, so verdicts can be collected mechanically.
 
 ## Layout
 
@@ -37,7 +55,7 @@ CHECK <n> — <plain-language name>
   Sufficient ... <why THIS value is enough — tie it to the threshold; name what a fail looks like>
 ----------------------------------------------------------------------
 VERDICT: <ACCEPTED | ACCEPTED WITH CAVEATS | NOT ACCEPTED>
-  <one sentence, scoped to the shape>   Sentinels: <…>   Exit: <0 | non-zero>
+  <one sentence, scoped to the shape>   Sentinels: <…>   Test-id: <registry id | ->   Exit: <0 | non-zero>
 ```
 
 ## The five per-check fields

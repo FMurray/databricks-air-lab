@@ -13,6 +13,8 @@
 # ==========================================================================================
 from __future__ import annotations
 
+import os
+import signal
 import textwrap
 import traceback as _tb
 from dataclasses import dataclass
@@ -57,11 +59,40 @@ def _wrap(text: str, indent: str = "               ") -> str:
     return textwrap.fill(text, width=96, initial_indent="", subsequent_indent=indent)
 
 
+def _receipt(checks: "list[Check]", verdict: str, exit_code: int, test_id: str) -> None:
+    """Dual-sink the verdict into MLflow params (the durable leg). stdout is the report's
+    primary sink but it depends on the env's log delivery and expires with job-run retention
+    (format spec §"Preconditions") — the receipt makes an absent stdout report disambiguable:
+    receipt present = logs didn't ship; receipt absent = the run died before the verdict.
+    Client API bound to MLFLOW_RUN_ID (never start_run — resuming the launcher-owned run
+    fails silently on the job plane); alarm-guarded so a blocked tracking call can't hang
+    the run; skips cleanly when MLFLOW_RUN_ID is unset (local)."""
+    run_id = os.environ.get("MLFLOW_RUN_ID")
+    if not run_id:
+        return
+    signal.alarm(120)
+    try:
+        from mlflow.tracking import MlflowClient
+        client = MlflowClient()
+        client.log_param(run_id, "acceptance_verdict", verdict)
+        client.log_param(run_id, "acceptance_exit", exit_code)
+        if test_id:
+            client.log_param(run_id, "acceptance_test_id", test_id)
+        for i, c in enumerate(checks, 1):
+            client.log_param(run_id, f"acceptance_check_{i}", f"{c.status} — {c.name}"[:490])
+    except Exception as e:                                 # noqa: BLE001 — receipt is best-effort
+        print(f"acceptance receipt logging FAILED: {e}", flush=True)
+    finally:
+        signal.alarm(0)
+
+
 def render_report(checks: "list[Check]", run_id: str, profile: str, shape: str,
-                  scope: str, runtime: str, sentinels: str) -> int:
+                  scope: str, runtime: str, sentinels: str, test_id: str = "") -> int:
     """Render every check identically and DERIVE the exit code last. Returns the exit code:
     any FAIL ⇒ 1; BLOCKED / SKIPPED / N/A alone ⇒ 0. Verdict is generated from scope + statuses
-    so a run cannot claim a proof it did not perform (smoke ⇒ capped at ACCEPTED WITH CAVEATS)."""
+    so a run cannot claim a proof it did not perform (smoke ⇒ capped at ACCEPTED WITH CAVEATS).
+    `test_id` is the UAT results-registry id (utils/verification/results/registry.py) — the
+    join key shared by the registry row, the sheet row, and the MLflow receipt."""
     when = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%SZ")
     W = 70
     out = []
@@ -100,7 +131,8 @@ def render_report(checks: "list[Check]", run_id: str, profile: str, shape: str,
         verdict, exit_code = "ACCEPTED", 0
         vline = f"All checks passed at {shape}."
     out.append(f"VERDICT: {verdict}")
-    out.append(f"  {vline}   Sentinels: {sentinels}   Exit: {exit_code}")
+    out.append(f"  {vline}   Sentinels: {sentinels}   Test-id: {test_id or '-'}   "
+               f"Exit: {exit_code}")
 
     # On FAIL — plain English first, then the raw trace (format spec §"On FAIL"). Never swallowed.
     if has_fail:
@@ -118,6 +150,8 @@ def render_report(checks: "list[Check]", run_id: str, profile: str, shape: str,
                 out.append(c.traceback.rstrip())
 
     print("\n" + "\n".join(out), flush=True)
+    # Receipt AFTER the print: report delivery is priority one; the receipt is the durable leg.
+    _receipt(checks, verdict, exit_code, test_id)
     return exit_code
 
 
@@ -138,7 +172,8 @@ def render_report(checks: "list[Check]", run_id: str, profile: str, shape: str,
 #                 checks, run_id=run_id,
 #                 profile=("local-cpu" if args.local else "air"),
 #                 shape=shape, scope=scope, runtime=runtime_str,
-#                 sentinels=" ".join(sentinels))
+#                 sentinels=" ".join(sentinels),
+#                 test_id="<registry id>")  # utils/verification/results/registry.py
 #         except Exception:                              # noqa: BLE001 — never lose the verdict
 #             _tb.print_exc()
 #             exit_code = 1

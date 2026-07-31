@@ -324,7 +324,7 @@ TESTS = [
     },
     {
         "id": "fsdp",
-        "sentinels": ["FSDP_BR4_COMPLETE"], "sentinels_pending": "PR #1 (train_fsdp.py not yet on main)",
+        "sentinels": ["FSDP_BR4_COMPLETE"],
         "test": "Multi-node FSDP fine-tune",
         "category": "Workload",
         "hardware": "H100",
