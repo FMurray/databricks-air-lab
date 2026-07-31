@@ -1,5 +1,7 @@
 # Probe: which ML packages does the baked-in databricks-ai env (env v5 image) actually have?
 # Decides whether workloads like XGBoost work via the AI-env interpreter or need vendored wheels.
+# Built from proven shapes only: $AIPY -c one-liners (torch-v5-probe) + default-python
+# heredoc param logging (cli-egress-probe). First heredoc version failed 2x log-less.
 experiment_name: air-lab-env-diagnostics
 
 environment:
@@ -13,16 +15,22 @@ compute:
 command: |
   set +e
   AIPY=/opt/databricks-environments/databricks-ai/bin/python
-  $AIPY - <<'PYEOF'
-  import importlib, json, os, signal
-  results = {}
-  for pkg in ["torch", "xgboost", "sklearn", "transformers", "lightgbm", "peft", "datasets", "mlflow", "pandas", "numpy"]:
+  $AIPY -c "
+  import importlib, json
+  r = {}
+  for p in ['torch','xgboost','sklearn','transformers','lightgbm','peft','datasets','mlflow','pandas','numpy']:
       try:
-          m = importlib.import_module(pkg)
-          results[pkg] = getattr(m, "__version__", "present")
-      except ImportError:
-          results[pkg] = "MISSING"
-  for k, v in results.items():
+          r[p] = getattr(importlib.import_module(p), '__version__', 'present')
+      except Exception:
+          r[p] = 'MISSING'
+  print(json.dumps(r))
+  open('/tmp/ai_env_pkgs.json','w').write(json.dumps(r))
+  " || echo '{"ai_env":"interpreter missing"}' > /tmp/ai_env_pkgs.json
+  cat /tmp/ai_env_pkgs.json
+  python - <<'PYEOF'
+  import json, os, signal
+  r = json.load(open('/tmp/ai_env_pkgs.json'))
+  for k, v in r.items():
       print(f"RESULT ai_env.{k}={v}", flush=True)
   run_id = os.environ.get("MLFLOW_RUN_ID")
   if run_id:
@@ -30,8 +38,8 @@ command: |
       try:
           import mlflow
           mlflow.start_run(run_id=run_id)
-          mlflow.log_params({f"ai_env_{k}": v for k, v in results.items()})
-          mlflow.end_run()  # REQUIRED: metrics-monitor thread otherwise keeps python alive
+          mlflow.log_params({f"ai_env_{k}": str(v)[:400] for k, v in r.items()})
+          mlflow.end_run()
       finally:
           signal.alarm(0)
   PYEOF
