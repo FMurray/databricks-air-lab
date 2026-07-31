@@ -146,6 +146,9 @@ conclude GPU notebook jobs are broken from one skip, but re-run before the windo
 5. Live YAMLs: `code_source` workloads are workspace-portable (profile picks the target at
    submit); only Docker/telemetry configs need a per-workspace copy (env: workspace id/url,
    region, tables).
+5b. **Fill `TARGET` in the deployed `uat/uat_config.py`** (`uc_catalog`, `root_storage_host`)
+   — committed blank on purpose (no workspace identifiers in git); the DRIVER fails fast,
+   before submitting anything, while they're blank.
 6. Validate cheap-first: exec-probe (1×A10) → per-family A10 smokes → single-H100 → multinode
    A10 override → 8×H100 only deliberately.
 7. Record every run in the family's `experiments/*/NOTES.md` with run id + workspace + date

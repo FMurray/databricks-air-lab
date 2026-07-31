@@ -31,6 +31,16 @@ _ns = {}
 exec(open(f"/Workspace{HERE}/uat_config.py").read(), _ns)
 CFG = _ns["UAT_CONFIG"]
 
+# Per-target values are committed blank (no workspace identifiers in git). Refuse to run
+# until the DEPLOYED copy of uat_config.py has them — failing fast here beats a matrix
+# full of misleading probe results against the wrong (or no) target.
+_blank = sorted(k for k, v in _ns.get("TARGET", {}).items() if not str(v).strip())
+if _blank:
+    raise RuntimeError(
+        f"uat_config.py TARGET not populated for this workspace: {_blank}. "
+        f"Edit /Workspace{HERE}/uat_config.py (the deployed copy — the committed repo keeps "
+        "these blank on purpose) and re-run. See docs/06-uat-suite.md deploy procedure.")
+
 want = dbutils.widgets.get("shapes").strip()
 ALLOWED = None if want.lower() == "all" else {s.strip() for s in want.split(",")} | {"CPU"}
 

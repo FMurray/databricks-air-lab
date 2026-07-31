@@ -18,6 +18,19 @@
 # goes through the air CLI only (engagement rule — see RUNNING-UAT.md ground rules);
 # use workloads/multinode-*.yaml and workloads/nccl-allreduce.example.yaml.
 
+# ── Per-target values — REQUIRED, committed blank on purpose ──────────────────────────
+# No workspace identifiers live in git: fill these in on the DEPLOYED copy of this file
+# (uat/uat_config.py in the target workspace) before running the DRIVER — it fails fast,
+# before submitting anything, listing whatever is still blank.
+TARGET = {
+    # catalog (or catalog.schema.table) whose CLOUD BUCKET the network check must read —
+    # use the catalog the customer's workloads will actually write to
+    "uc_catalog": "",
+    # workspace root-storage bucket host (parse it from an MLflow artifact-upload error,
+    # or ask the workspace admin) — the log/artifact delivery path
+    "root_storage_host": "",
+}
+
 UAT_CONFIG = {
     "environment_version": "5",
     "dependencies": [],
@@ -27,12 +40,9 @@ UAT_CONFIG = {
             # CPU baseline + the AIR-plane view (the two DIFFER here — docs/06 plane differential)
             "shapes": ["CPU", "GPU_1xA10"],
             "timeout_minutes": 15,
-            # Per-TARGET values live here, not in the check (the check is workspace-portable:
-            # leave these out on a new workspace and it auto-discovers/derives).
-            "params": {
-                "uc_catalog": "mkazia_lw2_catalog_7474656734648830.default.t1",
-                "root_storage_host": "mkazia-lw2-workspace-root-storage.s3-fips.us-east-1.amazonaws.com",
-            },
+            # Per-target values come from TARGET above (the check itself is generic; run
+            # standalone it can also auto-discover, but the DRIVER requires explicit values).
+            "params": dict(TARGET),
         },
         {
             "path": "checks/air-cli-from-notebook",
