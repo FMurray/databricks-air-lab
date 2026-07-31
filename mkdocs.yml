@@ -49,6 +49,7 @@ nav:
           - Run multi-node training: cookbook/run-multi-node-training.md
           - Use a custom Docker image: cookbook/use-a-custom-docker-image.md
           - Run non-Python workloads: cookbook/run-non-python-workloads.md
+          - Install packages from a UC Volume: cookbook/install-packages-from-a-volume.md
       - Observe things:
           - Stream logs and artifacts: cookbook/stream-logs-and-artifacts.md
           - Track metrics with MLflow: cookbook/track-metrics-with-mlflow.md

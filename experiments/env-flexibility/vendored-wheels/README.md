@@ -1,5 +1,8 @@
 # Vendored dependencies UAT — no-PyPI workspaces (W-vendor)
 
+> **Customer-facing "for dummies" recipe: [docs/cookbook/install-packages-from-a-volume.md](../../../docs/cookbook/install-packages-from-a-volume.md)**
+> — 4 copy-paste steps, troubleshooting table. This README is the UAT engineering detail behind it.
+
 The hardened/customer workspaces block PyPI **by design** (no `environment.dependencies`).
 
 **Check the documented path FIRST — workspace default package repositories (GA):** an admin
@@ -17,8 +20,9 @@ GA surface only (no Docker):
 
 | Variant | Delivery | Workload | Status gate |
 |---|---|---|---|
-| A | **code snapshot** (workspace filesystem): vendor dir rides `include_paths`, `PYTHONPATH` at run | `workloads/vendored-wheels-snapshot.example.yaml` | none — works today |
+| A | **code snapshot** (workspace filesystem): vendor dir rides `include_paths`, `PYTHONPATH` at run | `workloads/vendored-wheels-snapshot.example.yaml` | none — works today; small deps only |
 | B | **UC Volume**: vendor dir staged once in a volume, `PYTHONPATH=/Volumes/...` | `workloads/vendored-wheels-ucvolume.example.yaml` | catalog bucket fix (docs/06 ask #1) |
+| C | **env-build from workspace wheels**: `environment.dependencies` accepts direct paths (`- /Workspace/Shared/.../pkg.whl`), `-r` files, and inline `--index-url` (per `air -h config.environment`) | untested — build after A/B verdicts | workspace-file size cap (~500MB/file) rules out torch-scale wheels |
 
 ## How it works
 

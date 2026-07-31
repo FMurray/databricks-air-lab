@@ -8,6 +8,7 @@ anything unverified is labeled as such.
 - [Submit a workload](submit-a-workload.md) — the YAML field by field, with the schema quirks that cost us hours
 - [Run multi-node training](run-multi-node-training.md) — torchrun across 8×H100 nodes, verified end-to-end
 - [Use a custom Docker image](use-a-custom-docker-image.md) — native deps, non-Python stacks, cross-build traps
+- [Install packages from a UC Volume](install-packages-from-a-volume.md) — Python deps on no-PyPI workspaces: vendor once, one YAML line per workload
 - [Run non-Python workloads](run-non-python-workloads.md) — the JVM ladder through the GA surface
 
 ## Observe things
