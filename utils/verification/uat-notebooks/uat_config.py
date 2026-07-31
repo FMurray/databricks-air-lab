@@ -27,6 +27,12 @@ UAT_CONFIG = {
             # CPU baseline + the AIR-plane view (the two DIFFER here — docs/06 plane differential)
             "shapes": ["CPU", "GPU_1xA10"],
             "timeout_minutes": 15,
+            # Per-TARGET values live here, not in the check (the check is workspace-portable:
+            # leave these out on a new workspace and it auto-discovers/derives).
+            "params": {
+                "uc_catalog": "mkazia_lw2_catalog_7474656734648830.default.t1",
+                "root_storage_host": "mkazia-lw2-workspace-root-storage.s3-fips.us-east-1.amazonaws.com",
+            },
         },
         {
             "path": "checks/air-cli-from-notebook",
