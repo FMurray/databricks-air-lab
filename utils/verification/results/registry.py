@@ -15,6 +15,7 @@
 TESTS = [
     {
         "id": "burn-single",
+        "sentinels": ["RESULT burn=PASS"],
         "test": "GPU burn — single node",
         "category": "Hardware",
         "hardware": "H100",
@@ -32,6 +33,7 @@ TESTS = [
     },
     {
         "id": "burn-pool",
+        "sentinels": ["pool_ready"],
         "test": "GPU burn — 20-node pool (160 GPUs)",
         "category": "Hardware",
         "hardware": "H100",
@@ -67,6 +69,7 @@ TESTS = [
     },
     {
         "id": "allreduce-single",
+        "sentinels": ["RESULT allreduce=DONE"],
         "test": "All-reduce — single node (NVLink)",
         "category": "Communication",
         "hardware": "H100",
@@ -84,6 +87,7 @@ TESTS = [
     },
     {
         "id": "allreduce-multi",
+        "sentinels": ["MULTINODE_NCCL_V5_OK"],
         "test": "All-reduce — multi-node (2->20 nodes)",
         "category": "Communication",
         "hardware": "H100",
@@ -101,6 +105,7 @@ TESTS = [
     },
     {
         "id": "dist-correctness",
+        "sentinels": ["DISTRIBUTED_CORRECTNESS_OK"],
         "test": "Distributed correctness (16/96/160 GPUs)",
         "category": "Correctness",
         "hardware": "H100",
@@ -229,6 +234,7 @@ TESTS = [
     },
     {
         "id": "xgboost",
+        "sentinels": ["RESULT xgboost_gpu="],
         "test": "XGBoost on 1xA10, 1xH100, 8xH100",
         "category": "Workload",
         "hardware": "H100, A10",
@@ -300,6 +306,7 @@ TESTS = [
     },
     {
         "id": "vllm",
+        "sentinels": ["RESULT vllm_generate="],
         "test": "vLLM inference",
         "category": "Workload",
         "hardware": "",
@@ -317,6 +324,7 @@ TESTS = [
     },
     {
         "id": "fsdp",
+        "sentinels": ["FSDP_BR4_COMPLETE"], "sentinels_pending": "PR #1 (train_fsdp.py not yet on main)",
         "test": "Multi-node FSDP fine-tune",
         "category": "Workload",
         "hardware": "H100",
