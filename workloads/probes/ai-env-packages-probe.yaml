@@ -1,0 +1,42 @@
+# Probe: which ML packages does the baked-in databricks-ai env (env v5 image) actually have?
+# Decides whether workloads like XGBoost work via the AI-env interpreter or need vendored wheels.
+experiment_name: air-lab-env-diagnostics
+
+environment:
+  version: "5"
+  dependencies: []
+
+compute:
+  num_accelerators: 1
+  accelerator_type: GPU_1xA10
+
+command: |
+  set +e
+  AIPY=/opt/databricks-environments/databricks-ai/bin/python
+  $AIPY - <<'PYEOF'
+  import importlib, json, os, signal
+  results = {}
+  for pkg in ["torch", "xgboost", "sklearn", "transformers", "lightgbm", "peft", "datasets", "mlflow", "pandas", "numpy"]:
+      try:
+          m = importlib.import_module(pkg)
+          results[pkg] = getattr(m, "__version__", "present")
+      except ImportError:
+          results[pkg] = "MISSING"
+  for k, v in results.items():
+      print(f"RESULT ai_env.{k}={v}", flush=True)
+  run_id = os.environ.get("MLFLOW_RUN_ID")
+  if run_id:
+      signal.alarm(120)
+      try:
+          import mlflow
+          mlflow.start_run(run_id=run_id)
+          mlflow.log_params({f"ai_env_{k}": v for k, v in results.items()})
+          mlflow.end_run()  # REQUIRED: metrics-monitor thread otherwise keeps python alive
+      finally:
+          signal.alarm(0)
+  PYEOF
+  exit 0
+
+max_retries: 0
+timeout_minutes: 15
+mlflow_run_name: ai-env-packages-probe
