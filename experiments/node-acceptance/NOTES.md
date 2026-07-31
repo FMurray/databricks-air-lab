@@ -143,3 +143,29 @@ Filter on `gpus_visible` receipts, not MLflow status, when aggregating.
 scale) was staged but NOT fired on 07-25 (pool drained after the session ended). It is
 one command away (`workloads/rdma-m1-soak.example.yaml` + num_accelerators=128 override)
 — coordinate before firing during the shared UAT window.
+
+### ⛔ 2026-07-31: A10 Gen-AI task path DOWN on the UAT workspace (3/3 pre-bootstrap failures)
+
+Attempted to close the torch-on-v5 question with a receipt-driven probe
+(`torch_v5_receipt.py` via `workloads/probes/torch-v5-probe.yaml` — success criteria:
+MLflow params `torch_via_ai_env` / `torch_cuda_matmul` + sentinel `TORCH_V5_RECEIPT_DONE`,
+receipts chosen because this workspace's GPU-plane blackout eats stdout). Never got that
+far — every 1×A10 `air run` today dies INTERNAL_ERROR ~6 min in, **before the workload
+command executes** (MLflow runs created but zero params; `air logs` = nothing):
+
+| Run (fe-sandbox-mkazia-lw2, 2026-07-31) | Workload | Result |
+|---|---|---|
+| 401340759545364 | torch-v5-probe (inline-shell variant) | INTERNAL_ERROR ~6 min, no logs, MLflow run 0866966e… empty |
+| 146384426415624 | torch-v5-probe (receipt variant) | INTERNAL_ERROR ~6 min, no receipts |
+| 399568464113966 | **envvar-probe — control, SUCCESS on 07-30** (677147480932865) | INTERNAL_ERROR ~6 min |
+
+The control run failing is the finding: identical YAML, identical path, one day apart —
+workspace-side regression on the A10 Gen-AI plane, not workload code. Correlates with the
+07-30 DRIVER anomaly (`gpu-smoke@GPU_1xA10` job run 975022265079249 → `skipped_no_gpu` via
+the notebook-job path — possibly the same underlying A10 attach issue, one day earlier).
+Escalate to #ai-runtime-oncall with the three run IDs; re-fire `torch-v5-probe` once a
+plain envvar-probe passes again. Torch-on-v5 status until then (labels per
+experiment-verification): **measured** — default v5 env has no torch (366126592157969,
+survey 491958602140255); **measured** — torch files exist under
+`/opt/databricks-environments/databricks-ai` (survey 96419244890099); **inferred, still
+unproven** — that the ai-env interpreter imports torch and runs CUDA ops.
