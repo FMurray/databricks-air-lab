@@ -134,6 +134,34 @@ conclude GPU notebook jobs are broken from one skip, but re-run before the windo
    - Receipt discipline: MLflow params/metrics are the durable channel;
      `signal.alarm` around storage calls; `mlflow.end_run()` always.
 
+## Base environments for Jobs / DABs (verified 2026-07-31)
+
+The notebook UI's "Managed → AI v5" base environment **cannot be expressed for job tasks** —
+every API spelling is rejected (receipts):
+
+- `spec.base_environment: "databricks_ai_v5"` → `Invalid base environment... Only custom
+  base environments (Workspace or Volume absolute paths ending with '.yaml'/'.yml') are
+  currently supported.`
+- `base_environment` + `environment_version` together → `Only one of them must be provided.`
+- A workspace YAML *containing* `base_environment: databricks_ai_v5` (indirection) → accepted
+  at submit, fails at env build: `missing or invalid environment version`
+  (run 409043184621081).
+
+**What works:** custom base-env workspace file, verified end-to-end — run 118585768584418
+(SUCCESS) with `spec.base_environment: /Workspace/Shared/databricks-air-lab/uat/base-env-v5.yaml`
+(file: `environment_version: '5'`, `dependencies: []`; repo copy
+`utils/verification/uat-notebooks/base-env-v5.yaml`). DAB CLI 1.5.0 passes the path form
+through verbatim (`bundle validate` receipt); it strips/errors on the managed string.
+Task-level `compute.hardware_accelerator` propagates fine through DABs.
+
+**Consequence:** a job task on env v5 gets the BARE interpreter regardless of base-env file —
+no torch/AI stack (same run's gpu-smoke: torch-missing skip with a GPU attached). AI stack
+under a v5 job task = the baked-in env at `/opt/databricks-environments/databricks-ai/`
+(interpreter or sys.path — receipts in torch-v5-probe) or explicit `dependencies:` wheel
+paths in the base-env file. Package inventory of the baked-in AI env: probe
+`workloads/probes/ai-env-packages-probe.yaml`. **Eng ask:** managed base environments
+(AI vN) selectable for job tasks — today the notebook panel and Jobs disagree.
+
 ## Deploy procedure (per workspace)
 
 1. `databricks auth login --host <ws-url> --profile <name>` (U2M OAuth).
