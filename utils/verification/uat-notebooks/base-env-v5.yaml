@@ -1,0 +1,5 @@
+# Custom base environment for Jobs (the only base_environment form Jobs accepts —
+# managed 'databricks_ai_v5' is rejected: probe 2026-07-31). Pins env v5; extend
+# `dependencies:` with /Workspace wheel paths for packages (no PyPI here).
+environment_version: '5'
+dependencies: []
