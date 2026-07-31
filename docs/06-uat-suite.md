@@ -187,3 +187,13 @@ because the launcher aborts the command block on first non-zero line).
   only storage failing (isolation receipts in `experiments/docker-otel-zerobus/NOTES.md`).
 - Prior AIR usage exists (another user's `gpu-1xa10 ssh-tunnel` secret scopes) — GPU capacity
   has been exercised here before.
+- **Billing discriminators verified live 2026-07-30** (warehouse e7e6ecf78c767db6, 30d window;
+  source of truth go/airuntime-field-billing-faq): AIR rows carry `identity_metadata.created_by`
+  ONLY (1530/1530 rows; run_as/owned_by always NULL) — on-demand spend IS attributable per
+  principal. CLI rows carry `ai_runtime_workload_id` + `compute_type=ON_DEMAND_COMPUTE`;
+  notebook rows carry `serverless_gpu.workload_type`. **Zero reserved-SKU
+  (`…PROVISIONED_CAPACITY`) rows account-wide** — the 2026-07-25 20-node pool sweep billed as
+  `ON_DEMAND_COMPUTE` (751.3 DBUs). Consistent with pool usage not yet stamped reserved in this
+  PrPr account (pricing-bucket inference is platform-side config, not the cloud reservation) —
+  ask eng before treating any DBU number here as what a reserved customer would see. Query it:
+  `python -m utils.billing.queries capacity`.
