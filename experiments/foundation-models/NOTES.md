@@ -536,6 +536,65 @@ on zero completions (exit code derived from results).
   the [finetune] extra) + tabulate (to_markdown); both fixed (explicit xgboost dep,
   to_string), resubmitted as runs 1080666107616587 (R1) / 405178255580469 (T2).
 
+**T2 partial (run 892979459471614, 2/5 — below the ≥4/5 bar; rerun in flight):**
+- The 2 completed sets are STRONG for TabICL zero-shot on timeseries-as-tabular:
+  ECG5000 acc 0.9464 / macro-F1 0.6466 vs XGB 0.9329/0.5471; MedicalImages acc 0.8408 /
+  F1 0.8139 vs XGB 0.7118/0.6167. (Contradicts the pre-registered "mediocre plausible" —
+  the tabular prior transfers to windowed TS better than expected, 2-task sample.)
+- 3 failures are ALL in **upstream's fine-tune path**: CUDA scatter-gather
+  `index out of bounds` inside `_finetune/classifier._compute_batch_loss` →
+  `tabicl.py:496 _train_forward` (ElectricDevices, Crop, FaceAll). Zero-shot leg fine.
+  Second upstream fine-tune-path defect this week (after the DDP skip-on-OOM) — worth one
+  combined upstream report.
+- ECG5000 fine-tune returned metrics BIT-IDENTICAL to zero-shot (early stopping reverting
+  to initial weights at epochs=100/patience=8) — fine-tune didn't help there, observed.
+- Bench bug fixed: a fine-tune crash was destroying the whole row incl. computed zero-shot
+  numbers; fine-tune leg now isolated per-dataset (`finetuned_error` column).
+  T2 rerun 806384006001663; T3 treatment submitted in parallel 908748703480331.
+
+**T2 RESULTS — ✅ 5/5 zero-shot baseline (run 806384006001663, 1×A10, 2026-08-05):**
+
+| set (classes) | TabICL zs acc / macro-F1 | XGB acc / macro-F1 | finetune leg |
+|---|---|---|---|
+| ECG5000 (5) | **0.9464 / 0.6466** | 0.9329 / 0.5471 | ran; bit-identical to zs (early-stop revert) |
+| ElectricDevices (7) | **0.6907 / 0.6086** | 0.6759 / 0.5994 | upstream OutOfMemoryError |
+| MedicalImages (10) | **0.8408 / 0.8139** | 0.7118 / 0.6167 | ran; +0.001 |
+| Crop (24) | **0.8199 / 0.8201** | 0.7596 / 0.7596 | upstream OutOfMemoryError |
+| FaceAll (14) | 0.7722 / **0.7980** | **0.7976** / 0.7759 | upstream AcceleratorError (scatter-gather assert) |
+
+Zero-shot TabICL ≥ XGB on 4/5 accuracy and 5/5 macro-F1 — pre-registered "mediocre
+plausible" hypothesis falsified; the tabular prior transfers to windowed TS well.
+Upstream fine-tune path fails 3/5 UCR sets (typed above) — second fine-tune-path defect
+class; combined upstream report justified.
+
+**T3 first pass (run 908748703480331, 1×H100): treatment mechanics ✅, UCR delta ≈ 0.**
+16/16 synthetic-TS tasks chained from the released ckpt in **300 s wall** (sentinel
+`TS_CONTINUED_PRETRAIN_OK /tmp/ts-continued/task_015/best.ckpt`); treatment-ckpt UCR eval
+5/5 vs T2 baseline: Δacc within ±0.004 on every set, mixed signs (ECG −0.0002, ElecDev
+−0.0025, MedImg −0.0013, Crop +0.0019, FaceAll −0.0042). **Read: naive AR/seasonal regime
+prior moves NOTHING on real UCR — the mechanics work end-to-end; the value hinges on
+prior design (the customer's paper-based approach), not on infrastructure.** Forgetting
+check lost to bench_sprawl's to_markdown crash (fixed → to_string); full rerun
+344953280315973 (ckpt was container-local; chain re-executes — fine-tune stochasticity
+not seed-pinned, so treatment ckpt is statistically-similar, not bit-identical; label
+accordingly).
+
+**T3 COMPLETE (rerun 344953280315973, 1×H100, 2026-08-05) — the three-number story:**
+1. **Baseline** (T2): zero-shot TabICL ≥ XGB on 4/5 acc, 5/5 macro-F1 on UCR multi-class.
+2. **Treatment TS delta ≈ 0**: 16 chained synthetic-TS fine-tunes (310 s wall), then UCR
+   re-eval — Δacc within ±0.004, mixed signs, REPRODUCED across two independent chains
+   (908748703480331, 344953280315973). The naive AR/seasonal regime prior adds nothing;
+   value hinges on prior design (TimEE-class / customer's data-adapted priors), not infra.
+3. **Forgetting delta ≈ 0 — the customer's acceptance bar HOLDS**: treatment-ckpt sprawl
+   AUCs within ±0.0011 of the released-ckpt baseline on all 5 tabular tasks
+   (bank-marketing −0.0008, churn +0.0011, credit-g +0.0002, adult 0.0000, click +0.0003).
+   Continued training on 16 out-of-domain tasks did NOT degrade standard tabular
+   performance under this protocol (default fine-tune LR 1e-5, early stopping).
+Protocol caveat for customer reuse: pin fine-tune seeds for bit-reproducibility; deltas
+here are noise-level, labeled measured; "no forgetting" is protocol-scoped (16 tasks ×
+10 epochs, LR 1e-5) — their 2-round plan at larger scale should re-run this check, which
+is now a 15-minute one-command receipt (`tabicl-ts-treatment.example.yaml`).
+
 #### AIR CLI schema findings (v0.1.0, verified via --dry-run 2026-07-17)
 
 - `environment.env_variables` **rejected** ("Unknown field"; only dependencies/docker_image/version).
@@ -546,3 +605,27 @@ on zero completions (exit code derived from results).
   `air-lab` policy) — omit unless the workspace has one (open-q #5 still open).
 - Submit = `air run -f <yaml> [-p profile] [--watch|--dry-run]`; `--dry-run` does full validation
   incl. workspace API calls — use it always.
+
+### MLflow loggers verification (V1 finetune logger, V2 pretrain wandb-shim) — e2-demo-field-eng
+
+Code under test: `tabicl/mlflow_loggers.py` (MLflowLogger base + MLflowFinetuningLogger),
+`tabicl/wandb_mlflow_shim.py` + `tabicl/train_with_mlflow.py` (committed cc61617). Local
+pre-flight: 19/19 checks vs a sqlite store (attach/resume/ownership, param chunking, shim
+init/log/resume-by-id) — `uv run --with mlflow python test_mlflow_loggers.py` → `ALL PASS`
+(scratchpad, 2026-08-05).
+
+**Success criteria (written before submission):**
+
+- **V1** (`tabicl-finetune.yaml`, finetune_smoke --epochs 10, 1×A10): ONE MLflow run
+  (`tabicl-finetune-smoke`, the AIR ambient run) holds ALL of: per-step history
+  `train/loss` + `train/lr`, per-epoch `val/roc_auc` + `train/mean_loss`, estimator
+  params (epochs=10, eval_metric=roc_auc), AND final `auc_zero_shot`/`auc_finetuned`.
+  The single-run property is the point — upstream fit() calls finish() on its logger,
+  and the non-owning attach must survive it so the post-fit AUCs land in the same run.
+  Stdout AUC lines are corroboration, not the evidence (log delivery unreliable).
+- **V2** (`tabicl-pol.yaml`, pol_stage1_smoke MAX_STEPS=100, 1×A10): the AIR ambient
+  MLflow run holds `ce`/`accuracy`/`lr` metric history reaching step 100 plus TrainConfig
+  params (~80: lr=0.0008, prior_type=graph_scm, …) — logged by upstream tabicl.train's
+  own wandb.init/wandb.log calls routed through the shim (`--wandb_log True`, real wandb
+  never imported). Checkpoint-listing tail (`--- checkpoints written:`) still prints.
+- **Fail** = metrics split across runs, missing histories, or a second stray run created.

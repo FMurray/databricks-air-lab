@@ -1,0 +1,19 @@
+2026-08-05 21:50:44 - INFO - Recorded condition marker /databricks/work/main/main-main-14bbdcef-c33c-471c-b55b-92d779fe227c-main-tl4ito-08052150-wnlvxpge-main-644631.conditions/LauncherStarted
+2026-08-05 21:50:44 - INFO - SGC launcher startup: pod_name=14bbdcef-c33c-471c-b55b-92d779fe227c-main-tl4ito-08052150-wnlvxpge-main pod_rank=0
+2026-08-05 21:50:44 - INFO - SGC_DEBUG_INFO:
+2026-08-05 21:50:44 - INFO -   job_id=796383919389543
+2026-08-05 21:50:44 - INFO -   job_task_run_id=159570570282176
+2026-08-05 21:50:44 - INFO -   mlflow_experiment_id=829662291327334
+2026-08-05 21:50:44 - INFO -   mlflow_run_id=50853a95c7754e2b843c736a407b0851
+2026-08-05 21:50:44 - INFO -   run_id=908748703480331
+2026-08-05 21:50:44 - INFO -   workload_id=14bbdcef-c33c-471c-b55b-92d779fe227c
+2026-08-05 21:50:44 - INFO -   workspace_id=1444828305810485
+2026-08-05 21:50:44 - INFO - Network block passed, proceeding with command execution
+2026-08-05 21:50:44 - INFO - Configuring filesystem...
+2026-08-05 21:50:44 - INFO - Skipping UC FUSE auth - sidecar registered PE token
+2026-08-05 21:50:44 - INFO - Filesystem configuration finished
+2026-08-05 21:50:44 - INFO - ulimit set successfully
+2026-08-05 21:50:44 - INFO - Configuring CUDA compat...
+2026-08-05 21:50:44 - INFO - CUDA compat configuration finished
+2026-08-05 21:50:44 - INFO - Recorded condition marker /databricks/work/main/main-main-14bbdcef-c33c-471c-b55b-92d779fe227c-main-tl4ito-08052150-wnlvxpge-main-644631.conditions/UserCodeStarted
+2026-08-05 21:59:11 - INFO - User command exited with code 1

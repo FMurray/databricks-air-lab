@@ -1,0 +1,223 @@
+Root python environment activated successfully
+Environment setup started at Wed Aug  5 09:50:44 PM UTC 2026
+Hyperparameters path: /Workspace/Users/forrest.murray@databricks.com/.air/cli_launch/air-lab-tabicl-ts-treatment/tabicl-ts-treatment_f844fb32ff3b4b84/training_config.yaml
+Inspecting tarball at /Workspace/Users/forrest.murray@databricks.com/.air/repo_snapshots/databricks-air-lab/databricks-air-lab_20260805_175011.tar.gz...
+tar: Ignoring unknown extended header keyword 'LIBARCHIVE.xattr.com.apple.provenance'
+tar: Ignoring unknown extended header keyword 'LIBARCHIVE.xattr.com.apple.provenance'
+Extracting code_source into /databricks/code_source...
+tar: Ignoring unknown extended header keyword 'LIBARCHIVE.xattr.com.apple.provenance'
+tar: Ignoring unknown extended header keyword 'LIBARCHIVE.xattr.com.apple.provenance'
+tar: Ignoring unknown extended header keyword 'LIBARCHIVE.xattr.com.apple.provenance'
+tar: Ignoring unknown extended header keyword 'LIBARCHIVE.xattr.com.apple.provenance'
+tar: Ignoring unknown extended header keyword 'LIBARCHIVE.xattr.com.apple.provenance'
+tar: Ignoring unknown extended header keyword 'LIBARCHIVE.xattr.com.apple.provenance'
+tar: Ignoring unknown extended header keyword 'LIBARCHIVE.xattr.com.apple.provenance'
+tar: Ignoring unknown extended header keyword 'LIBARCHIVE.xattr.com.apple.provenance'
+tar: Ignoring unknown extended header keyword 'LIBARCHIVE.xattr.com.apple.provenance'
+tar: Ignoring unknown extended header keyword 'LIBARCHIVE.xattr.com.apple.provenance'
+tar: Ignoring unknown extended header keyword 'LIBARCHIVE.xattr.com.apple.provenance'
+tar: Ignoring unknown extended header keyword 'LIBARCHIVE.xattr.com.apple.provenance'
+tar: Ignoring unknown extended header keyword 'LIBARCHIVE.xattr.com.apple.provenance'
+Tarball extraction completed in 0s
+Code source databricks-air-lab available at /databricks/code_source/databricks-air-lab
+requirements.yaml path: /Workspace/Users/forrest.murray@databricks.com/.air/cli_launch/air-lab-tabicl-ts-treatment/tabicl-ts-treatment_f844fb32ff3b4b84/requirements.yaml
+uv not found in base environment; attempting to install it...
+uv installed.
+Installing dependencies...
+Installing 3 requirements.yaml dependencies with dependency resolution (via uv)...
+Using Python 3.12.3 environment at: /databricks/python3
+Resolved 82 packages in 738ms
+Downloading nvidia-cufile-cu12 (1.1MiB)
+Downloading networkx (2.0MiB)
+Downloading numba (3.6MiB)
+Downloading hf-xet (4.3MiB)
+Downloading aeon (6.4MiB)
+Downloading sympy (6.0MiB)
+Downloading scikit-learn (8.5MiB)
+Downloading nvidia-cuda-cupti-cu12 (9.8MiB)
+Downloading transformers (11.1MiB)
+Downloading cuda-bindings (11.6MiB)
+Downloading wandb (25.3MiB)
+Downloading scipy (33.6MiB)
+Downloading nvidia-nvjitlink-cu12 (37.4MiB)
+Downloading llvmlite (53.7MiB)
+Downloading nvidia-curand-cu12 (60.7MiB)
+Downloading nvidia-cuda-nvrtc-cu12 (84.0MiB)
+Downloading nvidia-nvshmem-cu12 (132.7MiB)
+Downloading triton (179.5MiB)
+Downloading nvidia-cufft-cu12 (184.2MiB)
+Downloading nvidia-nccl-cu13 (206.0MiB)
+Downloading nvidia-cusolver-cu12 (255.1MiB)
+Downloading nvidia-cusparselt-cu12 (273.9MiB)
+Downloading nvidia-cusparse-cu12 (274.9MiB)
+Downloading nvidia-nccl-cu12 (307.4MiB)
+Downloading nvidia-cudnn-cu12 (674.0MiB)
+Downloading nvidia-cublas-cu12 (566.8MiB)
+Downloading torch (873.2MiB)
+Downloading xgboost (54.9MiB)
+ Downloaded nvidia-cufile-cu12
+ Downloaded networkx
+ Downloaded hf-xet
+ Downloaded numba
+ Downloaded scikit-learn
+ Downloaded sympy
+ Downloaded nvidia-cuda-cupti-cu12
+ Downloaded aeon
+ Downloaded cuda-bindings
+ Downloaded transformers
+ Downloaded nvidia-nvjitlink-cu12
+ Downloaded scipy
+ Downloaded wandb
+ Downloaded llvmlite
+ Downloaded xgboost
+ Downloaded nvidia-curand-cu12
+ Downloaded nvidia-cuda-nvrtc-cu12
+ Downloaded nvidia-nvshmem-cu12
+ Downloaded triton
+ Downloaded nvidia-cufft-cu12
+ Downloaded nvidia-nccl-cu13
+ Downloaded nvidia-cusolver-cu12
+ Downloaded nvidia-cusparselt-cu12
+ Downloaded nvidia-cusparse-cu12
+ Downloaded nvidia-nccl-cu12
+ Downloaded nvidia-cublas-cu12
+ Downloaded nvidia-cudnn-cu12
+ Downloaded torch
+Prepared 42 packages in 35.84s
+Uninstalled 4 packages in 33ms
+Installed 42 packages in 509ms
+ + aeon==1.5.0
+ - click==8.1.8
+ + click==8.4.2
+ + cuda-bindings==12.9.4
+ + cuda-pathfinder==1.6.0
+ + einops==0.8.2
+ - hf-xet==1.2.0
+ + hf-xet==1.6.0
+ - huggingface-hub==1.2.4
+ + huggingface-hub==1.26.0
+ + llvmlite==0.46.0
+ + mpmath==1.3.0
+ + networkx==3.6.1
+ + numba==0.63.1
+ + nvidia-cublas-cu12==12.8.4.1
+ + nvidia-cuda-cupti-cu12==12.8.90
+ + nvidia-cuda-nvrtc-cu12==12.8.93
+ + nvidia-cuda-runtime-cu12==12.8.90
+ + nvidia-cudnn-cu12==9.10.2.21
+ + nvidia-cufft-cu12==11.3.3.83
+ + nvidia-cufile-cu12==1.13.1.3
+ + nvidia-curand-cu12==10.3.9.90
+ + nvidia-cusolver-cu12==11.7.3.90
+ + nvidia-cusparse-cu12==12.5.8.93
+ + nvidia-cusparselt-cu12==0.7.1
+ + nvidia-nccl-cu12==2.27.5
+ + nvidia-nccl-cu13==2.30.7
+ + nvidia-nvjitlink-cu12==12.8.93
+ + nvidia-nvshmem-cu12==3.4.5
+ + nvidia-nvtx-cu12==12.8.90
+ + platformdirs==4.11.0
+ - regex==2024.11.6
+ + regex==2026.7.19
+ + safetensors==0.8.0
+ + scikit-learn==1.8.0
+ + scipy==1.17.1
+ + sentry-sdk==2.66.1
+ + setuptools==83.0.0
+ + sympy==1.14.0
+ + tabicl==2.1.1
+ + torch==2.10.0
+ + transformers==5.14.1
+ + triton==3.6.0
+ + typer==0.27.1
+ + wandb==0.28.1
+ + xgboost==3.4.0
+Successfully installed all dependencies
+Dependency installation completed in 42s
+================================
+Environment setup completed at Wed Aug  5 09:51:27 PM UTC 2026
+Environment setup time: 43s
+================================
+/databricks/python3/lib/python3.12/site-packages/huggingface_hub/constants.py:298: FutureWarning: The `HF_HUB_ENABLE_HF_TRANSFER` environment variable is deprecated as 'hf_transfer' is not used anymore. Please use `HF_XET_HIGH_PERFORMANCE` instead to enable high performance transfer with Xet. Visit https://huggingface.co/docs/huggingface_hub/package_reference/environment_variables#hfxethighperformance for more details.
+  warnings.warn(
+INFO: You are downloading 'tabicl-classifier-v2-20260212.ckpt', the latest best-performing version, used in our TabICLv2 paper.
+
+Checkpoint 'tabicl-classifier-v2-20260212.ckpt' not cached.
+ Downloading from Hugging Face Hub (jingang/TabICL).
+
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+[task 0] classes=4 shape=(492, 130) ckpt=chained elapsed=28s
+[task 1] classes=10 shape=(1380, 127) ckpt=chained elapsed=51s
+[task 2] classes=7 shape=(700, 123) ckpt=chained elapsed=72s
+[task 3] classes=5 shape=(350, 104) ckpt=chained elapsed=95s
+[task 4] classes=8 shape=(320, 59) ckpt=chained elapsed=112s
+[task 5] classes=6 shape=(318, 140) ckpt=chained elapsed=133s
+[task 6] classes=7 shape=(651, 66) ckpt=chained elapsed=147s
+[task 7] classes=3 shape=(153, 117) ckpt=chained elapsed=165s
+[task 8] classes=5 shape=(330, 94) ckpt=chained elapsed=182s
+[task 9] classes=8 shape=(392, 106) ckpt=chained elapsed=200s
+[task 10] classes=8 shape=(440, 113) ckpt=chained elapsed=224s
+[task 11] classes=5 shape=(425, 55) ckpt=chained elapsed=237s
+[task 12] classes=8 shape=(712, 61) ckpt=chained elapsed=251s
+[task 13] classes=4 shape=(668, 93) ckpt=chained elapsed=267s
+[task 14] classes=7 shape=(763, 92) ckpt=chained elapsed=284s
+[task 15] classes=7 shape=(679, 79) ckpt=chained elapsed=300s
+RESULT ts_continued tasks_chained=16/16 wall=300s
+TS_CONTINUED_PRETRAIN_OK /tmp/ts-continued/task_015/best.ckpt
+=== ECG5000 (5 classes)
+/databricks/python3/lib/python3.12/site-packages/huggingface_hub/constants.py:298: FutureWarning: The `HF_HUB_ENABLE_HF_TRANSFER` environment variable is deprecated as 'hf_transfer' is not used anymore. Please use `HF_XET_HIGH_PERFORMANCE` instead to enable high performance transfer with Xet. Visit https://huggingface.co/docs/huggingface_hub/package_reference/environment_variables#hfxethighperformance for more details.
+  warnings.warn(
+=== ElectricDevices (7 classes)
+=== MedicalImages (10 classes)
+=== Crop (24 classes)
+=== FaceAll (14 classes)
+        dataset  n_classes  n_train  series_len  zeroshot_s  zeroshot_accuracy  zeroshot_macro_f1  gpu_peak_gb  xgb_s  xgb_accuracy  xgb_macro_f1
+        ECG5000          5      500         140      2.3049             0.9462             0.6470       9.1931 0.3471        0.9329        0.5471
+ElectricDevices          7     8926          96      3.2977             0.6882             0.6070      21.6676 2.0902        0.6759        0.5994
+  MedicalImages         10      381          99      1.2604             0.8395             0.8117       1.6977 0.4896        0.7118        0.6167
+           Crop         24     7200          46      3.2774             0.8218             0.8220      17.9421 2.1838        0.7596        0.7596
+        FaceAll         14      560         131      1.9358             0.7680             0.7939       4.6975 0.7932        0.7976        0.7759
+RESULT ts_bench tasks_completed=5/5 checkpoint=custom
+/databricks/python3/lib/python3.12/site-packages/huggingface_hub/constants.py:298: FutureWarning: The `HF_HUB_ENABLE_HF_TRANSFER` environment variable is deprecated as 'hf_transfer' is not used anymore. Please use `HF_XET_HIGH_PERFORMANCE` instead to enable high performance transfer with Xet. Visit https://huggingface.co/docs/huggingface_hub/package_reference/environment_variables#hfxethighperformance for more details.
+  warnings.warn(
+=== bank-marketing (openml 1461)
+=== churn (openml 40701)
+=== credit-g (openml 31)
+=== adult (openml 1590)
+=== click-prediction (openml 1220)
+Traceback (most recent call last):
+  File "/databricks/python3/lib/python3.12/site-packages/pandas/compat/_optional.py", line 135, in import_optional_dependency
+    module = importlib.import_module(name)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/importlib/__init__.py", line 90, in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "<frozen importlib._bootstrap>", line 1387, in _gcd_import
+  File "<frozen importlib._bootstrap>", line 1360, in _find_and_load
+  File "<frozen importlib._bootstrap>", line 1324, in _find_and_load_unlocked
+ModuleNotFoundError: No module named 'tabulate'
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/databricks/code_source/databricks-air-lab/experiments/foundation-models/tabicl/bench_sprawl.py", line 152, in <module>
+    main()
+  File "/databricks/code_source/databricks-air-lab/experiments/foundation-models/tabicl/bench_sprawl.py", line 135, in main
+    print(df.round(4).to_markdown(index=False))
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/databricks/python3/lib/python3.12/site-packages/pandas/util/_decorators.py", line 333, in wrapper
+    return func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "/databricks/python3/lib/python3.12/site-packages/pandas/core/frame.py", line 2983, in to_markdown
+    tabulate = import_optional_dependency("tabulate")
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/databricks/python3/lib/python3.12/site-packages/pandas/compat/_optional.py", line 138, in import_optional_dependency
+    raise ImportError(msg)
+ImportError: Missing optional dependency 'tabulate'.  Use pip or conda to install tabulate.
+================================
+Execution Summary
+================================
+Total time: 507s
+User code execution time: 464s
+ERROR: Script failed with exit code 1 after 507s
+================================

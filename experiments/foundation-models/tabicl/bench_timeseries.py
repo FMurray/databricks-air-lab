@@ -71,16 +71,23 @@ def run_dataset(name, n_classes, args):
     if torch.cuda.is_available():
         row["gpu_peak_gb"] = torch.cuda.max_memory_allocated() / 1e9
 
-    # --- TabICL fine-tuned ("oneshot", matching the customer's ~100-iter recipe)
+    # --- TabICL fine-tuned ("oneshot", matching the customer's ~100-iter recipe).
+    # Isolated: the upstream fine-tune path CUDA-asserts on some UCR sets (scatter-gather
+    # index OOB in _train_forward, run 892979459471614) — a fine-tune crash must not lose
+    # the zero-shot row.
     if args.finetune:
-        from tabicl import FinetunedTabICLClassifier
-        ft = FinetunedTabICLClassifier(epochs=args.finetune_epochs,
-                                       model_path=args.checkpoint or None)
-        t0 = time.time()
-        ft.fit(X_tr, y_tr)
-        pred = ft.predict(X_te)
-        row["finetuned_s"] = time.time() - t0
-        row.update({f"finetuned_{k}": v for k, v in cls_scores(y_te, pred).items()})
+        try:
+            from tabicl import FinetunedTabICLClassifier
+            ft = FinetunedTabICLClassifier(epochs=args.finetune_epochs,
+                                           model_path=args.checkpoint or None)
+            t0 = time.time()
+            ft.fit(X_tr, y_tr)
+            pred = ft.predict(X_te)
+            row["finetuned_s"] = time.time() - t0
+            row.update({f"finetuned_{k}": v for k, v in cls_scores(y_te, pred).items()})
+        except Exception as e:  # noqa: BLE001 — record the upstream failure, keep the row
+            row["finetuned_error"] = f"{type(e).__name__}"
+            print(f"    finetune leg failed (upstream): {type(e).__name__}: {e}", flush=True)
 
     # --- XGBoost on the same tabular framing
     t0 = time.time()

@@ -132,7 +132,7 @@ def main():
 
     df = pd.DataFrame(rows)
     pd.set_option("display.width", 200)
-    print(df.round(4).to_markdown(index=False))
+    print(df.round(4).to_string(index=False))
 
     try:
         import mlflow

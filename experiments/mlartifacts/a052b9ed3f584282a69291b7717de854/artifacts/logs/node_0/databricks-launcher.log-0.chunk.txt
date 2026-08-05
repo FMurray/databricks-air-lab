@@ -1,0 +1,19 @@
+2026-08-05 21:50:44 - INFO - Recorded condition marker /databricks/work/main/main-main-610f1f96-cafd-4c87-a661-479085e9844f-main-glude2-08052150-ygcblg9i-main-644348.conditions/LauncherStarted
+2026-08-05 21:50:44 - INFO - SGC launcher startup: pod_name=610f1f96-cafd-4c87-a661-479085e9844f-main-glude2-08052150-ygcblg9i-main pod_rank=0
+2026-08-05 21:50:44 - INFO - SGC_DEBUG_INFO:
+2026-08-05 21:50:44 - INFO -   job_id=576386322281275
+2026-08-05 21:50:44 - INFO -   job_task_run_id=92701347053556
+2026-08-05 21:50:44 - INFO -   mlflow_experiment_id=829662291326754
+2026-08-05 21:50:44 - INFO -   mlflow_run_id=4bb8528d95d744e382f87c3f278354de
+2026-08-05 21:50:44 - INFO -   run_id=806384006001663
+2026-08-05 21:50:44 - INFO -   workload_id=610f1f96-cafd-4c87-a661-479085e9844f
+2026-08-05 21:50:44 - INFO -   workspace_id=1444828305810485
+2026-08-05 21:50:44 - INFO - Network block passed, proceeding with command execution
+2026-08-05 21:50:44 - INFO - Configuring filesystem...
+2026-08-05 21:50:44 - INFO - Skipping UC FUSE auth - sidecar registered PE token
+2026-08-05 21:50:44 - INFO - Filesystem configuration finished
+2026-08-05 21:50:44 - INFO - ulimit set successfully
+2026-08-05 21:50:44 - INFO - Configuring CUDA compat...
+2026-08-05 21:50:44 - INFO - CUDA compat configuration finished
+2026-08-05 21:50:44 - INFO - Recorded condition marker /databricks/work/main/main-main-610f1f96-cafd-4c87-a661-479085e9844f-main-glude2-08052150-ygcblg9i-main-644348.conditions/UserCodeStarted
+2026-08-05 21:57:56 - INFO - User command exited with code 0

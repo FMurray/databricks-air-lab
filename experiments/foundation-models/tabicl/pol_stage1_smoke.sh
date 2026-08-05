@@ -12,6 +12,10 @@ NPROC="${NPROC_PER_NODE:-1}"                 # 1 for A10/1xH100 smoke; 8 on GPU_
 CKPT_DIR="${CKPT_DIR:-/tmp/tabicl-pol/ckpt}" # point at a UC volume for the restart test
 MAX_STEPS="${MAX_STEPS:-100}"
 N_JOBS="${N_JOBS:-8}"                        # CPU prior-gen workers PER RANK — watch GPU util vs this
+# Upstream latent bug (only reachable with --wandb_log True): configure_wandb writes
+# checkpoint_dir/wand_id.txt at Trainer init, BEFORE anything mkdirs checkpoint_dir
+# (_run.py:168, FileNotFoundError — run 1056674589011590, e2, 2026-08-05). Pre-create it.
+mkdir -p "$CKPT_DIR"
 # Continued pretraining (T1 / the customer's fusion->continue path): set CHECKPOINT_PATH to
 # start from existing weights (upstream: --checkpoint_path + --only_load_model True chains stages)
 CONTINUE_ARGS=""
