@@ -21,9 +21,13 @@ class ShapeCapacity:
 
     @property
     def admittable(self) -> int:
-        """Slots the platform would admit right now (the binding constraint)."""
+        """Slots the platform would admit right now (the binding constraint).
+        Shapes with no configured cap are on-demand: nothing to bind platform-side,
+        team quotas still apply at dispatch."""
         caps = [c for c in (self.platform_quota_nodes, self.reserved_nodes) if c > 0]
-        return max(0, (min(caps) if caps else 0) - self.in_flight)
+        if not caps:
+            return max(0, 999 - self.in_flight)
+        return max(0, min(caps) - self.in_flight)
 
 
 def shape_capacity(cfg, shape: str, in_flight: int) -> ShapeCapacity:

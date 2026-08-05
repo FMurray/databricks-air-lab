@@ -14,7 +14,10 @@ Delta-backed twin can replace it.
 
 from __future__ import annotations
 
+import os
+import re
 import sqlite3
+import subprocess
 import time
 from dataclasses import dataclass
 from pathlib import Path
@@ -187,14 +190,12 @@ class Broker:
         return events
 
     def _submit(self, r) -> str:
+        if r["kind"] != "notebook":
+            return self._submit_air_yaml(r)   # air CLI path needs no workspace client
         if self.ws is None:
             self.store.update("runs", r["id"], state="SUBMITTED",
                               run_id=f"dryrun-{r['id']}", submitted_utc=time.time())
             return f"run {r['id']} ({r['name']}): submitted (dry-run)"
-        if r["kind"] != "notebook":
-            self.store.update("runs", r["id"], state="FAILED", finished_utc=time.time(),
-                              detail="air_yaml dispatch not wired yet (vendored CLI subprocess)")
-            return f"run {r['id']}: air_yaml dispatch not wired yet"
         task = {"task_key": "work",
                 "notebook_task": {"notebook_path": r["ref"]},
                 "environment_key": "hub", "timeout_seconds": 3600 * 6}
@@ -211,6 +212,34 @@ class Broker:
             self.store.update("runs", r["id"], state="FAILED", detail=str(e)[:400],
                               finished_utc=time.time())
             return f"run {r['id']}: submit failed — {e}"
+
+    def _submit_air_yaml(self, r) -> str:
+        """Repo workloads submit through the air CLI — the only supported path for
+        Gen-AI tasks (persistent-job wrapping is receipt-dead, docs/06)."""
+        repo_root = Path(__file__).resolve().parents[3]
+        yaml_path = repo_root / r["ref"]
+        if not yaml_path.exists():
+            self.store.update("runs", r["id"], state="FAILED", finished_utc=time.time(),
+                              detail=f"{r['ref']} not found in repo")
+            return f"run {r['id']}: {r['ref']} not found"
+        profile = os.environ.get("HUB_PROFILE", "mkazia-lw2")
+        try:
+            out = subprocess.run(
+                ["air", "run", "--file", str(yaml_path), "-p", profile],
+                capture_output=True, text=True, timeout=300, cwd=repo_root)
+            text = re.sub(r"\x1b\[[0-9;]*m", "", out.stdout + out.stderr)
+            m = re.search(r"Job Run ID:\s*(\d+)", text)
+            if m:
+                self.store.update("runs", r["id"], state="SUBMITTED", run_id=m.group(1),
+                                  submitted_utc=time.time())
+                return f"run {r['id']} ({r['name']}): submitted as {m.group(1)}"
+            self.store.update("runs", r["id"], state="FAILED", finished_utc=time.time(),
+                              detail=text[-400:])
+            return f"run {r['id']}: air run gave no Job Run ID"
+        except Exception as e:
+            self.store.update("runs", r["id"], state="FAILED", finished_utc=time.time(),
+                              detail=str(e)[:400])
+            return f"run {r['id']}: air run failed — {e}"
 
     def _sync(self, r) -> list[str]:
         if self.ws is None or str(r["run_id"]).startswith("dryrun-"):
