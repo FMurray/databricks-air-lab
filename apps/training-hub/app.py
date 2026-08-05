@@ -4,13 +4,13 @@ import tempfile
 
 import streamlit as st
 
-from hub import config, templates
+from hub import config, queue as hubq, templates
 
 st.set_page_config(page_title="Training Hub", page_icon="🛠", layout="wide")
 st.title("Training Hub")
 
 cfg = config.load()
-fleet_tab, submit_tab = st.tabs(["Fleet", "Submit a workload"])
+fleet_tab, submit_tab, queue_tab = st.tabs(["Fleet", "Submit a workload", "Queue"])
 
 
 with fleet_tab:
@@ -119,3 +119,40 @@ with submit_tab:
                 f.write(workload_yaml)
             ok, output = templates.submit(f.name)
             (st.success if ok else st.error)(output or "submitted")
+
+
+with queue_tab:
+    st.subheader("GPU broker — the queue the platform doesn't have")
+    broker = hubq.Broker(cfg=cfg, ws=None)  # ws=None → dry-run; wire WorkspaceClient for live
+    st.caption("Dry-run mode (no workspace client wired): requests gate, queue, and 'dispatch' locally.")
+
+    shapes = sorted({cfg.reservation.accelerator_type, "GPU_1xA10", "GPU_1xH100"})
+    ccols = st.columns(len(shapes))
+    for col, shape in zip(ccols, shapes):
+        c = broker.capacity(shape)
+        bind = c.platform_quota_nodes or c.reserved_nodes or 0
+        col.metric(shape, f"{c.admittable} admittable",
+                   f"{c.in_flight} in flight / cap {bind or '?'}")
+
+    with st.form("enqueue"):
+        e1, e2, e3 = st.columns(3)
+        user = e1.text_input("Your email")
+        team = e2.selectbox("Team", [t.name for t in cfg.teams])
+        shape = e3.selectbox("Shape", shapes)
+        ref = st.text_input("Notebook workspace path", "/Workspace/Shared/databricks-air-lab/uat/checks/gpu-smoke")
+        use_case = st.text_input("Use case tag (chargeback attribution)", "")
+        if st.form_submit_button("Enqueue"):
+            rid, msg = broker.enqueue(user=user.strip(), team=team, kind="notebook",
+                                      ref=ref.strip(), shape=shape, use_case=use_case.strip())
+            (st.error if msg.startswith("REJECTED") else st.success)(f"request {rid}: {msg}")
+
+    if st.button("Run dispatcher tick"):
+        for ev in broker.tick():
+            st.write(ev)
+
+    st.subheader("Ledger (attribution: every brokered node-hour has an owner)")
+    rows = broker.ledger()
+    if rows:
+        st.dataframe(rows, use_container_width=True)
+    else:
+        st.caption("No requests yet.")
