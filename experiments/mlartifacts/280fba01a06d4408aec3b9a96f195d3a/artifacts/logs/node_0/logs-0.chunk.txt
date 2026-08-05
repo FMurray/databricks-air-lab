@@ -1,0 +1,340 @@
+Root python environment activated successfully
+Environment setup started at Wed Aug  5 05:20:18 PM UTC 2026
+Hyperparameters path: /Workspace/Users/forrest.murray@databricks.com/.air/cli_launch/air-lab-tabicl-pol/tabicl-pol-stage1-h100_6da4ebd97c3346b8/training_config.yaml
+Inspecting tarball at /Workspace/Users/forrest.murray@databricks.com/.air/repo_snapshots/databricks-air-lab/databricks-air-lab_20260805_131939.tar.gz...
+tar: Ignoring unknown extended header keyword 'LIBARCHIVE.xattr.com.apple.provenance'
+tar: Ignoring unknown extended header keyword 'LIBARCHIVE.xattr.com.apple.provenance'
+tar: Ignoring unknown extended header keyword 'LIBARCHIVE.xattr.com.apple.provenance'
+Extracting code_source into /databricks/code_source...
+tar: Ignoring unknown extended header keyword 'LIBARCHIVE.xattr.com.apple.provenance'
+tar: Ignoring unknown extended header keyword 'LIBARCHIVE.xattr.com.apple.provenance'
+tar: Ignoring unknown extended header keyword 'LIBARCHIVE.xattr.com.apple.provenance'
+tar: Ignoring unknown extended header keyword 'LIBARCHIVE.xattr.com.apple.provenance'
+tar: Ignoring unknown extended header keyword 'LIBARCHIVE.xattr.com.apple.provenance'
+Tarball extraction completed in 1s
+Code source databricks-air-lab available at /databricks/code_source/databricks-air-lab
+requirements.yaml path: /Workspace/Users/forrest.murray@databricks.com/.air/cli_launch/air-lab-tabicl-pol/tabicl-pol-stage1-h100_6da4ebd97c3346b8/requirements.yaml
+uv not found in base environment; attempting to install it...
+uv installed.
+Installing dependencies...
+Installing 4 requirements.yaml dependencies with dependency resolution (via uv)...
+Using Python 3.12.3 environment at: /databricks/python3
+   Updating https://github.com/soda-inria/tabicl (HEAD)
+    Updated https://github.com/soda-inria/tabicl (46b91961db4f8873dd049ec09990698a435e1e29)
+Resolved 73 packages in 4.75s
+   Building tabicl @ git+https://github.com/soda-inria/tabicl@46b91961db4f8873dd049ec09990698a435e1e29
+Downloading hf-xet (4.3MiB)
+Downloading scikit-learn (8.7MiB)
+Downloading nvidia-cudnn-cu13 (349.2MiB)
+Downloading nvidia-cuda-nvrtc (86.0MiB)
+Downloading nvidia-curand (56.8MiB)
+Downloading nvidia-nvjitlink (38.9MiB)
+Downloading networkx (2.0MiB)
+Downloading nvidia-cuda-cupti (10.2MiB)
+Downloading nvidia-cusolver (191.6MiB)
+Downloading nvidia-cusparse (139.2MiB)
+Downloading sympy (6.0MiB)
+Downloading nvidia-cusparselt-cu13 (162.3MiB)
+Downloading nvidia-cublas (403.5MiB)
+Downloading triton (188.6MiB)
+Downloading torch (502.2MiB)
+Downloading transformers (11.1MiB)
+Downloading cuda-bindings (6.3MiB)
+Downloading wandb (25.3MiB)
+Downloading xgboost (54.9MiB)
+Downloading scipy (33.7MiB)
+Downloading nvidia-nvshmem-cu13 (57.6MiB)
+Downloading nvidia-nccl-cu13 (196.4MiB)
+Downloading nvidia-cuda-runtime (2.1MiB)
+Downloading nvidia-cufft (204.2MiB)
+Downloading nvidia-cufile (1.2MiB)
+      Built tabicl @ git+https://github.com/soda-inria/tabicl@46b91961db4f8873dd049ec09990698a435e1e29
+ Downloaded nvidia-cufile
+ Downloaded nvidia-cuda-runtime
+ Downloaded networkx
+ Downloaded hf-xet
+ Downloaded cuda-bindings
+ Downloaded nvidia-cuda-cupti
+ Downloaded scikit-learn
+ Downloaded sympy
+ Downloaded transformers
+ Downloaded scipy
+ Downloaded nvidia-nvjitlink
+ Downloaded wandb
+ Downloaded xgboost
+ Downloaded nvidia-curand
+ Downloaded nvidia-nvshmem-cu13
+ Downloaded nvidia-cuda-nvrtc
+ Downloaded nvidia-cusparse
+ Downloaded nvidia-cusparselt-cu13
+ Downloaded nvidia-cusolver
+ Downloaded triton
+ Downloaded nvidia-nccl-cu13
+ Downloaded nvidia-cufft
+ Downloaded nvidia-cudnn-cu13
+ Downloaded nvidia-cublas
+ Downloaded torch
+Prepared 40 packages in 17.10s
+Uninstalled 4 packages in 32ms
+Installed 40 packages in 646ms
+ - click==8.1.8
+ + click==8.4.2
+ + cuda-bindings==13.3.1
+ + cuda-pathfinder==1.6.0
+ + cuda-toolkit==13.0.3.0
+ + einops==0.8.2
+ - hf-xet==1.2.0
+ + hf-xet==1.6.0
+ - huggingface-hub==1.2.4
+ + huggingface-hub==1.26.0
+ + mpmath==1.3.0
+ + narwhals==2.24.0
+ + networkx==3.6.1
+ + nvidia-cublas==13.1.1.3
+ + nvidia-cuda-cupti==13.0.85
+ + nvidia-cuda-nvrtc==13.0.88
+ + nvidia-cuda-runtime==13.0.96
+ + nvidia-cudnn-cu13==9.20.0.48
+ + nvidia-cufft==12.0.0.61
+ + nvidia-cufile==1.15.1.6
+ + nvidia-curand==10.4.0.35
+ + nvidia-cusolver==12.0.4.66
+ + nvidia-cusparse==12.6.3.3
+ + nvidia-cusparselt-cu13==0.8.1
+ + nvidia-nccl-cu13==2.29.7
+ + nvidia-nvjitlink==13.3.33
+ + nvidia-nvshmem-cu13==3.4.5
+ + nvidia-nvtx==13.0.85
+ + platformdirs==4.11.0
+ - regex==2024.11.6
+ + regex==2026.7.19
+ + safetensors==0.8.0
+ + scikit-learn==1.9.0
+ + scipy==1.18.0
+ + sentry-sdk==2.66.1
+ + setuptools==83.0.0
+ + sympy==1.14.0
+ + tabicl==2.1.1 (from git+https://github.com/soda-inria/tabicl@46b91961db4f8873dd049ec09990698a435e1e29)
+ + torch==2.13.0
+ + transformers==5.14.1
+ + triton==3.7.1
+ + typer==0.27.1
+ + wandb==0.28.1
+ + xgboost==3.4.0
+warning: The package `tabicl @ git+https://github.com/soda-inria/tabicl@46b91961db4f8873dd049ec09990698a435e1e29` does not have an extra named `pretraining`
+Successfully installed all dependencies
+Dependency installation completed in 27s
+================================
+Environment setup completed at Wed Aug  5 05:20:46 PM UTC 2026
+Environment setup time: 28s
+================================
+Wed Aug  5 17:20:46 2026       
++-----------------------------------------------------------------------------------------+
+| NVIDIA-SMI 580.126.16             Driver Version: 580.126.16     CUDA Version: 13.0     |
++-----------------------------------------+------------------------+----------------------+
+| GPU  Name                 Persistence-M | Bus-Id          Disp.A | Volatile Uncorr. ECC |
+| Fan  Temp   Perf          Pwr:Usage/Cap |           Memory-Usage | GPU-Util  Compute M. |
+|                                         |                        |               MIG M. |
+|=========================================+========================+======================|
+|   0  NVIDIA H100 80GB HBM3          Off |   00000000:33:00.0 Off |                    0 |
+| N/A   33C    P0             66W /  700W |       0MiB /  81559MiB |      0%      Default |
+|                                         |                        |             Disabled |
++-----------------------------------------+------------------------+----------------------+
+
++-----------------------------------------------------------------------------------------+
+| Processes:                                                                              |
+|  GPU   GI   CI              PID   Type   Process name                        GPU Memory |
+|        ID   ID                                                               Usage      |
+|=========================================================================================|
+|  No running processes found                                                             |
++-----------------------------------------------------------------------------------------+
+torch 2.13.0+cu130 | cuda True | gpus 1
+cpus 16
+/databricks/python3/lib/python3.12/site-packages/huggingface_hub/constants.py:298: FutureWarning: The `HF_HUB_ENABLE_HF_TRANSFER` environment variable is deprecated as 'hf_transfer' is not used anymore. Please use `HF_XET_HIGH_PERFORMANCE` instead to enable high performance transfer with Xet. Visit https://huggingface.co/docs/huggingface_hub/package_reference/environment_variables#hfxethighperformance for more details.
+  warnings.warn(
+DDP training with 1 processes
+Per-GPU batch size: 64
+Model has 27552250 parameters.
+/databricks/python3/lib/python3.12/site-packages/tabicl/train/_run.py:261: FutureWarning: `broadcast_buffers` is deprecated. Use `forward_sync_buffers` instead. IMPORTANT: unlike `broadcast_buffers=False`, `forward_sync_buffers=False` still syncs buffers at init. If you rely on buffers NOT being synced at init (e.g. rank-local buffers), keep using `broadcast_buffers=False` until `init_sync_buffers` is available.
+  self.model = DDP(model, device_ids=[self.ddp_local_rank], broadcast_buffers=False)
+main:610:610 [0] NCCL INFO ENV/Plugin: Could not find: libnccl-env.so
+main:610:610 [0] NCCL INFO Bootstrap: Using eth0:10.125.173.255<0>
+main:610:610 [0] NCCL INFO cudaDriverVersion 13000
+main:610:610 [0] NCCL INFO NCCL version 2.29.7+cuda13.2
+main:610:610 [0] NCCL INFO NCCL git version stable b81d6a5a3
+main:610:610 [0] NCCL INFO Comm config Blocking set to 1
+main:610:610 [0] NCCL INFO NET/Plugin: Loaded net plugin Libfabric (v10)
+main:610:610 [0] NCCL INFO Successfully loaded external network plugin /opt/aws-ofi-nccl/install/lib/libnccl-net.so
+main:610:610 [0] NCCL INFO NET/OFI Initializing aws-ofi-nccl 1.15.0
+main:610:610 [0] NCCL INFO NET/OFI Using Libfabric version 2.1
+main:610:610 [0] NCCL INFO NET/OFI Using CUDA driver version 13000 with runtime 12090
+main:610:610 [0] NCCL INFO NET/OFI Configuring AWS-specific options
+main:610:610 [0] NCCL INFO NET/OFI Setting provider_filter to efa
+main:610:610 [0] NCCL INFO NET/OFI Setting NCCL_NET_FORCE_FLUSH=0 since this platform does not require a network flush.
+main:610:610 [0] NCCL INFO NET/OFI Setting NCCL_NVLSTREE_MAX_CHUNKSIZE to 512KiB
+main:610:610 [0] NCCL INFO NET/OFI Setting NCCL_NVLS_CHUNKSIZE to 512KiB
+main:610:610 [0] NCCL INFO NET/OFI Internode latency set at 75.0 us
+main:610:610 [0] NCCL INFO NET/OFI Using transport protocol RDMA (platform set)
+main:610:610 [0] NCCL INFO NET/OFI No eligible providers were found
+
+[2026-08-05 17:21:05] main:610:610 [0] int nccl_net_ofi_create_plugin(nccl_net_ofi_plugin_t**):219 NCCL WARN NET/OFI Failed to initialize rdma protocol
+
+[2026-08-05 17:21:05] main:610:610 [0] int nccl_net_ofi_create_plugin(nccl_net_ofi_plugin_t**):354 NCCL WARN NET/OFI aws-ofi-nccl initialization failed
+
+[2026-08-05 17:21:05] main:610:610 [0] ncclResult_t nccl_net_ofi_init_v2(ncclDebugLogger_t):155 NCCL WARN NET/OFI Initializing plugin failed
+main:610:610 [0] NCCL INFO plugin/net/net_v10.cc:82 -> 2
+main:610:610 [0] NCCL INFO Failed to initialize NET plugin Libfabric
+main:610:610 [0] NCCL INFO NET/IB : No device found.
+main:610:610 [0] NCCL INFO NET/IB : Using [RO]; OOB eth0:10.125.173.255<0>
+main:610:610 [0] NCCL INFO Failed to initialize NET plugin IB
+main:610:610 [0] NCCL INFO NET/Socket : Using [0]eth0:10.125.173.255<0>
+main:610:610 [0] NCCL INFO Initialized NET plugin Socket
+main:610:610 [0] NCCL INFO Assigned NET plugin Socket to comm
+main:610:610 [0] NCCL INFO GIN/Plugin: Could not find: libnccl-gin.so
+main:610:610 [0] NCCL INFO Successfully loaded external gin plugin /opt/aws-ofi-nccl/install/lib/libnccl-net.so
+main:610:610 [0] NCCL INFO Failed to initialize any GIN plugin
+main:610:610 [0] NCCL INFO Using network Socket
+main:610:610 [0] NCCL INFO [Rank 0] ncclCommInitRankConfig comm 0x39860720 rank 0 nranks 1 cudaDev 0 nvmlDev 0 busId 33000 commId 0x8a457f433b60618 - Init START
+main:610:610 [0] NCCL INFO RAS client listening socket at 127.0.0.1<28028>
+main:610:610 [0] NCCL INFO Bootstrap timings total 0.001560 (create 0.000242, send 0.000269, recv 0.000282, ring 0.000001, delay 0.000003)
+main:610:610 [0] NCCL INFO ncclTopoGetCpuAffinity: Affinity for GPU 0 is 0-15. (GPU affinity = 0-15 ; CPU affinity = 0-15).
+main:610:610 [0] NCCL INFO comm 0x39860720 rank 0 nRanks 1 nNodes 1 localRanks 1 localRank 0 MNNVL 0
+main:610:610 [0] NCCL INFO Channel 00/64 : 0
+main:610:610 [0] NCCL INFO Channel 01/64 : 0
+main:610:610 [0] NCCL INFO Channel 02/64 : 0
+main:610:610 [0] NCCL INFO Channel 03/64 : 0
+main:610:610 [0] NCCL INFO Channel 04/64 : 0
+main:610:610 [0] NCCL INFO Channel 05/64 : 0
+main:610:610 [0] NCCL INFO Channel 06/64 : 0
+main:610:610 [0] NCCL INFO Channel 07/64 : 0
+main:610:610 [0] NCCL INFO Channel 08/64 : 0
+main:610:610 [0] NCCL INFO Channel 09/64 : 0
+main:610:610 [0] NCCL INFO Channel 10/64 : 0
+main:610:610 [0] NCCL INFO Channel 11/64 : 0
+main:610:610 [0] NCCL INFO Channel 12/64 : 0
+main:610:610 [0] NCCL INFO Channel 13/64 : 0
+main:610:610 [0] NCCL INFO Channel 14/64 : 0
+main:610:610 [0] NCCL INFO Channel 15/64 : 0
+main:610:610 [0] NCCL INFO Channel 16/64 : 0
+main:610:610 [0] NCCL INFO Channel 17/64 : 0
+main:610:610 [0] NCCL INFO Channel 18/64 : 0
+main:610:610 [0] NCCL INFO Channel 19/64 : 0
+main:610:610 [0] NCCL INFO Channel 20/64 : 0
+main:610:610 [0] NCCL INFO Channel 21/64 : 0
+main:610:610 [0] NCCL INFO Channel 22/64 : 0
+main:610:610 [0] NCCL INFO Channel 23/64 : 0
+main:610:610 [0] NCCL INFO Channel 24/64 : 0
+main:610:610 [0] NCCL INFO Channel 25/64 : 0
+main:610:610 [0] NCCL INFO Channel 26/64 : 0
+main:610:610 [0] NCCL INFO Channel 27/64 : 0
+main:610:610 [0] NCCL INFO Channel 28/64 : 0
+main:610:610 [0] NCCL INFO Channel 29/64 : 0
+main:610:610 [0] NCCL INFO Channel 30/64 : 0
+main:610:610 [0] NCCL INFO Channel 31/64 : 0
+main:610:610 [0] NCCL INFO Channel 32/64 : 0
+main:610:610 [0] NCCL INFO Channel 33/64 : 0
+main:610:610 [0] NCCL INFO Channel 34/64 : 0
+main:610:610 [0] NCCL INFO Channel 35/64 : 0
+main:610:610 [0] NCCL INFO Channel 36/64 : 0
+main:610:610 [0] NCCL INFO Channel 37/64 : 0
+main:610:610 [0] NCCL INFO Channel 38/64 : 0
+main:610:610 [0] NCCL INFO Channel 39/64 : 0
+main:610:610 [0] NCCL INFO Channel 40/64 : 0
+main:610:610 [0] NCCL INFO Channel 41/64 : 0
+main:610:610 [0] NCCL INFO Channel 42/64 : 0
+main:610:610 [0] NCCL INFO Channel 43/64 : 0
+main:610:610 [0] NCCL INFO Channel 44/64 : 0
+main:610:610 [0] NCCL INFO Channel 45/64 : 0
+main:610:610 [0] NCCL INFO Channel 46/64 : 0
+main:610:610 [0] NCCL INFO Channel 47/64 : 0
+main:610:610 [0] NCCL INFO Channel 48/64 : 0
+main:610:610 [0] NCCL INFO Channel 49/64 : 0
+main:610:610 [0] NCCL INFO Channel 50/64 : 0
+main:610:610 [0] NCCL INFO Channel 51/64 : 0
+main:610:610 [0] NCCL INFO Channel 52/64 : 0
+main:610:610 [0] NCCL INFO Channel 53/64 : 0
+main:610:610 [0] NCCL INFO Channel 54/64 : 0
+main:610:610 [0] NCCL INFO Channel 55/64 : 0
+main:610:610 [0] NCCL INFO Channel 56/64 : 0
+main:610:610 [0] NCCL INFO Channel 57/64 : 0
+main:610:610 [0] NCCL INFO Channel 58/64 : 0
+main:610:610 [0] NCCL INFO Channel 59/64 : 0
+main:610:610 [0] NCCL INFO Channel 60/64 : 0
+main:610:610 [0] NCCL INFO Channel 61/64 : 0
+main:610:610 [0] NCCL INFO Channel 62/64 : 0
+main:610:610 [0] NCCL INFO Channel 63/64 : 0
+main:610:610 [0] NCCL INFO Trees [0] -1/-1/-1->0->-1 [1] -1/-1/-1->0->-1 [2] -1/-1/-1->0->-1 [3] -1/-1/-1->0->-1 [4] -1/-1/-1->0->-1 [5] -1/-1/-1->0->-1 [6] -1/-1/-1->0->-1 [7] -1/-1/-1->0->-1 [8] -1/-1/-1->0->-1 [9] -1/-1/-1->0->-1 [10] -1/-1/-1->0->-1 [11] -1/-1/-1->0->-1 [12] -1/-1/-1->0->-1 [13] -1/-1/-1->0->-1 [14] -1/-1/-1->0->-1 [15] -1/-1/-1->0->-1 [16] -1/-1/-1->0->-1 [17] -1/-1/-1->0->-1 [18] -1/-1/-1->0->-1 [19] -1/-1/-1->0->-1 [20] -1/-1/-1->0->-1 [21] -1/-1/-1->0->-1 [22] -1/-1/-1->0->-1 [23] -1/-1/-1->0->-1 [24] -1/-1/-1->0->-1 [25] -1/-1/-1->0->-1 [26] -1/-1/-1->0->-1 [27] -1/-1/-1->0->-1 [28] -1/-1/-1->0->-1 [29] -1/-1/-1->0->-1 [30] -1/-1/-1->0->-1 [31] -1/-1/-1->0->-1 [32] -1/-1/-1->0->-1 [33] -1/-1/-1->0->-1 [34] -1/-1/-1->0->-1 [35] -1/-1/-1->0->-1 [36] -1/-1/-1->0->-1 [37] -1/-1/-1->0->-1 [38] -1/-1/-1->0->-1 [39] -1/-1/-1->0->-1 [40] -1/-1/-1->0->-1 [41] -1/-1/-1->0->-1 [42] -1/-1/-1->0->-1 [43] -1/-1/-1->0->-1 [44] -1/-1/-1->0->-1 [45] -1/-1/-1->0->-1 [46] -1/-1/-1->0->-1 [47] -1/-1/-1->0->-1 [48] -1/-1/-1->0->-1 [4
+main:610:610 [0] NCCL INFO P2P Chunksize set to 524288
+main:610:610 [0] NCCL INFO PROFILER/Plugin: Could not find: libnccl-profiler.so
+main:610:610 [0] NCCL INFO Check P2P Type isAllDirectP2p 1 directMode 0 isAllCudaP2p 1
+main:610:679 [0] NCCL INFO [Proxy Service] Device 0 CPU core 14
+main:610:680 [0] NCCL INFO [Proxy Service UDS] Device 0 CPU core 10
+main:610:610 [0] NCCL INFO TUNER/Plugin: Could not find: libnccl-tuner.so
+main:610:610 [0] NCCL INFO 64 coll channels, 64 collnet channels, 0 nvls channels, 64 p2p channels, 64 p2p channels per peer
+main:610:610 [0] NCCL INFO Symmetric VA size=80GB
+main:610:610 [0] NCCL INFO CC Off, workFifoBytes 1048576
+main:610:610 [0] NCCL INFO ncclCommInitRankConfig comm 0x39860720 rank 0 nranks 1 cudaDev 0 nvmlDev 0 busId 33000 commId 0x8a457f433b60618 - Init COMPLETE
+main:610:610 [0] NCCL INFO Init timings - ncclCommInitRankConfig: rank 0 nranks 1 total 0.36 (kernels 0.29, alloc 0.05, bootstrap 0.00, allgathers 0.00, topo 0.00, graphs 0.00, connections 0.02, rest 0.00)
+PriorDataset(
+  task: classification
+  prior_type: graph_scm
+  batch_size: 64
+  batch_size_per_gp: 4
+  features: 1 - 100
+  max classes: 10
+  seq_len: None - 1024
+  sequence length varies across groups: True
+  train_size: 0.3 - 0.9
+  device: cpu
+)
+Using Muon optimizer.
+Automatic Mixed Precision is enabled.
+No checkpoint found, starting from scratch.
+Step:   0%|          | 0/100 [00:00<?, ?it/s]/databricks/python3/lib/python3.12/site-packages/torch/utils/data/dataloader.py:1102: UserWarning: pin_memory_device is deprecated, the current accelerator will be used as the device,ignore pin_memory_device='cuda:0'.
+  super().__init__(loader)
+/databricks/python3/lib/python3.12/site-packages/huggingface_hub/constants.py:298: FutureWarning: The `HF_HUB_ENABLE_HF_TRANSFER` environment variable is deprecated as 'hf_transfer' is not used anymore. Please use `HF_XET_HIGH_PERFORMANCE` instead to enable high performance transfer with Xet. Visit https://huggingface.co/docs/huggingface_hub/package_reference/environment_variables#hfxethighperformance for more details.
+  warnings.warn(
+/databricks/python3/lib/python3.12/site-packages/huggingface_hub/constants.py:298: FutureWarning: The `HF_HUB_ENABLE_HF_TRANSFER` environment variable is deprecated as 'hf_transfer' is not used anymore. Please use `HF_XET_HIGH_PERFORMANCE` instead to enable high performance transfer with Xet. Visit https://huggingface.co/docs/huggingface_hub/package_reference/environment_variables#hfxethighperformance for more details.
+  warnings.warn(
+Initializing worker 4 with seed 3421126071
+/databricks/python3/lib/python3.12/site-packages/huggingface_hub/constants.py:298: FutureWarning: The `HF_HUB_ENABLE_HF_TRANSFER` environment variable is deprecated as 'hf_transfer' is not used anymore. Please use `HF_XET_HIGH_PERFORMANCE` instead to enable high performance transfer with Xet. Visit https://huggingface.co/docs/huggingface_hub/package_reference/environment_variables#hfxethighperformance for more details.
+  warnings.warn(
+Initializing worker 2 with seed 3421126069
+/databricks/python3/lib/python3.12/site-packages/huggingface_hub/constants.py:298: FutureWarning: The `HF_HUB_ENABLE_HF_TRANSFER` environment variable is deprecated as 'hf_transfer' is not used anymore. Please use `HF_XET_HIGH_PERFORMANCE` instead to enable high performance transfer with Xet. Visit https://huggingface.co/docs/huggingface_hub/package_reference/environment_variables#hfxethighperformance for more details.
+  warnings.warn(
+Initializing worker 5 with seed 3421126072
+Initializing worker 1 with seed 3421126068
+/databricks/python3/lib/python3.12/site-packages/huggingface_hub/constants.py:298: FutureWarning: The `HF_HUB_ENABLE_HF_TRANSFER` environment variable is deprecated as 'hf_transfer' is not used anymore. Please use `HF_XET_HIGH_PERFORMANCE` instead to enable high performance transfer with Xet. Visit https://huggingface.co/docs/huggingface_hub/package_reference/environment_variables#hfxethighperformance for more details.
+  warnings.warn(
+/databricks/python3/lib/python3.12/site-packages/huggingface_hub/constants.py:298: FutureWarning: The `HF_HUB_ENABLE_HF_TRANSFER` environment variable is deprecated as 'hf_transfer' is not used anymore. Please use `HF_XET_HIGH_PERFORMANCE` instead to enable high performance transfer with Xet. Visit https://huggingface.co/docs/huggingface_hub/package_reference/environment_variables#hfxethighperformance for more details.
+  warnings.warn(
+/databricks/python3/lib/python3.12/site-packages/huggingface_hub/constants.py:298: FutureWarning: The `HF_HUB_ENABLE_HF_TRANSFER` environment variable is deprecated as 'hf_transfer' is not used anymore. Please use `HF_XET_HIGH_PERFORMANCE` instead to enable high performance transfer with Xet. Visit https://huggingface.co/docs/huggingface_hub/package_reference/environment_variables#hfxethighperformance for more details.
+  warnings.warn(
+/databricks/python3/lib/python3.12/site-packages/huggingface_hub/constants.py:298: FutureWarning: The `HF_HUB_ENABLE_HF_TRANSFER` environment variable is deprecated as 'hf_transfer' is not used anymore. Please use `HF_XET_HIGH_PERFORMANCE` instead to enable high performance transfer with Xet. Visit https://huggingface.co/docs/huggingface_hub/package_reference/environment_variables#hfxethighperformance for more details.
+  warnings.warn(
+Initializing worker 7 with seed 3421126074
+Initializing worker 3 with seed 3421126070
+Initializing worker 0 with seed 3421126067
+Initializing worker 6 with seed 3421126073
+Step:   0%|          | 0/100 [00:53<?, ?it/s, accuracy=0.061, ce=2.3, prior_time=48.4, train_time=4.95]Step:   1%|          | 1/100 [00:53<1:28:10, 53.44s/it, accuracy=0.061, ce=2.3, prior_time=48.4, train_time=4.95]Step:   1%|          | 1/100 [00:56<1:28:10, 53.44s/it, accuracy=0.071, ce=2.3, prior_time=0, train_time=3.03]   Step:   2%|▏         | 2/100 [00:56<38:54, 23.83s/it, accuracy=0.071, ce=2.3, prior_time=0, train_time=3.03]  Step:   2%|▏         | 2/100 [00:59<38:54, 23.83s/it, accuracy=0.347, ce=2.15, prior_time=0, train_time=2.62]Step:   3%|▎         | 3/100 [00:59<22:53, 14.16s/it, accuracy=0.347, ce=2.15, prior_time=0, train_time=2.62]Step:   3%|▎         | 3/100 [01:02<22:53, 14.16s/it, accuracy=0.298, ce=2.06, prior_time=0, train_time=3]   Step:   4%|▍         | 4/100 [01:02<15:37,  9.77s/it, accuracy=0.298, ce=2.06, prior_time=0, train_time=3]Step:   4%|▍         | 4/100 [01:04<15:37,  9.77s/it, accuracy=0.309, ce=2, prior_time=0, train_time=2.7] Step:   5%|▌         | 5/100 [01:04<11:28,  7.24s/it, accuracy=0.309, ce=2, prior_time=0, train_time=2.7]Step:   5%|▌         | 5/100 [01:07<11:28,  7.24s/it, accuracy=0.366, ce=1.86, prior_time=0, train_time=2.93]Step:   6%|▌         | 6/100 [01:07<09:04,  5.79s/it, accuracy=0.366, ce=1.86, prior_time=0, train_time=2.93]Step:   6%|▌         | 6/100 [01:11<09:04,  5.79s/it, accuracy=0.369, ce=1.76, prior_time=0, train_time=3.27]Step:   7%|▋         | 7/100 [01:11<07:44,  4.99s/it, accuracy=0.369, ce=1.76, prior_time=0, train_time=3.27]Step:   7%|▋         | 7/100 [01:14<07:44,  4.99s/it, accuracy=0.356, ce=1.76, prior_time=0, train_time=3.16]Step:   8%|▊         | 8/100 [01:14<06:47,  4.42s/it, accuracy=0.356, ce=1.76, prior_time=0, train_time=3.16]Step:   8%|▊         | 8/100 [01:30<06:47,  4.42s/it, accuracy=0.382, ce=1.68, prior_time=12.1, train_time=3.35]Step:   9%|▉         | 9/100 [01:30<11:57,  7.88s/it, accuracy=0.382, ce=1.68, prior_time=12.1, train_time=3.35]Step:   9%|▉         | 9/100 [01:32<11:57,  7.88s/it, accuracy=0.354, ce=1.75, prior_time=0, train_time=2.81]   Step:  10%|█         | 10/100 [01:32<09:29,  6.33s/it, accuracy=0.354, ce=1.75, prior_time=0, train_time=2.81]Step:  10%|█         | 10/100 [01:35<09:29,  6.33s/it, accuracy=0.42, ce=1.58, prior_time=0, train_time=2.88] Step:  11%|█         | 11/100 [01:35<07:51,  5.29s/it, accuracy=0.42, ce=1.58, prior_time=0, train_time=2.88]Step:  11%|█         | 11/100 [01:38<07:51,  5.29s/it, accuracy=0.41, ce=1.59, prior_time=0, train_time=2.94]Step:  12%|█▏        | 12/100 [01:38<06:43,  4.59s/it, accuracy=0.41, ce=1.59, prior_time=0, train_time=2.94]Step:  12%|█▏        | 12/100 [01:41<06:43,  4.59s/it, accuracy=0.351, ce=1.68, prior_time=0, train_time=3.08]Step:  13%|█▎        | 13/100 [01:41<06:00,  4.14s/it, accuracy=0.351, ce=1.68, prior_time=0, train_time=3.08]Step:  13%|█▎        | 13/100 [01:44<06:00,  4.14s/it, accuracy=0.448, ce=1.5, prior_time=0, train_time=2.7]  Step:  14%|█▍        | 14/100 [01:44<05:19,  3.72s/it, accuracy=0.448, ce=1.5, prior_time=0, train_time=2.7]Step:  14%|█▍        | 14/100 [01:48<05:19,  3.72s/it, accuracy=0.416, ce=1.5, prior_time=0, train_time=3.43]Step:  15%|█▌        | 15/100 [01:48<05:09,  3.65s/it, accuracy=0.416, ce=1.5, prior_time=0, train_time=3.43]Step:  15%|█▌        | 15/100 [01:51<05:09,  3.65s/it, accuracy=0.401, ce=1.55, prior_time=0, train_time=3.15]Step:  16%|█▌        | 16/100 [01:51<04:54,  3.51s/it, accuracy=0.401, ce=1.55, prior_time=0, train_time=3.15]Step:  16%|█▌        | 16/100 [02:08<04:54,  3.51s/it, accuracy=0.416, ce=1.5, prior_time=13.9, train_time=2.94]Step:  17%|█▋        | 17/100 [02:08<10:24,  7.52s/it, accuracy=0.416, ce=1.5, prior_time=13.9, train_time=2.94]Step:  17%|█▋        | 17/100 [02:10<10:24,  7.52s/it, accuracy=0.401, ce=1.59, prior_time=0, train_time=2.37]  Step:  18%|█▊        | 18/100 [02:10<08:10,  5.98s/it, accuracy=0.401, ce=1.59, prior_time=0, train_time=2.37]Step:  18%|█▊        | 18/100 [02:13<08:10,  5.98s/it, accuracy=0.403, ce=1.56, prior_time=0, train_time=2.6] Step:  19%|█▉        | 19/100 [02:13<06:43,  4.98s/it, accuracy=0.403, ce=1.56, prior_time=0, train_time=2.6]Step:  19%|█▉        | 19/100 [02:16<06:43,  4.98s/it, accuracy=0.497, ce=1.32, prior_time=0, train_time=2.84]Step:  20%|██        | 20/100 [02:16<05:48,  4.35s/it, accuracy=0.497, ce=1.32, prior_time=0, train_time=2.84]Step:  20%|██        | 20/100 [02:19<05:48,  4.35s/it, accuracy=0.406, ce=1.49, prior_time=0, train_time=3.49]Step:  21%|██        | 21/100 [02:19<05:24,  4.10s/it, accuracy=0.406, ce=1.49, prior_time=0, train_time=3.49]Step:  21%|██        | 21/100 [02:22<05:24,  4.10s/it, accuracy=0.42, ce=1.5, prior_time=0, train_time=2.96]  Step:  22%|██▏       | 22/100 [02:22<04:54,  3.77s/it, accuracy=0.42, ce=1.5, prior_time=0, train_time=2.96]Step:  22%|██▏       | 22/100 [02:25<04:54,  3.77s/it, accuracy=0.424, ce=1.49, prior_time=0, train_time=3.01]Step:  23%|██▎       | 23/100 [02:25<04:33,  3.55s/it, accuracy=0.424, ce=1.49, prior_time=0, train_time=3.01]Step:  23%|██▎       | 23/100 [02:29<04:33,  3.55s/it, accuracy=0.405, ce=1.51, prior_time=0, train_time=3.49]Step:  24%|██▍       | 24/100 [02:29<04:29,  3.55s/it, accuracy=0.405, ce=1.51, prior_time=0, train_time=3.49]Step:  24%|██▍       | 24/100 [02:38<04:29,  3.55s/it, accuracy=0.418, ce=1.48, prior_time=5.62, train_time=3.23]Step:  25%|██▌       | 25/100 [02:38<06:26,  5.16s/it, accuracy=0.418, ce=1.48, prior_time=5.62, train_time=3.23]Step:  25%|██▌       | 25/100 [02:41<06:26,  5.16s/it, accuracy=0.468, ce=1.39, prior_time=0, train_time=3.21]   Step:  26%|██▌       | 26/100 [02:41<05:39,  4.59s/it, accuracy=0.468, ce=1.39, prior_time=0, train_time=3.21]Step:  26%|██▌       | 26/100 [02:44<05:39,  4.59s/it, accuracy=0.407, ce=1.53, prior_time=0, train_time=2.92]Step:  27%|██▋       | 27/100 [02:44<04:59,  4.10s/it, accuracy=0.407, ce=1.53, prior_time=0, train_time=2.92]Step:  27%|██▋       | 27/100 [02:47<04:59,  4.10s/it, accuracy=0.431, ce=1.46, prior_time=0, train_time=2.92]Step:  28%|██▊       | 28/100 [02:47<04:30,  3.76s/it, accuracy=0.431, ce=1.46, prior_time=0, train_time=2.92]Step:  28%|██▊       | 28/100 [02:50<04:30,  3.76s/it, accuracy=0.404, ce=1.48, prior_time=0, train_time=3.05]Step:  29%|██▉       | 29/100 [02:50<04:13,  3.57s/it, accuracy=0.404, ce=1.48, prior_time=0, train_time=3.05]Step:  29%|██▉       | 29/100 [02:54<04:13,  3.57s/it, accuracy=0.451, ce=1.42, prior_time=0, train_time=3.64]Step:  30%|███       | 30/100 [02:54<04:12,  3.60s/it, accuracy=0.451, ce=1.42, prior_time=0, train_time=3.64]Step:  30%|███       | 30/100 [02:57<04:12,  3.60s/it, accuracy=0.395, ce=1.53, prior_time=0, train_time=3.21]Step:  31%|███       | 31/100 [02:57<04:01,  3.50s/it, accuracy=0.395, ce=1.53, prior_time=0, train_time=3.21]Step:  31%|███       | 31/100 [03:00<04:01,  3.50s/it, accuracy=0.381, ce=1.54, prior_time=0, train_time=3.57]Step:  32%|███▏      | 32/100 [03:00<04:00,  3.54s/it, accuracy=0.381, ce=1.54, prior_time=0, train_time=3.57]Step:  32%|███▏      | 32/100 [03:08<04:00,  3.54s/it, accuracy=0.464, ce=1.34, prior_time=4.22, train_time=3.35]Step:  33%|███▎      | 33/100 [03:08<05:19,  4.77s/it, accuracy=0.464, ce=1.34, prior_time=4.22, train_time=3.35]Step:  33%|███▎      | 33/100 [03:11<05:19,  4.77s/it, accuracy=0.43, ce=1.37, prior_time=0, train_time=3.14]    Step:  34%|███▍      | 34/100 [03:11<04:43,  4.29s/it, accuracy=0.43, ce=1.37, prior_time=0, train_time=3.14]Step:  34%|███▍      | 34/100 [03:14<04:43,  4.29s/it, accuracy=0.407, ce=1.41, prior_time=0, train_time=2.8]Step:  35%|███▌      | 35/100 [03:14<04:10,  3.86s/it, accuracy=0.407, ce=1.41, prior_time=0, train_time=2.8]Step:  35%|███▌      | 35/100 [03:17<04:10,  3.86s/it, accuracy=0.423, ce=1.46, prior_time=0, train_time=2.87]Step:  36%|███▌      | 36/100 [03:17<03:48,  3.57s/it, accuracy=0.423, ce=1.46, prior_time=0, train_time=2.87]Step:  36%|███▌      | 36/100 [03:20<03:48,  3.57s/it, accuracy=0.471, ce=1.33, prior_time=0, train_time=3.04]Step:  37%|███▋      | 37/100 [03:20<03:36,  3.43s/it, accuracy=0.471, ce=1.33, prior_time=0, train_time=3.04]Step:  37%|███▋      | 37/100 [03:24<03:36,  3.43s/it, accuracy=0.397, ce=1.53, prior_time=0, train_time=3.36]Step:  38%|███▊      | 38/100 [03:24<03:32,  3.43s/it, accuracy=0.397, ce=1.53, prior_time=0, train_time=3.36]Step:  38%|███▊      | 38/100 [03:27<03:32,  3.43s/it, accuracy=0.432, ce=1.42, prior_time=0, train_time=2.98]Step:  39%|███▉      | 39/100 [03:27<03:22,  3.31s/it, accuracy=0.432, ce=1.42, prior_time=0, train_time=2.98]Step:  39%|███▉      | 39/100 [03:30<03:22,  3.31s/it, accuracy=0.434, ce=1.39, prior_time=0, train_time=3]   Step:  40%|████      | 40/100 [03:30<03:14,  3.23s/it, accuracy=0.434, ce=1.39, prior_time=0, train_time=3]Step:  40%|████      | 40/100 [03:35<03:14,  3.23s/it, accuracy=0.46, ce=1.34, prior_time=1.91, train_time=2.96]Step:  41%|████      | 41/100 [03:35<03:40,  3.74s/it, accuracy=0.46, ce=1.34, prior_time=1.91, train_time=2.96]Step:  41%|████      | 41/100 [03:38<03:40,  3.74s/it, accuracy=0.394, ce=1.48, prior_time=0, train_time=2.96]  Step:  42%|████▏     | 42/100 [03:38<03:23,  3.51s/it, accuracy=0.394, ce=1.48, prior_time=0, train_time=2.96]Step:  42%|████▏     | 42/100 [03:41<03:23,  3.51s/it, accuracy=0.44, ce=1.39, prior_time=0, train_time=3.45] Step:  43%|████▎     | 43/100 [03:41<03:20,  3.51s/it, accuracy=0.44, ce=1.39, prior_time=0, train_time=3.45]Step:  43%|████▎     | 43/100 [03:44<03:20,  3.51s/it, accuracy=0.439, ce=1.38, prior_time=0, train_time=3.02]Step:  44%|████▍     | 44/100 [03:44<03:09,  3.38s/it, accuracy=0.439, ce=1.38, prior_time=0, train_time=3.02]Step:  44%|████▍     | 44/100 [03:47<03:09,  3.38s/it, accuracy=0.401, ce=1.44, prior_time=0, train_time=3.02]Step:  45%|████▌     | 45/100 [03:47<03:00,  3.29s/it, accuracy=0.401, ce=1.44, prior_time=0, train_time=3.02]Step:  45%|████▌     | 45/100 [03:50<03:00,  3.29s/it, accuracy=0.41, ce=1.46, prior_time=0, train_time=2.95] Step:  46%|████▌     | 46/100 [03:50<02:52,  3.20s/it, accuracy=0.41, ce=1.46, prior_time=0, train_time=2.95]Step:  46%|████▌     | 46/100 [03:53<02:52,  3.20s/it, accuracy=0.421, ce=1.4, prior_time=0, train_time=2.9] Step:  47%|████▋     | 47/100 [03:53<02:45,  3.13s/it, accuracy=0.421, ce=1.4, prior_time=0, train_time=2.9]Step:  47%|████▋     | 47/100 [03:56<02:45,  3.13s/it, accuracy=0.443, ce=1.33, prior_time=0, train_time=2.76]Step:  48%|████▊     | 48/100 [03:56<02:37,  3.03s/it, accuracy=0.443, ce=1.33, prior_time=0, train_time=2.76]Step:  48%|████▊     | 48/100 [04:09<02:37,  3.03s/it, accuracy=0.445, ce=1.34, prior_time=10.2, train_time=3.11]Step:  49%|████▉     | 49/100 [04:09<05:12,  6.13s/it, accuracy=0.445, ce=1.34, prior_time=10.2, train_time=3.11]Step:  49%|████▉     | 49/100 [04:12<05:12,  6.13s/it, accuracy=0.425, ce=1.42, prior_time=0, train_time=2.55]   Step:  50%|█████     | 50/100 [04:12<04:19,  5.19s/it, accuracy=0.425, ce=1.42, prior_time=0, train_time=2.55]Step:  50%|█████     | 50/100 [04:15<04:19,  5.19s/it, accuracy=0.416, ce=1.42, prior_time=0, train_time=2.57]Step:  51%|█████     | 51/100 [04:15<03:36,  4.42s/it, accuracy=0.416, ce=1.42, prior_time=0, train_time=2.57]Step:  51%|█████     | 51/100 [04:18<03:36,  4.42s/it, accuracy=0.399, ce=1.5, prior_time=0, train_time=3.2]  Step:  52%|█████▏    | 52/100 [04:18<03:15,  4.07s/it, accuracy=0.399, ce=1.5, prior_time=0, train_time=3.2]Step:  52%|█████▏    | 52/100 [04:22<03:15,  4.07s/it, accuracy=0.427, ce=1.37, prior_time=0, train_time=3.48]Step:  53%|█████▎    | 53/100 [04:22<03:03,  3.91s/it, accuracy=0.427, ce=1.37, prior_time=0, train_time=3.48]Step:  53%|█████▎    | 53/100 [04:25<03:03,  3.91s/it, accuracy=0.387, ce=1.54, prior_time=0, train_time=3.33]Step:  54%|█████▍    | 54/100 [04:25<02:52,  3.75s/it, accuracy=0.387, ce=1.54, prior_time=0, train_time=3.33]Step:  54%|█████▍    | 54/100 [04:28<02:52,  3.75s/it, accuracy=0.461, ce=1.31, prior_time=0, train_time=2.98]Step:  55%|█████▌    | 55/100 [04:28<02:39,  3.54s/it, accuracy=0.461, ce=1.31, prior_time=0, train_time=2.98]Step:  55%|█████▌    | 55/100 [04:31<02:39,  3.54s/it, accuracy=0.413, ce=1.47, prior_time=0, train_time=2.97]Step:  56%|█████▌    | 56/100 [04:31<02:28,  3.38s/it, accuracy=0.413, ce=1.47, prior_time=0, train_time=2.97]Step:  56%|█████▌    | 56/100 [04:48<02:28,  3.38s/it, accuracy=0.431, ce=1.38, prior_time=13.8, train_time=2.86]Step:  57%|█████▋    | 57/100 [04:48<05:17,  7.37s/it, accuracy=0.431, ce=1.38, prior_time=13.8, train_time=2.86]Step:  57%|█████▋    | 57/100 [04:51<05:17,  7.37s/it, accuracy=0.452, ce=1.36, prior_time=0, train_time=2.99]   Step:  58%|█████▊    | 58/100 [04:51<04:15,  6.08s/it, accuracy=0.452, ce=1.36, prior_time=0, train_time=2.99]Step:  58%|█████▊    | 58/100 [04:55<04:15,  6.08s/it, accuracy=0.448, ce=1.33, prior_time=0, train_time=3.57]Step:  59%|█████▉    | 59/100 [04:55<03:38,  5.34s/it, accuracy=0.448, ce=1.33, prior_time=0, train_time=3.57]Step:  59%|█████▉    | 59/100 [04:57<03:38,  5.34s/it, accuracy=0.434, ce=1.38, prior_time=0, train_time=2.87]Step:  60%|██████    | 60/100 [04:57<03:04,  4.61s/it, accuracy=0.434, ce=1.38, prior_time=0, train_time=2.87]Step:  60%|██████    | 60/100 [05:00<03:04,  4.61s/it, accuracy=0.44, ce=1.38, prior_time=0, train_time=2.79] Step:  61%|██████    | 61/100 [05:00<02:38,  4.08s/it, accuracy=0.44, ce=1.38, prior_time=0, train_time=2.79]Step:  61%|██████    | 61/100 [05:03<02:38,  4.08s/it, accuracy=0.435, ce=1.4, prior_time=0, train_time=2.98]Step:  62%|██████▏   | 62/100 [05:03<02:22,  3.76s/it, accuracy=0.435, ce=1.4, prior_time=0, train_time=2.98]Step:  62%|██████▏   | 62/100 [05:07<02:22,  3.76s/it, accuracy=0.389, ce=1.46, prior_time=0, train_time=3.47]Step:  63%|██████▎   | 63/100 [05:07<02:16,  3.69s/it, accuracy=0.389, ce=1.46, prior_time=0, train_time=3.47]Step:  63%|██████▎   | 63/100 [05:10<02:16,  3.69s/it, accuracy=0.443, ce=1.36, prior_time=0, train_time=3.03]Step:  64%|██████▍   | 64/100 [05:10<02:06,  3.51s/it, accuracy=0.443, ce=1.36, prior_time=0, train_time=3.03]Step:  64%|██████▍   | 64/100 [05:15<02:06,  3.51s/it, accuracy=0.404, ce=1.5, prior_time=2.19, train_time=3.1]Step:  65%|██████▌   | 65/100 [05:15<02:21,  4.05s/it, accuracy=0.404, ce=1.5, prior_time=2.19, train_time=3.1]Step:  65%|██████▌   | 65/100 [05:18<02:21,  4.05s/it, accuracy=0.482, ce=1.29, prior_time=0, train_time=3.04] Step:  66%|██████▌   | 66/100 [05:18<02:08,  3.77s/it, accuracy=0.482, ce=1.29, prior_time=0, train_time=3.04]Step:  66%|██████▌   | 66/100 [05:22<02:08,  3.77s/it, accuracy=0.396, ce=1.5, prior_time=0, train_time=3.17] Step:  67%|██████▋   | 67/100 [05:22<01:58,  3.60s/it, accuracy=0.396, ce=1.5, prior_time=0, train_time=3.17]Step:  67%|██████▋   | 67/100 [05:25<01:58,  3.60s/it, accuracy=0.419, ce=1.45, prior_time=0, train_time=3.18]Step:  68%|██████▊   | 68/100 [05:25<01:51,  3.49s/it, accuracy=0.419, ce=1.45, prior_time=0, train_time=3.18]Step:  68%|██████▊   | 68/100 [05:29<01:51,  3.49s/it, accuracy=0.457, ce=1.34, prior_time=0, train_time=3.66]Step:  69%|██████▉   | 69/100 [05:29<01:50,  3.56s/it, accuracy=0.457, ce=1.34, prior_time=0, train_time=3.66]Step:  69%|██████▉   | 69/100 [05:32<01:50,  3.56s/it, accuracy=0.46, ce=1.34, prior_time=0.53, train_time=2.97]Step:  70%|███████   | 70/100 [05:32<01:46,  3.55s/it, accuracy=0.46, ce=1.34, prior_time=0.53, train_time=2.97]Step:  70%|███████   | 70/100 [05:36<01:46,  3.55s/it, accuracy=0.468, ce=1.34, prior_time=0, train_time=3.77]  Step:  71%|███████   | 71/100 [05:36<01:45,  3.64s/it, accuracy=0.468, ce=1.34, prior_time=0, train_time=3.77]Step:  71%|███████   | 71/100 [05:39<01:45,  3.64s/it, accuracy=0.457, ce=1.35, prior_time=0, train_time=2.87]Step:  72%|███████▏  | 72/100 [05:39<01:35,  3.43s/it, accuracy=0.457, ce=1.35, prior_time=0, train_time=2.87]Step:  72%|███████▏  | 72/100 [05:51<01:35,  3.43s/it, accuracy=0.485, ce=1.3, prior_time=7.42, train_time=4.34]Step:  73%|███████▎  | 73/100 [05:51<02:40,  5.94s/it, accuracy=0.485, ce=1.3, prior_time=7.42, train_time=4.34]Step:  73%|███████▎  | 73/100 [05:54<02:40,  5.94s/it, accuracy=0.45, ce=1.37, prior_time=0, train_time=3.41]   Step:  74%|███████▍  | 74/100 [05:54<02:15,  5.20s/it, accuracy=0.45, ce=1.37, prior_time=0, train_time=3.41]Step:  74%|███████▍  | 74/100 [05:58<02:15,  5.20s/it, accuracy=0.399, ce=1.5, prior_time=0, train_time=3.43]Step:  75%|███████▌  | 75/100 [05:58<01:57,  4.69s/it, accuracy=0.399, ce=1.5, prior_time=0, train_time=3.43]Step:  75%|███████▌  | 75/100 [06:01<01:57,  4.69s/it, accuracy=0.417, ce=1.46, prior_time=0, train_time=3.05]Step:  76%|███████▌  | 76/100 [06:01<01:41,  4.21s/it, accuracy=0.417, ce=1.46, prior_time=0, train_time=3.05]Step:  76%|███████▌  | 76/100 [06:04<01:41,  4.21s/it, accuracy=0.419, ce=1.44, prior_time=0, train_time=2.77]Step:  77%|███████▋  | 77/100 [06:04<01:27,  3.80s/it, accuracy=0.419, ce=1.44, prior_time=0, train_time=2.77]Step:  77%|███████▋  | 77/100 [06:07<01:27,  3.80s/it, accuracy=0.405, ce=1.46, prior_time=0, train_time=3.06]Step:  78%|███████▊  | 78/100 [06:07<01:19,  3.59s/it, accuracy=0.405, ce=1.46, prior_time=0, train_time=3.06]Step:  78%|███████▊  | 78/100 [06:10<01:19,  3.59s/it, accuracy=0.427, ce=1.4, prior_time=0, train_time=3.17] Step:  79%|███████▉  | 79/100 [06:10<01:13,  3.48s/it, accuracy=0.427, ce=1.4, prior_time=0, train_time=3.17]Step:  79%|███████▉  | 79/100 [06:13<01:13,  3.48s/it, accuracy=0.452, ce=1.36, prior_time=0, train_time=3.22]Step:  80%|████████  | 80/100 [06:13<01:08,  3.42s/it, accuracy=0.452, ce=1.36, prior_time=0, train_time=3.22]Step:  80%|████████  | 80/100 [06:22<01:08,  3.42s/it, accuracy=0.407, ce=1.49, prior_time=5.04, train_time=3.68]Step:  81%|████████  | 81/100 [06:22<01:35,  5.03s/it, accuracy=0.407, ce=1.49, prior_time=5.04, train_time=3.68]Step:  81%|████████  | 81/100 [06:31<01:35,  5.03s/it, accuracy=0.472, ce=1.3, prior_time=5.34, train_time=3.21] Step:  82%|████████▏ | 82/100 [06:31<01:49,  6.10s/it, accuracy=0.472, ce=1.3, prior_time=5.34, train_time=3.21]Step:  82%|████████▏ | 82/100 [06:34<01:49,  6.10s/it, accuracy=0.442, ce=1.39, prior_time=0, train_time=3.5]   Step:  83%|████████▎ | 83/100 [06:34<01:30,  5.33s/it, accuracy=0.442, ce=1.39, prior_time=0, train_time=3.5]Step:  83%|████████▎ | 83/100 [06:37<01:30,  5.33s/it, accuracy=0.468, ce=1.34, prior_time=0, train_time=3.22]Step:  84%|████████▍ | 84/100 [06:37<01:15,  4.71s/it, accuracy=0.468, ce=1.34, prior_time=0, train_time=3.22]Step:  84%|████████▍ | 84/100 [06:40<01:15,  4.71s/it, accuracy=0.487, ce=1.25, prior_time=0, train_time=2.82]Step:  85%|████████▌ | 85/100 [06:40<01:02,  4.15s/it, accuracy=0.487, ce=1.25, prior_time=0, train_time=2.82]Step:  85%|████████▌ | 85/100 [06:43<01:02,  4.15s/it, accuracy=0.407, ce=1.51, prior_time=0, train_time=3.12]Step:  86%|████████▌ | 86/100 [06:43<00:54,  3.86s/it, accuracy=0.407, ce=1.51, prior_time=0, train_time=3.12]Step:  86%|████████▌ | 86/100 [06:46<00:54,  3.86s/it, accuracy=0.455, ce=1.34, prior_time=0, train_time=2.49]Step:  87%|████████▋ | 87/100 [06:46<00:44,  3.46s/it, accuracy=0.455, ce=1.34, prior_time=0, train_time=2.49]Step:  87%|████████▋ | 87/100 [06:49<00:44,  3.46s/it, accuracy=0.452, ce=1.38, prior_time=0, train_time=2.89]Step:  88%|████████▊ | 88/100 [06:49<00:39,  3.31s/it, accuracy=0.452, ce=1.38, prior_time=0, train_time=2.89]Step:  88%|████████▊ | 88/100 [06:52<00:39,  3.31s/it, accuracy=0.449, ce=1.38, prior_time=0, train_time=2.9] Step:  89%|████████▉ | 89/100 [06:52<00:35,  3.21s/it, accuracy=0.449, ce=1.38, prior_time=0, train_time=2.9]Step:  89%|████████▉ | 89/100 [07:05<00:35,  3.21s/it, accuracy=0.447, ce=1.32, prior_time=10.4, train_time=3]Step:  90%|█████████ | 90/100 [07:05<01:02,  6.29s/it, accuracy=0.447, ce=1.32, prior_time=10.4, train_time=3]Step:  90%|█████████ | 90/100 [07:08<01:02,  6.29s/it, accuracy=0.437, ce=1.41, prior_time=0, train_time=2.89]Step:  91%|█████████ | 91/100 [07:08<00:47,  5.28s/it, accuracy=0.437, ce=1.41, prior_time=0, train_time=2.89]Step:  91%|█████████ | 91/100 [07:11<00:47,  5.28s/it, accuracy=0.475, ce=1.3, prior_time=0, train_time=2.7]  Step:  92%|█████████▏| 92/100 [07:11<00:36,  4.52s/it, accuracy=0.475, ce=1.3, prior_time=0, train_time=2.7]Step:  92%|█████████▏| 92/100 [07:14<00:36,  4.52s/it, accuracy=0.487, ce=1.32, prior_time=0, train_time=3.15]Step:  93%|█████████▎| 93/100 [07:14<00:28,  4.13s/it, accuracy=0.487, ce=1.32, prior_time=0, train_time=3.15]Step:  93%|█████████▎| 93/100 [07:18<00:28,  4.13s/it, accuracy=0.431, ce=1.37, prior_time=0, train_time=3.96]Step:  94%|█████████▍| 94/100 [07:18<00:24,  4.10s/it, accuracy=0.431, ce=1.37, prior_time=0, train_time=3.96]Step:  94%|█████████▍| 94/100 [07:21<00:24,  4.10s/it, accuracy=0.475, ce=1.28, prior_time=0, train_time=3.1] Step:  95%|█████████▌| 95/100 [07:21<00:19,  3.81s/it, accuracy=0.475, ce=1.28, prior_time=0, train_time=3.1]Step:  95%|█████████▌| 95/100 [07:25<00:19,  3.81s/it, accuracy=0.465, ce=1.28, prior_time=0, train_time=3.18]Step:  96%|█████████▌| 96/100 [07:25<00:14,  3.64s/it, accuracy=0.465, ce=1.28, prior_time=0, train_time=3.18]Step:  96%|█████████▌| 96/100 [07:28<00:14,  3.64s/it, accuracy=0.449, ce=1.38, prior_time=0, train_time=2.95]Step:  97%|█████████▋| 97/100 [07:28<00:10,  3.44s/it, accuracy=0.449, ce=1.38, prior_time=0, train_time=2.95]Step:  97%|█████████▋| 97/100 [07:49<00:10,  3.44s/it, accuracy=0.479, ce=1.38, prior_time=18.3, train_time=3.03]Step:  98%|█████████▊| 98/100 [07:49<00:17,  8.81s/it, accuracy=0.479, ce=1.38, prior_time=18.3, train_time=3.03]Step:  98%|█████████▊| 98/100 [07:52<00:17,  8.81s/it, accuracy=0.396, ce=1.51, prior_time=0, train_time=3.04]   Step:  99%|█████████▉| 99/100 [07:52<00:07,  7.09s/it, accuracy=0.396, ce=1.51, prior_time=0, train_time=3.04]Step:  99%|█████████▉| 99/100 [07:54<00:07,  7.09s/it, accuracy=0.464, ce=1.34, prior_time=0, train_time=2.41]Step: 100%|██████████| 100/100 [07:55<00:00,  5.80s/it, accuracy=0.464, ce=1.34, prior_time=0, train_time=2.41]Step: 100%|██████████| 100/100 [07:55<00:00,  4.75s/it, accuracy=0.464, ce=1.34, prior_time=0, train_time=2.41]
+main:610:610 [0] NCCL INFO comm 0x39860720 rank 0 nranks 1 cudaDev 0 busId 33000 - Destroy COMPLETE
+terminate called without an active exception
+terminate called without an active exception
+terminate called without an active exception
+terminate called without an active exception
+terminate called without an active exception
+terminate called without an active exception
+main:610:610 [0] NCCL INFO ENV/Plugin: Closing env plugin ncclEnvDefault
+--- checkpoints written:
+total 431056
+drwxr-xr-x. 2 root root      4096 Aug  5 17:29 .
+drwxr-xr-x. 3 root root      4096 Aug  5 17:25 ..
+-rw-r--r--. 1 root root 220695800 Aug  5 17:29 step-100.ckpt
+-rw-r--r--. 1 root root 220694437 Aug  5 17:25 step-50.ckpt
+================================
+Execution Summary
+================================
+Total time: 848s
+User code execution time: 820s
+Completed at Wed Aug  5 05:34:26 PM UTC 2026
+================================

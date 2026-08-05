@@ -1,0 +1,1369 @@
+Root python environment activated successfully
+Environment setup started at Wed Aug  5 05:20:33 PM UTC 2026
+Hyperparameters path: /Workspace/Users/forrest.murray@databricks.com/.air/cli_launch/air-lab-tabicl-pol/tabicl-pol-stage1-8xh100_84ea2457c44e464e/training_config.yaml
+Inspecting tarball at /Workspace/Users/forrest.murray@databricks.com/.air/repo_snapshots/databricks-air-lab/databricks-air-lab_20260805_131947.tar.gz...
+tar: Ignoring unknown extended header keyword 'LIBARCHIVE.xattr.com.apple.provenance'
+tar: Ignoring unknown extended header keyword 'LIBARCHIVE.xattr.com.apple.provenance'
+tar: Ignoring unknown extended header keyword 'LIBARCHIVE.xattr.com.apple.provenance'
+Extracting code_source into /databricks/code_source...
+tar: Ignoring unknown extended header keyword 'LIBARCHIVE.xattr.com.apple.provenance'
+tar: Ignoring unknown extended header keyword 'LIBARCHIVE.xattr.com.apple.provenance'
+tar: Ignoring unknown extended header keyword 'LIBARCHIVE.xattr.com.apple.provenance'
+tar: Ignoring unknown extended header keyword 'LIBARCHIVE.xattr.com.apple.provenance'
+tar: Ignoring unknown extended header keyword 'LIBARCHIVE.xattr.com.apple.provenance'
+Tarball extraction completed in 1s
+Code source databricks-air-lab available at /databricks/code_source/databricks-air-lab
+requirements.yaml path: /Workspace/Users/forrest.murray@databricks.com/.air/cli_launch/air-lab-tabicl-pol/tabicl-pol-stage1-8xh100_84ea2457c44e464e/requirements.yaml
+uv not found in base environment; attempting to install it...
+uv installed.
+Installing dependencies...
+Installing 4 requirements.yaml dependencies with dependency resolution (via uv)...
+Using Python 3.12.3 environment at: /databricks/python3
+   Updating https://github.com/soda-inria/tabicl (HEAD)
+    Updated https://github.com/soda-inria/tabicl (46b91961db4f8873dd049ec09990698a435e1e29)
+Resolved 73 packages in 3.50s
+Downloading scikit-learn (8.7MiB)
+Downloading networkx (2.0MiB)
+Downloading nvidia-cuda-runtime (2.1MiB)
+Downloading nvidia-cufile (1.2MiB)
+Downloading nvidia-cufft (204.2MiB)
+Downloading nvidia-cuda-cupti (10.2MiB)
+Downloading nvidia-nvshmem-cu13 (57.6MiB)
+Downloading scipy (33.7MiB)
+Downloading cuda-bindings (6.3MiB)
+Downloading nvidia-nccl-cu13 (196.4MiB)
+Downloading nvidia-nvjitlink (38.9MiB)
+Downloading wandb (25.3MiB)
+Downloading nvidia-cudnn-cu13 (349.2MiB)
+Downloading nvidia-curand (56.8MiB)
+Downloading nvidia-cusolver (191.6MiB)
+Downloading nvidia-cuda-nvrtc (86.0MiB)
+Downloading triton (188.6MiB)
+Downloading nvidia-cublas (403.5MiB)
+Downloading hf-xet (4.3MiB)
+Downloading sympy (6.0MiB)
+Downloading torch (502.2MiB)
+Downloading nvidia-cusparselt-cu13 (162.3MiB)
+Downloading nvidia-cusparse (139.2MiB)
+Downloading xgboost (54.9MiB)
+Downloading transformers (11.1MiB)
+   Building tabicl @ git+https://github.com/soda-inria/tabicl@46b91961db4f8873dd049ec09990698a435e1e29
+      Built tabicl @ git+https://github.com/soda-inria/tabicl@46b91961db4f8873dd049ec09990698a435e1e29
+ Downloaded nvidia-cufile
+ Downloaded nvidia-cuda-runtime
+ Downloaded hf-xet
+ Downloaded networkx
+ Downloaded cuda-bindings
+ Downloaded nvidia-cuda-cupti
+ Downloaded scikit-learn
+ Downloaded sympy
+ Downloaded scipy
+ Downloaded wandb
+ Downloaded nvidia-nvjitlink
+ Downloaded transformers
+ Downloaded nvidia-curand
+ Downloaded xgboost
+ Downloaded nvidia-nvshmem-cu13
+ Downloaded nvidia-cuda-nvrtc
+ Downloaded nvidia-cusparse
+ Downloaded nvidia-cusparselt-cu13
+ Downloaded nvidia-cusolver
+ Downloaded nvidia-nccl-cu13
+ Downloaded nvidia-cufft
+ Downloaded triton
+ Downloaded nvidia-cudnn-cu13
+ Downloaded nvidia-cublas
+ Downloaded torch
+Prepared 40 packages in 16.10s
+Uninstalled 4 packages in 34ms
+Installed 40 packages in 642ms
+ - click==8.1.8
+ + click==8.4.2
+ + cuda-bindings==13.3.1
+ + cuda-pathfinder==1.6.0
+ + cuda-toolkit==13.0.3.0
+ + einops==0.8.2
+ - hf-xet==1.2.0
+ + hf-xet==1.6.0
+ - huggingface-hub==1.2.4
+ + huggingface-hub==1.26.0
+ + mpmath==1.3.0
+ + narwhals==2.24.0
+ + networkx==3.6.1
+ + nvidia-cublas==13.1.1.3
+ + nvidia-cuda-cupti==13.0.85
+ + nvidia-cuda-nvrtc==13.0.88
+ + nvidia-cuda-runtime==13.0.96
+ + nvidia-cudnn-cu13==9.20.0.48
+ + nvidia-cufft==12.0.0.61
+ + nvidia-cufile==1.15.1.6
+ + nvidia-curand==10.4.0.35
+ + nvidia-cusolver==12.0.4.66
+ + nvidia-cusparse==12.6.3.3
+ + nvidia-cusparselt-cu13==0.8.1
+ + nvidia-nccl-cu13==2.29.7
+ + nvidia-nvjitlink==13.3.33
+ + nvidia-nvshmem-cu13==3.4.5
+ + nvidia-nvtx==13.0.85
+ + platformdirs==4.11.0
+ - regex==2024.11.6
+ + regex==2026.7.19
+ + safetensors==0.8.0
+ + scikit-learn==1.9.0
+ + scipy==1.18.0
+ + sentry-sdk==2.66.1
+ + setuptools==83.0.0
+ + sympy==1.14.0
+ + tabicl==2.1.1 (from git+https://github.com/soda-inria/tabicl@46b91961db4f8873dd049ec09990698a435e1e29)
+ + torch==2.13.0
+ + transformers==5.14.1
+ + triton==3.7.1
+ + typer==0.27.1
+ + wandb==0.28.1
+ + xgboost==3.4.0
+warning: The package `tabicl @ git+https://github.com/soda-inria/tabicl@46b91961db4f8873dd049ec09990698a435e1e29` does not have an extra named `pretraining`
+Successfully installed all dependencies
+Dependency installation completed in 24s
+================================
+Environment setup completed at Wed Aug  5 05:20:58 PM UTC 2026
+Environment setup time: 25s
+================================
+Wed Aug  5 17:20:59 2026       
++-----------------------------------------------------------------------------------------+
+| NVIDIA-SMI 580.126.16             Driver Version: 580.126.16     CUDA Version: 13.0     |
++-----------------------------------------+------------------------+----------------------+
+| GPU  Name                 Persistence-M | Bus-Id          Disp.A | Volatile Uncorr. ECC |
+| Fan  Temp   Perf          Pwr:Usage/Cap |           Memory-Usage | GPU-Util  Compute M. |
+|                                         |                        |               MIG M. |
+|=========================================+========================+======================|
+|   0  NVIDIA H100 80GB HBM3          On  |   00000000:53:00.0 Off |                    0 |
+| N/A   37C    P0             72W /  700W |       0MiB /  81559MiB |      0%      Default |
+|                                         |                        |             Disabled |
++-----------------------------------------+------------------------+----------------------+
+|   1  NVIDIA H100 80GB HBM3          On  |   00000000:64:00.0 Off |                    0 |
+| N/A   37C    P0             73W /  700W |       0MiB /  81559MiB |      0%      Default |
+|                                         |                        |             Disabled |
++-----------------------------------------+------------------------+----------------------+
+|   2  NVIDIA H100 80GB HBM3          On  |   00000000:75:00.0 Off |                    0 |
+| N/A   37C    P0             71W /  700W |       0MiB /  81559MiB |      0%      Default |
+|                                         |                        |             Disabled |
++-----------------------------------------+------------------------+----------------------+
+|   3  NVIDIA H100 80GB HBM3          On  |   00000000:86:00.0 Off |                    0 |
+| N/A   38C    P0             72W /  700W |       0MiB /  81559MiB |      0%      Default |
+|                                         |                        |             Disabled |
++-----------------------------------------+------------------------+----------------------+
+|   4  NVIDIA H100 80GB HBM3          On  |   00000000:97:00.0 Off |                    0 |
+| N/A   37C    P0             70W /  700W |       0MiB /  81559MiB |      0%      Default |
+|                                         |                        |             Disabled |
++-----------------------------------------+------------------------+----------------------+
+|   5  NVIDIA H100 80GB HBM3          On  |   00000000:A8:00.0 Off |                    0 |
+| N/A   35C    P0             72W /  700W |       0MiB /  81559MiB |      0%      Default |
+|                                         |                        |             Disabled |
++-----------------------------------------+------------------------+----------------------+
+|   6  NVIDIA H100 80GB HBM3          On  |   00000000:B9:00.0 Off |                    0 |
+| N/A   36C    P0             71W /  700W |       0MiB /  81559MiB |      0%      Default |
+|                                         |                        |             Disabled |
++-----------------------------------------+------------------------+----------------------+
+|   7  NVIDIA H100 80GB HBM3          On  |   00000000:CA:00.0 Off |                    0 |
+| N/A   35C    P0             72W /  700W |       0MiB /  81559MiB |      0%      Default |
+|                                         |                        |             Disabled |
++-----------------------------------------+------------------------+----------------------+
+
++-----------------------------------------------------------------------------------------+
+| Processes:                                                                              |
+|  GPU   GI   CI              PID   Type   Process name                        GPU Memory |
+|        ID   ID                                                               Usage      |
+|=========================================================================================|
+|  No running processes found                                                             |
++-----------------------------------------------------------------------------------------+
+torch 2.13.0+cu130 | cuda True | gpus 8
+cpus 192
+W0805 17:21:07.952000 1188 torch/distributed/run.py:874] 
+W0805 17:21:07.952000 1188 torch/distributed/run.py:874] *****************************************
+W0805 17:21:07.952000 1188 torch/distributed/run.py:874] Setting OMP_NUM_THREADS environment variable for each process to be 1 in default, to avoid your system being overloaded, please further tune the variable for optimal performance in your application as needed. 
+W0805 17:21:07.952000 1188 torch/distributed/run.py:874] *****************************************
+/databricks/python3/lib/python3.12/site-packages/huggingface_hub/constants.py:298: FutureWarning: The `HF_HUB_ENABLE_HF_TRANSFER` environment variable is deprecated as 'hf_transfer' is not used anymore. Please use `HF_XET_HIGH_PERFORMANCE` instead to enable high performance transfer with Xet. Visit https://huggingface.co/docs/huggingface_hub/package_reference/environment_variables#hfxethighperformance for more details.
+  warnings.warn(
+/databricks/python3/lib/python3.12/site-packages/huggingface_hub/constants.py:298: FutureWarning: The `HF_HUB_ENABLE_HF_TRANSFER` environment variable is deprecated as 'hf_transfer' is not used anymore. Please use `HF_XET_HIGH_PERFORMANCE` instead to enable high performance transfer with Xet. Visit https://huggingface.co/docs/huggingface_hub/package_reference/environment_variables#hfxethighperformance for more details.
+  warnings.warn(
+/databricks/python3/lib/python3.12/site-packages/huggingface_hub/constants.py:298: FutureWarning: The `HF_HUB_ENABLE_HF_TRANSFER` environment variable is deprecated as 'hf_transfer' is not used anymore. Please use `HF_XET_HIGH_PERFORMANCE` instead to enable high performance transfer with Xet. Visit https://huggingface.co/docs/huggingface_hub/package_reference/environment_variables#hfxethighperformance for more details.
+  warnings.warn(
+/databricks/python3/lib/python3.12/site-packages/huggingface_hub/constants.py:298: FutureWarning: The `HF_HUB_ENABLE_HF_TRANSFER` environment variable is deprecated as 'hf_transfer' is not used anymore. Please use `HF_XET_HIGH_PERFORMANCE` instead to enable high performance transfer with Xet. Visit https://huggingface.co/docs/huggingface_hub/package_reference/environment_variables#hfxethighperformance for more details.
+  warnings.warn(
+/databricks/python3/lib/python3.12/site-packages/huggingface_hub/constants.py:298: FutureWarning: The `HF_HUB_ENABLE_HF_TRANSFER` environment variable is deprecated as 'hf_transfer' is not used anymore. Please use `HF_XET_HIGH_PERFORMANCE` instead to enable high performance transfer with Xet. Visit https://huggingface.co/docs/huggingface_hub/package_reference/environment_variables#hfxethighperformance for more details.
+  warnings.warn(
+/databricks/python3/lib/python3.12/site-packages/huggingface_hub/constants.py:298: FutureWarning: The `HF_HUB_ENABLE_HF_TRANSFER` environment variable is deprecated as 'hf_transfer' is not used anymore. Please use `HF_XET_HIGH_PERFORMANCE` instead to enable high performance transfer with Xet. Visit https://huggingface.co/docs/huggingface_hub/package_reference/environment_variables#hfxethighperformance for more details.
+  warnings.warn(
+/databricks/python3/lib/python3.12/site-packages/huggingface_hub/constants.py:298: FutureWarning: The `HF_HUB_ENABLE_HF_TRANSFER` environment variable is deprecated as 'hf_transfer' is not used anymore. Please use `HF_XET_HIGH_PERFORMANCE` instead to enable high performance transfer with Xet. Visit https://huggingface.co/docs/huggingface_hub/package_reference/environment_variables#hfxethighperformance for more details.
+  warnings.warn(
+/databricks/python3/lib/python3.12/site-packages/huggingface_hub/constants.py:298: FutureWarning: The `HF_HUB_ENABLE_HF_TRANSFER` environment variable is deprecated as 'hf_transfer' is not used anymore. Please use `HF_XET_HIGH_PERFORMANCE` instead to enable high performance transfer with Xet. Visit https://huggingface.co/docs/huggingface_hub/package_reference/environment_variables#hfxethighperformance for more details.
+  warnings.warn(
+DDP training with 8 processes
+Per-GPU batch size: 8
+Model has 27552250 parameters.
+/databricks/python3/lib/python3.12/site-packages/tabicl/train/_run.py:261: FutureWarning: `broadcast_buffers` is deprecated. Use `forward_sync_buffers` instead. IMPORTANT: unlike `broadcast_buffers=False`, `forward_sync_buffers=False` still syncs buffers at init. If you rely on buffers NOT being synced at init (e.g. rank-local buffers), keep using `broadcast_buffers=False` until `init_sync_buffers` is available.
+  self.model = DDP(model, device_ids=[self.ddp_local_rank], broadcast_buffers=False)
+/databricks/python3/lib/python3.12/site-packages/tabicl/train/_run.py:261: FutureWarning: `broadcast_buffers` is deprecated. Use `forward_sync_buffers` instead. IMPORTANT: unlike `broadcast_buffers=False`, `forward_sync_buffers=False` still syncs buffers at init. If you rely on buffers NOT being synced at init (e.g. rank-local buffers), keep using `broadcast_buffers=False` until `init_sync_buffers` is available.
+  self.model = DDP(model, device_ids=[self.ddp_local_rank], broadcast_buffers=False)
+/databricks/python3/lib/python3.12/site-packages/tabicl/train/_run.py:261: FutureWarning: `broadcast_buffers` is deprecated. Use `forward_sync_buffers` instead. IMPORTANT: unlike `broadcast_buffers=False`, `forward_sync_buffers=False` still syncs buffers at init. If you rely on buffers NOT being synced at init (e.g. rank-local buffers), keep using `broadcast_buffers=False` until `init_sync_buffers` is available.
+  self.model = DDP(model, device_ids=[self.ddp_local_rank], broadcast_buffers=False)
+/databricks/python3/lib/python3.12/site-packages/tabicl/train/_run.py:261: FutureWarning: `broadcast_buffers` is deprecated. Use `forward_sync_buffers` instead. IMPORTANT: unlike `broadcast_buffers=False`, `forward_sync_buffers=False` still syncs buffers at init. If you rely on buffers NOT being synced at init (e.g. rank-local buffers), keep using `broadcast_buffers=False` until `init_sync_buffers` is available.
+  self.model = DDP(model, device_ids=[self.ddp_local_rank], broadcast_buffers=False)
+/databricks/python3/lib/python3.12/site-packages/tabicl/train/_run.py:261: FutureWarning: `broadcast_buffers` is deprecated. Use `forward_sync_buffers` instead. IMPORTANT: unlike `broadcast_buffers=False`, `forward_sync_buffers=False` still syncs buffers at init. If you rely on buffers NOT being synced at init (e.g. rank-local buffers), keep using `broadcast_buffers=False` until `init_sync_buffers` is available.
+  self.model = DDP(model, device_ids=[self.ddp_local_rank], broadcast_buffers=False)
+/databricks/python3/lib/python3.12/site-packages/tabicl/train/_run.py:261: FutureWarning: `broadcast_buffers` is deprecated. Use `forward_sync_buffers` instead. IMPORTANT: unlike `broadcast_buffers=False`, `forward_sync_buffers=False` still syncs buffers at init. If you rely on buffers NOT being synced at init (e.g. rank-local buffers), keep using `broadcast_buffers=False` until `init_sync_buffers` is available.
+  self.model = DDP(model, device_ids=[self.ddp_local_rank], broadcast_buffers=False)
+/databricks/python3/lib/python3.12/site-packages/tabicl/train/_run.py:261: FutureWarning: `broadcast_buffers` is deprecated. Use `forward_sync_buffers` instead. IMPORTANT: unlike `broadcast_buffers=False`, `forward_sync_buffers=False` still syncs buffers at init. If you rely on buffers NOT being synced at init (e.g. rank-local buffers), keep using `broadcast_buffers=False` until `init_sync_buffers` is available.
+  self.model = DDP(model, device_ids=[self.ddp_local_rank], broadcast_buffers=False)
+/databricks/python3/lib/python3.12/site-packages/tabicl/train/_run.py:261: FutureWarning: `broadcast_buffers` is deprecated. Use `forward_sync_buffers` instead. IMPORTANT: unlike `broadcast_buffers=False`, `forward_sync_buffers=False` still syncs buffers at init. If you rely on buffers NOT being synced at init (e.g. rank-local buffers), keep using `broadcast_buffers=False` until `init_sync_buffers` is available.
+  self.model = DDP(model, device_ids=[self.ddp_local_rank], broadcast_buffers=False)
+main:1261:1261 [0] NCCL INFO ENV/Plugin: Could not find: libnccl-env.so
+main:1261:1261 [0] NCCL INFO Bootstrap: Using eth0:10.125.201.29<0>
+main:1261:1261 [0] NCCL INFO cudaDriverVersion 13000
+main:1261:1261 [0] NCCL INFO NCCL version 2.29.7+cuda13.2
+main:1261:1261 [0] NCCL INFO NCCL git version stable b81d6a5a3
+main:1262:1262 [1] NCCL INFO ENV/Plugin: Could not find: libnccl-env.so
+main:1264:1264 [3] NCCL INFO ENV/Plugin: Could not find: libnccl-env.so
+main:1262:1262 [1] NCCL INFO cudaDriverVersion 13000
+main:1264:1264 [3] NCCL INFO cudaDriverVersion 13000
+main:1267:1267 [6] NCCL INFO ENV/Plugin: Could not find: libnccl-env.so
+main:1267:1267 [6] NCCL INFO cudaDriverVersion 13000
+main:1268:1268 [7] NCCL INFO ENV/Plugin: Could not find: libnccl-env.so
+main:1268:1268 [7] NCCL INFO cudaDriverVersion 13000
+main:1265:1265 [4] NCCL INFO ENV/Plugin: Could not find: libnccl-env.so
+main:1266:1266 [5] NCCL INFO ENV/Plugin: Could not find: libnccl-env.so
+main:1266:1266 [5] NCCL INFO cudaDriverVersion 13000
+main:1265:1265 [4] NCCL INFO cudaDriverVersion 13000
+main:1263:1263 [2] NCCL INFO ENV/Plugin: Could not find: libnccl-env.so
+main:1263:1263 [2] NCCL INFO cudaDriverVersion 13000
+main:1263:1263 [2] NCCL INFO Bootstrap: Using eth0:10.125.201.29<0>
+main:1263:1263 [2] NCCL INFO NCCL version 2.29.7+cuda13.2
+main:1263:1263 [2] NCCL INFO NCCL git version stable b81d6a5a3
+main:1262:1262 [1] NCCL INFO Bootstrap: Using eth0:10.125.201.29<0>
+main:1262:1262 [1] NCCL INFO NCCL version 2.29.7+cuda13.2
+main:1262:1262 [1] NCCL INFO NCCL git version stable b81d6a5a3
+main:1264:1264 [3] NCCL INFO Bootstrap: Using eth0:10.125.201.29<0>
+main:1264:1264 [3] NCCL INFO NCCL version 2.29.7+cuda13.2
+main:1264:1264 [3] NCCL INFO NCCL git version stable b81d6a5a3
+main:1261:1261 [0] NCCL INFO Comm config Blocking set to 1
+main:1267:1267 [6] NCCL INFO Bootstrap: Using eth0:10.125.201.29<0>
+main:1266:1266 [5] NCCL INFO Bootstrap: Using eth0:10.125.201.29<0>
+main:1266:1266 [5] NCCL INFO NCCL version 2.29.7+cuda13.2
+main:1267:1267 [6] NCCL INFO NCCL version 2.29.7+cuda13.2
+main:1266:1266 [5] NCCL INFO NCCL git version stable b81d6a5a3
+main:1267:1267 [6] NCCL INFO NCCL git version stable b81d6a5a3
+main:1268:1268 [7] NCCL INFO Bootstrap: Using eth0:10.125.201.29<0>
+main:1265:1265 [4] NCCL INFO Bootstrap: Using eth0:10.125.201.29<0>
+main:1268:1268 [7] NCCL INFO NCCL version 2.29.7+cuda13.2
+main:1265:1265 [4] NCCL INFO NCCL version 2.29.7+cuda13.2
+main:1268:1268 [7] NCCL INFO NCCL git version stable b81d6a5a3
+main:1265:1265 [4] NCCL INFO NCCL git version stable b81d6a5a3
+main:1262:1262 [1] NCCL INFO Comm config Blocking set to 1
+main:1263:1263 [2] NCCL INFO Comm config Blocking set to 1
+main:1264:1264 [3] NCCL INFO Comm config Blocking set to 1
+main:1267:1267 [6] NCCL INFO Comm config Blocking set to 1
+main:1265:1265 [4] NCCL INFO Comm config Blocking set to 1
+main:1268:1268 [7] NCCL INFO Comm config Blocking set to 1
+main:1266:1266 [5] NCCL INFO Comm config Blocking set to 1
+main:1261:1261 [0] NCCL INFO NET/Plugin: Loaded net plugin Libfabric (v10)
+main:1262:1262 [1] NCCL INFO NET/Plugin: Loaded net plugin Libfabric (v10)
+main:1264:1264 [3] NCCL INFO NET/Plugin: Loaded net plugin Libfabric (v10)
+main:1261:1261 [0] NCCL INFO Successfully loaded external network plugin /opt/aws-ofi-nccl/install/lib/libnccl-net.so
+main:1262:1262 [1] NCCL INFO Successfully loaded external network plugin /opt/aws-ofi-nccl/install/lib/libnccl-net.so
+main:1266:1266 [5] NCCL INFO NET/Plugin: Loaded net plugin Libfabric (v10)
+main:1265:1265 [4] NCCL INFO NET/Plugin: Loaded net plugin Libfabric (v10)
+main:1264:1264 [3] NCCL INFO Successfully loaded external network plugin /opt/aws-ofi-nccl/install/lib/libnccl-net.so
+main:1265:1265 [4] NCCL INFO Successfully loaded external network plugin /opt/aws-ofi-nccl/install/lib/libnccl-net.so
+main:1266:1266 [5] NCCL INFO Successfully loaded external network plugin /opt/aws-ofi-nccl/install/lib/libnccl-net.so
+main:1262:1262 [1] NCCL INFO NET/OFI Initializing aws-ofi-nccl 1.15.0
+main:1261:1261 [0] NCCL INFO NET/OFI Initializing aws-ofi-nccl 1.15.0
+main:1264:1264 [3] NCCL INFO NET/OFI Initializing aws-ofi-nccl 1.15.0
+main:1262:1262 [1] NCCL INFO NET/OFI Using Libfabric version 2.1
+main:1261:1261 [0] NCCL INFO NET/OFI Using Libfabric version 2.1
+main:1264:1264 [3] NCCL INFO NET/OFI Using Libfabric version 2.1
+main:1267:1267 [6] NCCL INFO NET/Plugin: Loaded net plugin Libfabric (v10)
+main:1265:1265 [4] NCCL INFO NET/OFI Initializing aws-ofi-nccl 1.15.0
+main:1266:1266 [5] NCCL INFO NET/OFI Initializing aws-ofi-nccl 1.15.0
+main:1265:1265 [4] NCCL INFO NET/OFI Using Libfabric version 2.1
+main:1266:1266 [5] NCCL INFO NET/OFI Using Libfabric version 2.1
+main:1267:1267 [6] NCCL INFO Successfully loaded external network plugin /opt/aws-ofi-nccl/install/lib/libnccl-net.so
+main:1267:1267 [6] NCCL INFO NET/OFI Initializing aws-ofi-nccl 1.15.0
+main:1267:1267 [6] NCCL INFO NET/OFI Using Libfabric version 2.1
+main:1263:1263 [2] NCCL INFO NET/Plugin: Loaded net plugin Libfabric (v10)
+main:1263:1263 [2] NCCL INFO Successfully loaded external network plugin /opt/aws-ofi-nccl/install/lib/libnccl-net.so
+main:1263:1263 [2] NCCL INFO NET/OFI Initializing aws-ofi-nccl 1.15.0
+main:1263:1263 [2] NCCL INFO NET/OFI Using Libfabric version 2.1
+main:1264:1264 [3] NCCL INFO NET/OFI Using CUDA driver version 13000 with runtime 12090
+main:1264:1264 [3] NCCL INFO NET/OFI Configuring AWS-specific options
+main:1264:1264 [3] NCCL INFO NET/OFI Setting provider_filter to efa
+main:1264:1264 [3] NCCL INFO NET/OFI Setting NCCL_NET_FORCE_FLUSH=0 since this platform does not require a network flush.
+main:1264:1264 [3] NCCL INFO NET/OFI Setting NCCL_NVLSTREE_MAX_CHUNKSIZE to 512KiB
+main:1264:1264 [3] NCCL INFO NET/OFI Setting NCCL_NVLS_CHUNKSIZE to 512KiB
+main:1264:1264 [3] NCCL INFO NET/OFI Internode latency set at 75.0 us
+main:1264:1264 [3] NCCL INFO NET/OFI Using transport protocol RDMA (platform set)
+main:1266:1266 [5] NCCL INFO NET/OFI Using CUDA driver version 13000 with runtime 12090
+main:1266:1266 [5] NCCL INFO NET/OFI Configuring AWS-specific options
+main:1266:1266 [5] NCCL INFO NET/OFI Setting provider_filter to efa
+main:1266:1266 [5] NCCL INFO NET/OFI Setting NCCL_NET_FORCE_FLUSH=0 since this platform does not require a network flush.
+main:1266:1266 [5] NCCL INFO NET/OFI Setting NCCL_NVLSTREE_MAX_CHUNKSIZE to 512KiB
+main:1266:1266 [5] NCCL INFO NET/OFI Setting NCCL_NVLS_CHUNKSIZE to 512KiB
+main:1266:1266 [5] NCCL INFO NET/OFI Internode latency set at 75.0 us
+main:1266:1266 [5] NCCL INFO NET/OFI Using transport protocol RDMA (platform set)
+main:1261:1261 [0] NCCL INFO NET/OFI Using CUDA driver version 13000 with runtime 12090
+main:1261:1261 [0] NCCL INFO NET/OFI Configuring AWS-specific options
+main:1261:1261 [0] NCCL INFO NET/OFI Setting provider_filter to efa
+main:1261:1261 [0] NCCL INFO NET/OFI Setting NCCL_NET_FORCE_FLUSH=0 since this platform does not require a network flush.
+main:1261:1261 [0] NCCL INFO NET/OFI Setting NCCL_NVLSTREE_MAX_CHUNKSIZE to 512KiB
+main:1261:1261 [0] NCCL INFO NET/OFI Setting NCCL_NVLS_CHUNKSIZE to 512KiB
+main:1261:1261 [0] NCCL INFO NET/OFI Internode latency set at 75.0 us
+main:1261:1261 [0] NCCL INFO NET/OFI Using transport protocol RDMA (platform set)
+main:1262:1262 [1] NCCL INFO NET/OFI Using CUDA driver version 13000 with runtime 12090
+main:1262:1262 [1] NCCL INFO NET/OFI Configuring AWS-specific options
+main:1262:1262 [1] NCCL INFO NET/OFI Setting provider_filter to efa
+main:1262:1262 [1] NCCL INFO NET/OFI Setting NCCL_NET_FORCE_FLUSH=0 since this platform does not require a network flush.
+main:1262:1262 [1] NCCL INFO NET/OFI Setting NCCL_NVLSTREE_MAX_CHUNKSIZE to 512KiB
+main:1262:1262 [1] NCCL INFO NET/OFI Setting NCCL_NVLS_CHUNKSIZE to 512KiB
+main:1262:1262 [1] NCCL INFO NET/OFI Internode latency set at 75.0 us
+main:1262:1262 [1] NCCL INFO NET/OFI Using transport protocol RDMA (platform set)
+main:1265:1265 [4] NCCL INFO NET/OFI Using CUDA driver version 13000 with runtime 12090
+main:1265:1265 [4] NCCL INFO NET/OFI Configuring AWS-specific options
+main:1265:1265 [4] NCCL INFO NET/OFI Setting provider_filter to efa
+main:1265:1265 [4] NCCL INFO NET/OFI Setting NCCL_NET_FORCE_FLUSH=0 since this platform does not require a network flush.
+main:1265:1265 [4] NCCL INFO NET/OFI Setting NCCL_NVLSTREE_MAX_CHUNKSIZE to 512KiB
+main:1265:1265 [4] NCCL INFO NET/OFI Setting NCCL_NVLS_CHUNKSIZE to 512KiB
+main:1265:1265 [4] NCCL INFO NET/OFI Internode latency set at 75.0 us
+main:1265:1265 [4] NCCL INFO NET/OFI Using transport protocol RDMA (platform set)
+main:1268:1268 [7] NCCL INFO NET/Plugin: Loaded net plugin Libfabric (v10)
+main:1268:1268 [7] NCCL INFO Successfully loaded external network plugin /opt/aws-ofi-nccl/install/lib/libnccl-net.so
+main:1268:1268 [7] NCCL INFO NET/OFI Initializing aws-ofi-nccl 1.15.0
+main:1268:1268 [7] NCCL INFO NET/OFI Using Libfabric version 2.1
+main:1263:1263 [2] NCCL INFO NET/OFI Using CUDA driver version 13000 with runtime 12090
+main:1263:1263 [2] NCCL INFO NET/OFI Configuring AWS-specific options
+main:1263:1263 [2] NCCL INFO NET/OFI Setting provider_filter to efa
+main:1263:1263 [2] NCCL INFO NET/OFI Setting NCCL_NET_FORCE_FLUSH=0 since this platform does not require a network flush.
+main:1263:1263 [2] NCCL INFO NET/OFI Setting NCCL_NVLSTREE_MAX_CHUNKSIZE to 512KiB
+main:1263:1263 [2] NCCL INFO NET/OFI Setting NCCL_NVLS_CHUNKSIZE to 512KiB
+main:1263:1263 [2] NCCL INFO NET/OFI Internode latency set at 75.0 us
+main:1263:1263 [2] NCCL INFO NET/OFI Using transport protocol RDMA (platform set)
+main:1267:1267 [6] NCCL INFO NET/OFI Using CUDA driver version 13000 with runtime 12090
+main:1267:1267 [6] NCCL INFO NET/OFI Configuring AWS-specific options
+main:1267:1267 [6] NCCL INFO NET/OFI Setting provider_filter to efa
+main:1267:1267 [6] NCCL INFO NET/OFI Setting NCCL_NET_FORCE_FLUSH=0 since this platform does not require a network flush.
+main:1267:1267 [6] NCCL INFO NET/OFI Setting NCCL_NVLSTREE_MAX_CHUNKSIZE to 512KiB
+main:1267:1267 [6] NCCL INFO NET/OFI Setting NCCL_NVLS_CHUNKSIZE to 512KiB
+main:1267:1267 [6] NCCL INFO NET/OFI Internode latency set at 75.0 us
+main:1267:1267 [6] NCCL INFO NET/OFI Using transport protocol RDMA (platform set)
+main:1268:1268 [7] NCCL INFO NET/OFI Using CUDA driver version 13000 with runtime 12090
+main:1268:1268 [7] NCCL INFO NET/OFI Configuring AWS-specific options
+main:1268:1268 [7] NCCL INFO NET/OFI Setting provider_filter to efa
+main:1268:1268 [7] NCCL INFO NET/OFI Setting NCCL_NET_FORCE_FLUSH=0 since this platform does not require a network flush.
+main:1268:1268 [7] NCCL INFO NET/OFI Setting NCCL_NVLSTREE_MAX_CHUNKSIZE to 512KiB
+main:1268:1268 [7] NCCL INFO NET/OFI Setting NCCL_NVLS_CHUNKSIZE to 512KiB
+main:1268:1268 [7] NCCL INFO NET/OFI Internode latency set at 75.0 us
+main:1268:1268 [7] NCCL INFO NET/OFI Using transport protocol RDMA (platform set)
+main:1262:1262 [1] NCCL INFO NET/OFI No eligible providers were found
+
+[2026-08-05 17:21:28] main:1262:1262 [1] int nccl_net_ofi_create_plugin(nccl_net_ofi_plugin_t**):219 NCCL WARN NET/OFI Failed to initialize rdma protocol
+
+[2026-08-05 17:21:28] main:1262:1262 [1] int nccl_net_ofi_create_plugin(nccl_net_ofi_plugin_t**):354 NCCL WARN NET/OFI aws-ofi-nccl initialization failed
+
+[2026-08-05 17:21:28] main:1262:1262 [1] ncclResult_t nccl_net_ofi_init_v2(ncclDebugLogger_t):155 NCCL WARN NET/OFI Initializing plugin failed
+main:1262:1262 [1] NCCL INFO plugin/net/net_v10.cc:82 -> 2
+main:1262:1262 [1] NCCL INFO Failed to initialize NET plugin Libfabric
+main:1262:1262 [1] NCCL INFO NET/IB : No device found.
+main:1262:1262 [1] NCCL INFO NET/IB : Using [RO]; OOB eth0:10.125.201.29<0>
+main:1262:1262 [1] NCCL INFO Failed to initialize NET plugin IB
+main:1262:1262 [1] NCCL INFO NET/Socket : Using [0]eth0:10.125.201.29<0>
+main:1262:1262 [1] NCCL INFO Initialized NET plugin Socket
+main:1262:1262 [1] NCCL INFO Assigned NET plugin Socket to comm
+main:1262:1262 [1] NCCL INFO GIN/Plugin: Could not find: libnccl-gin.so
+main:1262:1262 [1] NCCL INFO Successfully loaded external gin plugin /opt/aws-ofi-nccl/install/lib/libnccl-net.so
+main:1262:1262 [1] NCCL INFO Failed to initialize any GIN plugin
+main:1262:1262 [1] NCCL INFO Using network Socket
+main:1264:1264 [3] NCCL INFO NET/OFI No eligible providers were found
+
+[2026-08-05 17:21:28] main:1264:1264 [3] int nccl_net_ofi_create_plugin(nccl_net_ofi_plugin_t**):219 NCCL WARN NET/OFI Failed to initialize rdma protocol
+
+[2026-08-05 17:21:28] main:1264:1264 [3] int nccl_net_ofi_create_plugin(nccl_net_ofi_plugin_t**):354 NCCL WARN NET/OFI aws-ofi-nccl initialization failed
+
+[2026-08-05 17:21:28] main:1264:1264 [3] ncclResult_t nccl_net_ofi_init_v2(ncclDebugLogger_t):155 NCCL WARN NET/OFI Initializing plugin failed
+main:1264:1264 [3] NCCL INFO plugin/net/net_v10.cc:82 -> 2
+main:1264:1264 [3] NCCL INFO Failed to initialize NET plugin Libfabric
+main:1264:1264 [3] NCCL INFO NET/IB : No device found.
+main:1264:1264 [3] NCCL INFO NET/IB : Using [RO]; OOB eth0:10.125.201.29<0>
+main:1264:1264 [3] NCCL INFO Failed to initialize NET plugin IB
+main:1264:1264 [3] NCCL INFO NET/Socket : Using [0]eth0:10.125.201.29<0>
+main:1264:1264 [3] NCCL INFO Initialized NET plugin Socket
+main:1264:1264 [3] NCCL INFO Assigned NET plugin Socket to comm
+main:1264:1264 [3] NCCL INFO GIN/Plugin: Could not find: libnccl-gin.so
+main:1264:1264 [3] NCCL INFO Successfully loaded external gin plugin /opt/aws-ofi-nccl/install/lib/libnccl-net.so
+main:1264:1264 [3] NCCL INFO Failed to initialize any GIN plugin
+main:1264:1264 [3] NCCL INFO Using network Socket
+main:1266:1266 [5] NCCL INFO NET/OFI No eligible providers were found
+
+[2026-08-05 17:21:28] main:1266:1266 [5] int nccl_net_ofi_create_plugin(nccl_net_ofi_plugin_t**):219 NCCL WARN NET/OFI Failed to initialize rdma protocol
+
+[2026-08-05 17:21:28] main:1266:1266 [5] int nccl_net_ofi_create_plugin(nccl_net_ofi_plugin_t**):354 NCCL WARN NET/OFI aws-ofi-nccl initialization failed
+
+[2026-08-05 17:21:28] main:1266:1266 [5] ncclResult_t nccl_net_ofi_init_v2(ncclDebugLogger_t):155 NCCL WARN NET/OFI Initializing plugin failed
+main:1266:1266 [5] NCCL INFO plugin/net/net_v10.cc:82 -> 2
+main:1266:1266 [5] NCCL INFO Failed to initialize NET plugin Libfabric
+main:1266:1266 [5] NCCL INFO NET/IB : No device found.
+main:1266:1266 [5] NCCL INFO NET/IB : Using [RO]; OOB eth0:10.125.201.29<0>
+main:1266:1266 [5] NCCL INFO Failed to initialize NET plugin IB
+main:1266:1266 [5] NCCL INFO NET/Socket : Using [0]eth0:10.125.201.29<0>
+main:1266:1266 [5] NCCL INFO Initialized NET plugin Socket
+main:1266:1266 [5] NCCL INFO Assigned NET plugin Socket to comm
+main:1266:1266 [5] NCCL INFO GIN/Plugin: Could not find: libnccl-gin.so
+main:1266:1266 [5] NCCL INFO Successfully loaded external gin plugin /opt/aws-ofi-nccl/install/lib/libnccl-net.so
+main:1266:1266 [5] NCCL INFO Failed to initialize any GIN plugin
+main:1266:1266 [5] NCCL INFO Using network Socket
+main:1267:1267 [6] NCCL INFO NET/OFI No eligible providers were found
+
+[2026-08-05 17:21:28] main:1267:1267 [6] int nccl_net_ofi_create_plugin(nccl_net_ofi_plugin_t**):219 NCCL WARN NET/OFI Failed to initialize rdma protocol
+
+[2026-08-05 17:21:28] main:1267:1267 [6] int nccl_net_ofi_create_plugin(nccl_net_ofi_plugin_t**):354 NCCL WARN NET/OFI aws-ofi-nccl initialization failed
+
+[2026-08-05 17:21:28] main:1267:1267 [6] ncclResult_t nccl_net_ofi_init_v2(ncclDebugLogger_t):155 NCCL WARN NET/OFI Initializing plugin failed
+main:1267:1267 [6] NCCL INFO plugin/net/net_v10.cc:82 -> 2
+main:1267:1267 [6] NCCL INFO Failed to initialize NET plugin Libfabric
+main:1267:1267 [6] NCCL INFO NET/IB : No device found.
+main:1267:1267 [6] NCCL INFO NET/IB : Using [RO]; OOB eth0:10.125.201.29<0>
+main:1267:1267 [6] NCCL INFO Failed to initialize NET plugin IB
+main:1267:1267 [6] NCCL INFO NET/Socket : Using [0]eth0:10.125.201.29<0>
+main:1267:1267 [6] NCCL INFO Initialized NET plugin Socket
+main:1267:1267 [6] NCCL INFO Assigned NET plugin Socket to comm
+main:1267:1267 [6] NCCL INFO GIN/Plugin: Could not find: libnccl-gin.so
+main:1267:1267 [6] NCCL INFO Successfully loaded external gin plugin /opt/aws-ofi-nccl/install/lib/libnccl-net.so
+main:1267:1267 [6] NCCL INFO Failed to initialize any GIN plugin
+main:1267:1267 [6] NCCL INFO Using network Socket
+main:1261:1261 [0] NCCL INFO NET/OFI No eligible providers were found
+
+[2026-08-05 17:21:28] main:1261:1261 [0] int nccl_net_ofi_create_plugin(nccl_net_ofi_plugin_t**):219 NCCL WARN NET/OFI Failed to initialize rdma protocol
+
+[2026-08-05 17:21:28] main:1261:1261 [0] int nccl_net_ofi_create_plugin(nccl_net_ofi_plugin_t**):354 NCCL WARN NET/OFI aws-ofi-nccl initialization failed
+
+[2026-08-05 17:21:28] main:1261:1261 [0] ncclResult_t nccl_net_ofi_init_v2(ncclDebugLogger_t):155 NCCL WARN NET/OFI Initializing plugin failed
+main:1261:1261 [0] NCCL INFO plugin/net/net_v10.cc:82 -> 2
+main:1261:1261 [0] NCCL INFO Failed to initialize NET plugin Libfabric
+main:1261:1261 [0] NCCL INFO NET/IB : No device found.
+main:1261:1261 [0] NCCL INFO NET/IB : Using [RO]; OOB eth0:10.125.201.29<0>
+main:1261:1261 [0] NCCL INFO Failed to initialize NET plugin IB
+main:1261:1261 [0] NCCL INFO NET/Socket : Using [0]eth0:10.125.201.29<0>
+main:1261:1261 [0] NCCL INFO Initialized NET plugin Socket
+main:1261:1261 [0] NCCL INFO Assigned NET plugin Socket to comm
+main:1261:1261 [0] NCCL INFO GIN/Plugin: Could not find: libnccl-gin.so
+main:1261:1261 [0] NCCL INFO Successfully loaded external gin plugin /opt/aws-ofi-nccl/install/lib/libnccl-net.so
+main:1261:1261 [0] NCCL INFO Failed to initialize any GIN plugin
+main:1261:1261 [0] NCCL INFO Using network Socket
+main:1265:1265 [4] NCCL INFO NET/OFI No eligible providers were found
+
+[2026-08-05 17:21:28] main:1265:1265 [4] int nccl_net_ofi_create_plugin(nccl_net_ofi_plugin_t**):219 NCCL WARN NET/OFI Failed to initialize rdma protocol
+
+[2026-08-05 17:21:28] main:1265:1265 [4] int nccl_net_ofi_create_plugin(nccl_net_ofi_plugin_t**):354 NCCL WARN NET/OFI aws-ofi-nccl initialization failed
+
+[2026-08-05 17:21:28] main:1265:1265 [4] ncclResult_t nccl_net_ofi_init_v2(ncclDebugLogger_t):155 NCCL WARN NET/OFI Initializing plugin failed
+main:1265:1265 [4] NCCL INFO plugin/net/net_v10.cc:82 -> 2
+main:1265:1265 [4] NCCL INFO Failed to initialize NET plugin Libfabric
+main:1265:1265 [4] NCCL INFO NET/IB : No device found.
+main:1265:1265 [4] NCCL INFO NET/IB : Using [RO]; OOB eth0:10.125.201.29<0>
+main:1265:1265 [4] NCCL INFO Failed to initialize NET plugin IB
+main:1265:1265 [4] NCCL INFO NET/Socket : Using [0]eth0:10.125.201.29<0>
+main:1265:1265 [4] NCCL INFO Initialized NET plugin Socket
+main:1265:1265 [4] NCCL INFO Assigned NET plugin Socket to comm
+main:1265:1265 [4] NCCL INFO GIN/Plugin: Could not find: libnccl-gin.so
+main:1265:1265 [4] NCCL INFO Successfully loaded external gin plugin /opt/aws-ofi-nccl/install/lib/libnccl-net.so
+main:1265:1265 [4] NCCL INFO Failed to initialize any GIN plugin
+main:1265:1265 [4] NCCL INFO Using network Socket
+main:1263:1263 [2] NCCL INFO NET/OFI No eligible providers were found
+
+[2026-08-05 17:21:28] main:1263:1263 [2] int nccl_net_ofi_create_plugin(nccl_net_ofi_plugin_t**):219 NCCL WARN NET/OFI Failed to initialize rdma protocol
+
+[2026-08-05 17:21:28] main:1263:1263 [2] int nccl_net_ofi_create_plugin(nccl_net_ofi_plugin_t**):354 NCCL WARN NET/OFI aws-ofi-nccl initialization failed
+
+[2026-08-05 17:21:28] main:1263:1263 [2] ncclResult_t nccl_net_ofi_init_v2(ncclDebugLogger_t):155 NCCL WARN NET/OFI Initializing plugin failed
+main:1263:1263 [2] NCCL INFO plugin/net/net_v10.cc:82 -> 2
+main:1263:1263 [2] NCCL INFO Failed to initialize NET plugin Libfabric
+main:1263:1263 [2] NCCL INFO NET/IB : No device found.
+main:1263:1263 [2] NCCL INFO NET/IB : Using [RO]; OOB eth0:10.125.201.29<0>
+main:1263:1263 [2] NCCL INFO Failed to initialize NET plugin IB
+main:1263:1263 [2] NCCL INFO NET/Socket : Using [0]eth0:10.125.201.29<0>
+main:1263:1263 [2] NCCL INFO Initialized NET plugin Socket
+main:1263:1263 [2] NCCL INFO Assigned NET plugin Socket to comm
+main:1263:1263 [2] NCCL INFO GIN/Plugin: Could not find: libnccl-gin.so
+main:1263:1263 [2] NCCL INFO Successfully loaded external gin plugin /opt/aws-ofi-nccl/install/lib/libnccl-net.so
+main:1263:1263 [2] NCCL INFO Failed to initialize any GIN plugin
+main:1263:1263 [2] NCCL INFO Using network Socket
+main:1268:1268 [7] NCCL INFO NET/OFI No eligible providers were found
+
+[2026-08-05 17:21:28] main:1268:1268 [7] int nccl_net_ofi_create_plugin(nccl_net_ofi_plugin_t**):219 NCCL WARN NET/OFI Failed to initialize rdma protocol
+
+[2026-08-05 17:21:28] main:1268:1268 [7] int nccl_net_ofi_create_plugin(nccl_net_ofi_plugin_t**):354 NCCL WARN NET/OFI aws-ofi-nccl initialization failed
+
+[2026-08-05 17:21:28] main:1268:1268 [7] ncclResult_t nccl_net_ofi_init_v2(ncclDebugLogger_t):155 NCCL WARN NET/OFI Initializing plugin failed
+main:1268:1268 [7] NCCL INFO plugin/net/net_v10.cc:82 -> 2
+main:1268:1268 [7] NCCL INFO Failed to initialize NET plugin Libfabric
+main:1268:1268 [7] NCCL INFO NET/IB : No device found.
+main:1268:1268 [7] NCCL INFO NET/IB : Using [RO]; OOB eth0:10.125.201.29<0>
+main:1268:1268 [7] NCCL INFO Failed to initialize NET plugin IB
+main:1268:1268 [7] NCCL INFO NET/Socket : Using [0]eth0:10.125.201.29<0>
+main:1268:1268 [7] NCCL INFO Initialized NET plugin Socket
+main:1268:1268 [7] NCCL INFO Assigned NET plugin Socket to comm
+main:1268:1268 [7] NCCL INFO GIN/Plugin: Could not find: libnccl-gin.so
+main:1268:1268 [7] NCCL INFO Successfully loaded external gin plugin /opt/aws-ofi-nccl/install/lib/libnccl-net.so
+main:1268:1268 [7] NCCL INFO Failed to initialize any GIN plugin
+main:1268:1268 [7] NCCL INFO Using network Socket
+main:1262:1262 [1] NCCL INFO [Rank 1] ncclCommInitRankConfig comm 0xeb7f310 rank 1 nranks 8 cudaDev 1 nvmlDev 1 busId 64000 commId 0xb8797bd71184e95d - Init START
+main:1264:1264 [3] NCCL INFO [Rank 3] ncclCommInitRankConfig comm 0x47ecba20 rank 3 nranks 8 cudaDev 3 nvmlDev 3 busId 86000 commId 0xb8797bd71184e95d - Init START
+main:1267:1267 [6] NCCL INFO [Rank 6] ncclCommInitRankConfig comm 0x3e6bcfe0 rank 6 nranks 8 cudaDev 6 nvmlDev 6 busId b9000 commId 0xb8797bd71184e95d - Init START
+main:1266:1266 [5] NCCL INFO [Rank 5] ncclCommInitRankConfig comm 0x4e4dc960 rank 5 nranks 8 cudaDev 5 nvmlDev 5 busId a8000 commId 0xb8797bd71184e95d - Init START
+main:1261:1261 [0] NCCL INFO [Rank 0] ncclCommInitRankConfig comm 0x24eaf370 rank 0 nranks 8 cudaDev 0 nvmlDev 0 busId 53000 commId 0xb8797bd71184e95d - Init START
+main:1265:1265 [4] NCCL INFO [Rank 4] ncclCommInitRankConfig comm 0x3cd09e50 rank 4 nranks 8 cudaDev 4 nvmlDev 4 busId 97000 commId 0xb8797bd71184e95d - Init START
+main:1266:1266 [5] NCCL INFO RAS client listening socket at 127.0.0.1<28028>
+main:1265:1265 [4] NCCL INFO RAS client listening socket at 127.0.0.1<28028>
+main:1268:1268 [7] NCCL INFO [Rank 7] ncclCommInitRankConfig comm 0x1afab1d0 rank 7 nranks 8 cudaDev 7 nvmlDev 7 busId ca000 commId 0xb8797bd71184e95d - Init START
+main:1268:1268 [7] NCCL INFO RAS client listening socket at 127.0.0.1<28028>
+main:1261:1261 [0] NCCL INFO RAS client listening socket at 127.0.0.1<28028>
+main:1267:1267 [6] NCCL INFO RAS client listening socket at 127.0.0.1<28028>
+main:1263:1263 [2] NCCL INFO [Rank 2] ncclCommInitRankConfig comm 0x1fd821e0 rank 2 nranks 8 cudaDev 2 nvmlDev 2 busId 75000 commId 0xb8797bd71184e95d - Init START
+main:1263:1263 [2] NCCL INFO RAS client listening socket at 127.0.0.1<28028>
+main:1262:1262 [1] NCCL INFO RAS client listening socket at 127.0.0.1<28028>
+main:1264:1264 [3] NCCL INFO RAS client listening socket at 127.0.0.1<28028>
+main:1261:1261 [0] NCCL INFO Bootstrap timings total 0.032066 (create 0.000173, send 0.000175, recv 0.000335, ring 0.003189, delmain:1262:1262 [1] NCCL INFO Bootstrap timings total 0.180736 (create 0.000165, send 0.000230, recv 0.179007, ring 0.000205, delay 0.000002)
+ay 0.000001)
+main:1267:1267 [6] NCCL INFO Bootstrap timings total 0.055051 (create 0.000167, send 0.000169, recv 0.050421, ring 0.003177, delmain:1268:1268 [7] NCCL INFO Bootstrap timings total 0.004902 (create 0.000116, send 0.000140, recv 0.000449, ring 0.003188, delay 0.000002)
+ay 0.000001)
+main:1262:1262 [1] NCCL INFO NCCL_CUMEM_ENABLE set by environment to 0.
+main:1261:1261 [0] NCCL INFO NCCL_CUMEM_ENABLE set by environment to 0.
+main:1268:1268 [7] NCCL INFO NCCL_CUMEM_ENABLE set by environment to 0.
+main:1267:1267 [6] NCCL INFO NCCL_CUMEM_ENABLE set by environment to 0.
+main:1265:1265 [4] NCCL INFO Bootstrap timings total 0.009211 (create 0.000147, send 0.000184, recv 0.000535, ring 0.004820, delay 0.000002)
+main:1264:1264 [3] NCCL INFO Bootstrap timings total 0.115704 (create 0.000190, send 0.000182, recv 0.109307, ring 0.000158, delmain:1263:1263 [2] NCCL INFO Bootstrap timings total 0.002065 (create 0.000120, send 0.000131, recv 0.000473, ring 0.000287, delay 0.000002)
+ay 0.000001)
+main:1265:1265 [4] NCCL INFO NCCL_CUMEM_ENABLE set by environment to 0.
+main:1266:1266 [5] NCCL INFO Bootstrap timings total 0.045318 (create 0.000152, send 0.000157, recv 0.000336, ring 0.007295, delmain:1263:1263 [2] NCCL INFO NCCL_CUMEM_ENABLE set by environment to 0.
+ay 0.000001)
+main:1264:1264 [3] NCCL INFO NCCL_CUMEM_ENABLE set by environment to 0.
+main:1266:1266 [5] NCCL INFO NCCL_CUMEM_ENABLE set by environment to 0.
+main:1268:1268 [7] NCCL INFO MNNVL busId 0xca000 fabric UUID 0.0 cliqueId 0x0 state 3 healthMask 0x0
+main:1261:1261 [0] NCCL INFO MNNVL busId 0x53000 fabric UUID 0.0 cliqueId 0x0 state 3 healthMask 0x0
+main:1263:1263 [2] NCCL INFO MNNVL busId 0x75000 fabric UUID 0.0 cliqueId 0x0 state 3 healthMask 0x0
+main:1265:1265 [4] NCCL INFO MNNVL busId 0x97000 fabric UUID 0.0 cliqueId 0x0 state 3 healthMask 0x0
+main:1266:1266 [5] NCCL INFO MNNVL busId 0xa8000 fabric UUID 0.0 cliqueId 0x0 state 3 healthMask 0x0
+main:1267:1267 [6] NCCL INFO MNNVL busId 0xb9000 fabric UUID 0.0 cliqueId 0x0 state 3 healthMask 0x0
+main:1264:1264 [3] NCCL INFO MNNVL busId 0x86000 fabric UUID 0.0 cliqueId 0x0 state 3 healthMask 0x0
+main:1262:1262 [1] NCCL INFO MNNVL busId 0x64000 fabric UUID 0.0 cliqueId 0x0 state 3 healthMask 0x0
+main:1265:1265 [4] NCCL INFO ncclTopoGetCpuAffinity: Affinity for GPU 4 is 48-95,144-191. (GPU affinity = 48-95,144-191 ; CPU affinity = 0-191).
+main:1265:1265 [4] NCCL INFO NVLS multicast support is available on dev 4 (NVLS_NCHANNELS 16)
+main:1261:1261 [0] NCCL INFO ncclTopoGetCpuAffinity: Affinity for GPU 0 is 0-47,96-143. (GPU affinity = 0-47,96-143 ; CPU affinity = 0-191).
+main:1261:1261 [0] NCCL INFO NVLS multicast support is available on dev 0 (NVLS_NCHANNELS 16)
+main:1266:1266 [5] NCCL INFO ncclTopoGetCpuAffinity: Affinity for GPU 5 is 48-95,144-191. (GPU affinity = 48-95,144-191 ; CPU affinity = 0-191).
+main:1266:1266 [5] NCCL INFO NVLS multicast support is available on dev 5 (NVLS_NCHANNELS 16)
+main:1262:1262 [1] NCCL INFO ncclTopoGetCpuAffinity: Affinity for GPU 1 is 0-47,96-143. (GPU affinity = 0-47,96-143 ; CPU affinity = 0-191).
+main:1262:1262 [1] NCCL INFO NVLS multicast support is available on dev 1 (NVLS_NCHANNELS 16)
+main:1267:1267 [6] NCCL INFO ncclTopoGetCpuAffinity: Affinity for GPU 6 is 48-95,144-191. (GPU affinity = 48-95,144-191 ; CPU affinity = 0-191).
+main:1267:1267 [6] NCCL INFO NVLS multicast support is available on dev 6 (NVLS_NCHANNELS 16)
+main:1264:1264 [3] NCCL INFO ncclTopoGetCpuAffinity: Affinity for GPU 3 is 0-47,96-143. (GPU affinity = 0-47,96-143 ; CPU affinity = 0-191).
+main:1268:1268 [7] NCCL INFO ncclTopoGetCpuAffinity: Affinity for GPU 7 is 48-95,144-191. (GPU affinity = 48-95,144-191 ; CPU afmain:1264:1264 [3] NCCL INFO NVLS multicast support is available on dev 3 (NVLS_NCHANNELS 16)
+finity = 0-191).
+main:1263:1263 [2] NCCL INFO ncclTopoGetCpuAffinity: Affinity for GPU 2 is 0-47,96-143. (GPU affinity = 0-47,96-143 ; CPU affinimain:1268:1268 [7] NCCL INFO NVLS multicast support is available on dev 7 (NVLS_NCHANNELS 16)
+ty = 0-191).
+main:1263:1263 [2] NCCL INFO NVLS multicast support is available on dev 2 (NVLS_NCHANNELS 16)
+main:1261:1261 [0] NCCL INFO comm 0x24eaf370 rank 0 nRanks 8 nNodes 1 localRanks 8 localRank 0 MNNVL 0
+main:1262:1262 [1] NCCL INFO comm 0xeb7f310 rank 1 nRanks 8 nNodes 1 localRanks 8 localRank 1 MNNVL 0
+main:1264:1264 [3] NCCL INFO comm 0x47ecba20 rank 3 nRanks 8 nNodes 1 localRanks 8 localRank 3 MNNVL 0
+main:1266:1266 [5] NCCL INFO comm 0x4e4dc960 rank 5 nRanks 8 nNodes 1 localRanks 8 localRank 5 MNNVL 0
+main:1268:1268 [7] NCCL INFO comm 0x1afab1d0 rank 7 nRanks 8 nNodes 1 localRanks 8 localRank 7 MNNVL 0
+main:1265:1265 [4] NCCL INFO comm 0x3cd09e50 rank 4 nRanks 8 nNodes 1 localRanks 8 localRank 4 MNNVL 0
+main:1261:1261 [0] NCCL INFO Channel 00/24 : 0 1 2 3 4 5 6 7
+main:1261:1261 [0] NCCL INFO Channel 01/24 : 0 1 2 3 4 5 6 7
+main:1261:1261 [0] NCCL INFO Channel 02/24 : 0 1 2 3 4 5 6 7
+main:1261:1261 [0] NCCL INFO Channel 03/24 : 0 1 2 3 4 5 6 7
+main:1261:1261 [0] NCCL INFO Channel 04/24 : 0 1 2 3 4 5 6 7
+main:1262:1262 [1] NCCL INFO Trees [0] 2/-1/-1->1->0 [1] 2/-1/-1->1->0 [2] 2/-1/-1->1->0 [3] 2/-1/-1->1->0 [4] 2/-1/-1->1->0 [5]main:1266:1266 [5] NCCL INFO Trees [0] 6/-1/-1->5->4 [1] 6/-1/-1->5->4 [2] 6/-1/-1->5->4 [3] 6/-1/-1->5->4 [4] 6/-1/-1->5->4 [5]main:1261:1261 [0] NCCL INFO Channel 05/24 : 0 1 2 3 4 5 6 7
+ 2/-1/-1->1->0 [6] 2/-1/-1->1->0 [7] 2/-1/-1->1->0 [8] 2/-1/-1->1->0 [9] 2/-1/-1->1->0 [10] 2/-1/-1->1->0 [11] 2/-1/-1->1->0 [12 6/-1/-1->5->4 [6] 6/-1/-1->5->4 [7] 6/-1/-1->5->4 [8] 6/-1/-1->5->4 [9] 6/-1/-1->5->4 [10] 6/-1/-1->5->4 [11] 6/-1/-1->5->4 [12main:1261:1261 [0] NCCL INFO Channel 06/24 : 0 1 2 3 4 5 6 7
+] 2/-1/-1->1->0 [13] 2/-1/-1->1->0 [14] 2/-1/-1->1->0 [15] 2/-1/-1->1->0 [16] 2/-1/-1->1->0 [17] 2/-1/-1->1->0 [18] 2/-1/-1->1->] 6/-1/-1->5->4 [13] 6/-1/-1->5->4 [14] 6/-1/-1->5->4 [15] 6/-1/-1->5->4 [16] 6/-1/-1->5->4 [17] 6/-1/-1->5->4 [18] 6/-1/-1->5->main:1264:1264 [3] NCCL INFO Trees [0] 4/-1/-1->3->2 [1] 4/-1/-1->3->2 [2] 4/-1/-1->3->2 [3] 4/-1/-1->3->2 [4] 4/-1/-1->3->2 [5]main:1261:1261 [0] NCCL INFO Channel 07/24 : 0 1 2 3 4 5 6 7
+main:1268:1268 [7] NCCL INFO Trees [0] -1/-1/-1->7->6 [1] -1/-1/-1->7->6 [2] -1/-1/-1->7->6 [3] -1/-1/-1->7->6 [4] -1/-1/-1->7->main:1261:1261 [0] NCCL INFO Channel 08/24 : 0 1 2 3 4 5 6 7
+6 [5] -1/-1/-1->7->6 [6] -1/-1/-1->7->6 [7] -1/-1/-1->7->6 [8] -1/-1/-1->7->6 [9] -1/-1/-1->7->6 [10] -1/-1/-1->7->6 [11] -1/-1/0 [19] 2/-1/-1->1->0 [20] 2/-1/-1->1->0 [21] 2/-1/-1->1->0 [22] 2/-1/-1->1->0 [23] 2/-1/-1->1->0
+4 [19] 6/-1/-1->5->4 [20] 6/-1/-1->5->4 [21] 6/-1/-1->5->4 [22] 6/-1/-1->5->4 [23] 6/-1/-1->5->4
+main:1261:1261 [0] NCCL INFO Channel 09/24 : 0 1 2 3 4 5 6 7
+ 4/-1/-1->3->2 [6] 4/-1/-1->3->2 [7] 4/-1/-1->3->2 [8] 4/-1/-1->3->2 [9] 4/-1/-1->3->2 [10] 4/-1/-1->3->2 [11] 4/-1/-1->3->2 [12-1->7->6 [12] -1/-1/-1->7->6 [13] -1/-1/-1->7->6 [14] -1/-1/-1->7->6 [15] -1/-1/-1->7->6 [16] -1/-1/-1->7->6 [17] -1/-1/-1->7->6main:1262:1262 [1] NCCL INFO P2P Chunksize set to 524288
+main:1261:1261 [0] NCCL INFO Channel 10/24 : 0 1 2 3 4 5 6 7
+] 4/-1/-1->3->2 [13] 4/-1/-1->3->2 [14] 4/-1/-1->3->2 [15] 4/-1/-1->3->2 [16] 4/-1/-1->3->2 [17] 4/-1/-1->3->2 [18] 4/-1/-1->3-> [18] -1/-1/-1->7->6 [19] -1/-1/-1->7->6 [20] -1/-1/-1->7->6 [21] -1/-1/-1->7->6 [22] -1/-1/-1->7->6 [23] -1/-1/-1->7->6
+main:1266:1266 [5] NCCL INFO P2P Chunksize set to 524288
+2 [19] 4/-1/-1->3->2 [20] 4/-1/-1->3->2 [21] 4/-1/-1->3->2 [22] 4/-1/-1->3->2 [23] 4/-1/-1->3->2
+main:1261:1261 [0] NCCL INFO Channel 11/24 : 0 1 2 3 4 5 6 7
+main:1268:1268 [7] NCCL INFO P2P Chunksize set to 524288
+main:1261:1261 [0] NCCL INFO Channel 12/24 : 0 1 2 3 4 5 6 7
+main:1264:1264 [3] NCCL INFO P2P Chunksize set to 524288
+main:1261:1261 [0] NCCL INFO Channel 13/24 : 0 1 2 3 4 5 6 7
+main:1261:1261 [0] NCCL INFO Channel 14/24 : 0 1 2 3 4 5 6 7
+main:1261:1261 [0] NCCL INFO Channel 15/24 : 0 1 2 3 4 5 6 7
+main:1261:1261 [0] NCCL INFO Channel 16/24 : 0 1 2 3 4 5 6 7
+main:1263:1263 [2] NCCL INFO comm 0x1fd821e0 rank 2 nRanks 8 nNodes 1 localRanks 8 localRank 2 MNNVL 0
+main:1267:1267 [6] NCCL INFO comm 0x3e6bcfe0 rank 6 nRanks 8 nNodes 1 localRanks 8 localRank 6 MNNVL 0
+main:1261:1261 [0] NCCL INFO Channel 17/24 : 0 1 2 3 4 5 6 7
+main:1261:1261 [0] NCCL INFO Channel 18/24 : 0 1 2 3 4 5 6 7
+main:1261:1261 [0] NCCL INFO Channel 19/24 : 0 1 2 3 4 5 6 7
+main:1261:1261 [0] NCCL INFO Channel 20/24 : 0 1 2 3 4 5 6 7
+main:1261:1261 [0] NCCL INFO Channel 21/24 : 0 1 2 3 4 5 6 7
+main:1261:1261 [0] NCCL INFO Channel 22/24 : 0 1 2 3 4 5 6 7
+main:1261:1261 [0] NCCL INFO Channel 23/24 : 0 1 2 3 4 5 6 7
+main:1265:1265 [4] NCCL INFO Trees [0] 5/-1/-1->4->3 [1] 5/-1/-1->4->3 [2] 5/-1/-1->4->3 [3] 5/-1/-1->4->3 [4] 5/-1/-1->4->3 [5]main:1261:1261 [0] NCCL INFO Trees [0] 1/-1/-1->0->-1 [1] 1/-1/-1->0->-1 [2] 1/-1/-1->0->-1 [3] 1/-1/-1->0->-1 [4] 1/-1/-1->0->- 5/-1/-1->4->3 [6] 5/-1/-1->4->3 [7] 5/-1/-1->4->3 [8] 5/-1/-1->4->3 [9] 5/-1/-1->4->3 [10] 5/-1/-1->4->3 [11] 5/-1/-1->4->3 [121 [5] 1/-1/-1->0->-1 [6] 1/-1/-1->0->-1 [7] 1/-1/-1->0->-1 [8] 1/-1/-1->0->-1 [9] 1/-1/-1->0->-1 [10] 1/-1/-1->0->-1 [11] 1/-1/-] 5/-1/-1->4->3 [13] 5/-1/-1->4->3 [14] 5/-1/-1->4->3 [15] 5/-1/-1->4->3 [16] 5/-1/-1->4->3 [17] 5/-1/-1->4->3 [18] 5/-1/-1->4->1->0->-1 [12] 1/-1/-1->0->-1 [13] 1/-1/-1->0->-1 [14] 1/-1/-1->0->-1 [15] 1/-1/-1->0->-1 [16] 1/-1/-1->0->-1 [17] 1/-1/-1->0->-1 [18] 1/-1/-1->0->-1 [19] 1/-1/-1->0->-1 [20] 1/-1/-1->0->-1 [21] 1/-1/-1->0->-1 [22] 1/-1/-1->0->-1 [23] 1/-1/-1->0->-1
+3 [19] 5/-1/-1->4->3 [20] 5/-1/-1->4->3 [21] 5/-1/-1->4->3 [22] 5/-1/-1->4->3 [23] 5/-1/-1->4->3
+main:1261:1261 [0] NCCL INFO P2P Chunksize set to 524288
+main:1267:1267 [6] NCCL INFO Trees [0] 7/-1/-1->6->5 [1] 7/-1/-1->6->5 [2] 7/-1/-1->6->5 [3] 7/-1/-1->6->5 [4] 7/-1/-1->6->5 [5]main:1263:1263 [2] NCCL INFO Trees [0] 3/-1/-1->2->1 [1] 3/-1/-1->2->1 [2] 3/-1/-1->2->1 [3] 3/-1/-1->2->1 [4] 3/-1/-1->2->1 [5]main:1265:1265 [4] NCCL INFO P2P Chunksize set to 524288
+ 7/-1/-1->6->5 [6] 7/-1/-1->6->5 [7] 7/-1/-1->6->5 [8] 7/-1/-1->6->5 [9] 7/-1/-1->6->5 [10] 7/-1/-1->6->5 [11] 7/-1/-1->6->5 [12 3/-1/-1->2->1 [6] 3/-1/-1->2->1 [7] 3/-1/-1->2->1 [8] 3/-1/-1->2->1 [9] 3/-1/-1->2->1 [10] 3/-1/-1->2->1 [11] 3/-1/-1->2->1 [12] 7/-1/-1->6->5 [13] 7/-1/-1->6->5 [14] 7/-1/-1->6->5 [15] 7/-1/-1->6->5 [16] 7/-1/-1->6->5 [17] 7/-1/-1->6->5 [18] 7/-1/-1->6->] 3/-1/-1->2->1 [13] 3/-1/-1->2->1 [14] 3/-1/-1->2->1 [15] 3/-1/-1->2->1 [16] 3/-1/-1->2->1 [17] 3/-1/-1->2->1 [18] 3/-1/-1->2->5 [19] 7/-1/-1->6->5 [20] 7/-1/-1->6->5 [21] 7/-1/-1->6->5 [22] 7/-1/-1->6->5 [23] 7/-1/-1->6->5
+1 [19] 3/-1/-1->2->1 [20] 3/-1/-1->2->1 [21] 3/-1/-1->2->1 [22] 3/-1/-1->2->1 [23] 3/-1/-1->2->1
+main:1267:1267 [6] NCCL INFO P2P Chunksize set to 524288
+main:1263:1263 [2] NCCL INFO P2P Chunksize set to 524288
+main:1262:1262 [1] NCCL INFO PROFILER/Plugin: Could not find: libnccl-profiler.so
+main:1261:1261 [0] NCCL INFO PROFILER/Plugin: Could not find: libnccl-profiler.so
+main:1262:1262 [1] NCCL INFO Check P2P Type isAllDirectP2p 1 directMode 0 isAllCudaP2p 1
+main:1261:1261 [0] NCCL INFO Check P2P Type isAllDirectP2p 1 directMode 0 isAllCudaP2p 1
+main:1261:1377 [0] NCCL INFO [Proxy Service] Device 0 CPU core 14
+main:1268:1268 [7] NCCL INFO PROFILER/Plugin: Could not find: libnccl-profiler.so
+main:1261:1380 [0] NCCL INFO [Proxy Service UDS] Device 0 CPU core 115
+main:1265:1265 [4] NCCL INFO PROFILER/Plugin: Could not find: libnccl-profiler.so
+main:1268:1268 [7] NCCL INFO Check P2P Type isAllDirectP2p 1 directMode 0 isAllCudaP2p 1
+main:1265:1265 [4] NCCL INFO Check P2P Type isAllDirectP2p 1 directMode 0 isAllCudaP2p 1
+main:1262:1379 [0] NCCL INFO [Proxy Service UDS] Device 1 CPU core 114
+main:1262:1378 [0] NCCL INFO [Proxy Service] Device 1 CPU core 36
+main:1266:1266 [5] NCCL INFO PROFILER/Plugin: Could not find: libnccl-profiler.so
+main:1266:1266 [5] NCCL INFO Check P2P Type isAllDirectP2p 1 directMode 0 isAllCudaP2p 1
+main:1268:1383 [0] NCCL INFO [Proxy Service UDS] Device 7 CPU core 70
+main:1266:1386 [0] NCCL INFO [Proxy Service UDS] Device 5 CPU core 177
+main:1268:1382 [0] NCCL INFO [Proxy Service] Device 7 CPU core 152
+main:1266:1385 [0] NCCL INFO [Proxy Service] Device 5 CPU core 186
+main:1265:1381 [0] NCCL INFO [Proxy Service] Device 4 CPU core 153
+main:1265:1384 [0] NCCL INFO [Proxy Service UDS] Device 4 CPU core 166
+main:1264:1264 [3] NCCL INFO PROFILER/Plugin: Could not find: libnccl-profiler.so
+main:1264:1264 [3] NCCL INFO Check P2P Type isAllDirectP2p 1 directMode 0 isAllCudaP2p 1
+main:1264:1387 [0] NCCL INFO [Proxy Service] Device 3 CPU core 15
+main:1267:1267 [6] NCCL INFO PROFILER/Plugin: Could not find: libnccl-profiler.so
+main:1263:1263 [2] NCCL INFO PROFILER/Plugin: Could not find: libnccl-profiler.so
+main:1264:1388 [0] NCCL INFO [Proxy Service UDS] Device 3 CPU core 36
+main:1267:1267 [6] NCCL INFO Check P2P Type isAllDirectP2p 1 directMode 0 isAllCudaP2p 1
+main:1263:1263 [2] NCCL INFO Check P2P Type isAllDirectP2p 1 directMode 0 isAllCudaP2p 1
+main:1267:1391 [0] NCCL INFO [Proxy Service UDS] Device 6 CPU core 70
+main:1263:1392 [0] NCCL INFO [Proxy Service UDS] Device 2 CPU core 104
+main:1263:1390 [0] NCCL INFO [Proxy Service] Device 2 CPU core 36
+main:1267:1389 [0] NCCL INFO [Proxy Service] Device 6 CPU core 153
+main:1266:1266 [5] NCCL INFO Channel 00/0 : 5[5] -> 6[6] via P2P/IPC
+main:1266:1266 [5] NCCL INFO Channel 01/0 : 5[5] -> 6[6] via P2P/IPC
+main:1262:1262 [1] NCCL INFO Channel 00/0 : 1[1] -> 2[2] via P2P/IPC
+main:1263:1263 [2] NCCL INFO Channel 00/0 : 2[2] -> 3[3] via P2P/IPC
+main:1265:1265 [4] NCCL INFO Channel 00/0 : 4[4] -> 5[5] via P2P/IPC
+main:1266:1266 [5] NCCL INFO Channel 02/0 : 5[5] -> 6[6] via P2P/IPC
+main:1265:1265 [4] NCCL INFO Channel 01/0 : 4[4] -> 5[5] via P2P/IPC
+main:1266:1266 [5] NCCL INFO Channel 03/0 : 5[5] -> 6[6] via P2P/IPC
+main:1263:1263 [2] NCCL INFO Channel 01/0 : 2[2] -> 3[3] via P2P/IPC
+main:1261:1261 [0] NCCL INFO Channel 00/0 : 0[0] -> 1[1] via P2P/IPC
+main:1262:1262 [1] NCCL INFO Channel 01/0 : 1[1] -> 2[2] via P2P/IPC
+main:1262:1262 [1] NCCL INFO Channel 02/0 : 1[1] -> 2[2] via P2P/IPC
+main:1265:1265 [4] NCCL INFO Channel 02/0 : 4[4] -> 5[5] via P2P/IPC
+main:1264:1264 [3] NCCL INFO Channel 00/0 : 3[3] -> 4[4] via P2P/IPC
+main:1263:1263 [2] NCCL INFO Channel 02/0 : 2[2] -> 3[3] via P2P/IPC
+main:1268:1268 [7] NCCL INFO Channel 00/0 : 7[7] -> 0[0] via P2P/IPC
+main:1261:1261 [0] NCCL INFO Channel 01/0 : 0[0] -> 1[1] via P2P/IPC
+main:1266:1266 [5] NCCL INFO Channel 04/0 : 5[5] -> 6[6] via P2P/IPC
+main:1264:1264 [3] NCCL INFO Channel 01/0 : 3[3] -> 4[4] via P2P/IPC
+main:1263:1263 [2] NCCL INFO Channel 03/0 : 2[2] -> 3[3] via P2P/IPC
+main:1262:1262 [1] NCCL INFO Channel 03/0 : 1[1] -> 2[2] via P2P/IPC
+main:1268:1268 [7] NCCL INFO Channel 01/0 : 7[7] -> 0[0] via P2P/IPC
+main:1265:1265 [4] NCCL INFO Channel 03/0 : 4[4] -> 5[5] via P2P/IPC
+main:1268:1268 [7] NCCL INFO Channel 02/0 : 7[7] -> 0[0] via P2P/IPC
+main:1263:1263 [2] NCCL INFO Channel 04/0 : 2[2] -> 3[3] via P2P/IPC
+main:1261:1261 [0] NCCL INFO Channel 02/0 : 0[0] -> 1[1] via P2P/IPC
+main:1266:1266 [5] NCCL INFO Channel 05/0 : 5[5] -> 6[6] via P2P/IPC
+main:1262:1262 [1] NCCL INFO Channel 04/0 : 1[1] -> 2[2] via P2P/IPC
+main:1265:1265 [4] NCCL INFO Channel 04/0 : 4[4] -> 5[5] via P2P/IPC
+main:1264:1264 [3] NCCL INFO Channel 02/0 : 3[3] -> 4[4] via P2P/IPC
+main:1267:1267 [6] NCCL INFO Channel 00/0 : 6[6] -> 7[7] via P2P/IPC
+main:1262:1262 [1] NCCL INFO Channel 05/0 : 1[1] -> 2[2] via P2P/IPC
+main:1267:1267 [6] NCCL INFO Channel 01/0 : 6[6] -> 7[7] via P2P/IPC
+main:1264:1264 [3] NCCL INFO Channel 03/0 : 3[3] -> 4[4] via P2P/IPC
+main:1263:1263 [2] NCCL INFO Channel 05/0 : 2[2] -> 3[3] via P2P/IPC
+main:1266:1266 [5] NCCL INFO Channel 06/0 : 5[5] -> 6[6] via P2P/IPC
+main:1262:1262 [1] NCCL INFO Channel 06/0 : 1[1] -> 2[2] via P2P/IPC
+main:1265:1265 [4] NCCL INFO Channel 05/0 : 4[4] -> 5[5] via P2P/IPC
+main:1261:1261 [0] NCCL INFO Channel 03/0 : 0[0] -> 1[1] via P2P/IPC
+main:1263:1263 [2] NCCL INFO Channel 06/0 : 2[2] -> 3[3] via P2P/IPC
+main:1268:1268 [7] NCCL INFO Channel 03/0 : 7[7] -> 0[0] via P2P/IPC
+main:1264:1264 [3] NCCL INFO Channel 04/0 : 3[3] -> 4[4] via P2P/IPC
+main:1267:1267 [6] NCCL INFO Channel 02/0 : 6[6] -> 7[7] via P2P/IPC
+main:1266:1266 [5] NCCL INFO Channel 07/0 : 5[5] -> 6[6] via P2P/IPC
+main:1268:1268 [7] NCCL INFO Channel 04/0 : 7[7] -> 0[0] via P2P/IPC
+main:1264:1264 [3] NCCL INFO Channel 05/0 : 3[3] -> 4[4] via P2P/IPC
+main:1268:1268 [7] NCCL INFO Channel 05/0 : 7[7] -> 0[0] via P2P/IPC
+main:1263:1263 [2] NCCL INFO Channel 07/0 : 2[2] -> 3[3] via P2P/IPC
+main:1265:1265 [4] NCCL INFO Channel 06/0 : 4[4] -> 5[5] via P2P/IPC
+main:1261:1261 [0] NCCL INFO Channel 04/0 : 0[0] -> 1[1] via P2P/IPC
+main:1262:1262 [1] NCCL INFO Channel 07/0 : 1[1] -> 2[2] via P2P/IPC
+main:1267:1267 [6] NCCL INFO Channel 03/0 : 6[6] -> 7[7] via P2P/IPC
+main:1262:1262 [1] NCCL INFO Channel 08/0 : 1[1] -> 2[2] via P2P/IPC
+main:1266:1266 [5] NCCL INFO Channel 08/0 : 5[5] -> 6[6] via P2P/IPC
+main:1264:1264 [3] NCCL INFO Channel 06/0 : 3[3] -> 4[4] via P2P/IPC
+main:1268:1268 [7] NCCL INFO Channel 06/0 : 7[7] -> 0[0] via P2P/IPC
+main:1263:1263 [2] NCCL INFO Channel 08/0 : 2[2] -> 3[3] via P2P/IPC
+main:1265:1265 [4] NCCL INFO Channel 07/0 : 4[4] -> 5[5] via P2P/IPC
+main:1261:1261 [0] NCCL INFO Channel 05/0 : 0[0] -> 1[1] via P2P/IPC
+main:1267:1267 [6] NCCL INFO Channel 04/0 : 6[6] -> 7[7] via P2P/IPC
+main:1262:1262 [1] NCCL INFO Channel 09/0 : 1[1] -> 2[2] via P2P/IPC
+main:1265:1265 [4] NCCL INFO Channel 08/0 : 4[4] -> 5[5] via P2P/IPC
+main:1267:1267 [6] NCCL INFO Channel 05/0 : 6[6] -> 7[7] via P2P/IPC
+main:1268:1268 [7] NCCL INFO Channel 07/0 : 7[7] -> 0[0] via P2P/IPC
+main:1261:1261 [0] NCCL INFO Channel 06/0 : 0[0] -> 1[1] via P2P/IPC
+main:1264:1264 [3] NCCL INFO Channel 07/0 : 3[3] -> 4[4] via P2P/IPC
+main:1263:1263 [2] NCCL INFO Channel 09/0 : 2[2] -> 3[3] via P2P/IPC
+main:1266:1266 [5] NCCL INFO Channel 09/0 : 5[5] -> 6[6] via P2P/IPC
+main:1268:1268 [7] NCCL INFO Channel 08/0 : 7[7] -> 0[0] via P2P/IPC
+main:1265:1265 [4] NCCL INFO Channel 09/0 : 4[4] -> 5[5] via P2P/IPC
+main:1262:1262 [1] NCCL INFO Channel 10/0 : 1[1] -> 2[2] via P2P/IPC
+main:1267:1267 [6] NCCL INFO Channel 06/0 : 6[6] -> 7[7] via P2P/IPC
+main:1268:1268 [7] NCCL INFO Channel 09/0 : 7[7] -> 0[0] via P2P/IPC
+main:1262:1262 [1] NCCL INFO Channel 11/0 : 1[1] -> 2[2] via P2P/IPC
+main:1267:1267 [6] NCCL INFO Channel 07/0 : 6[6] -> 7[7] via P2P/IPC
+main:1261:1261 [0] NCCL INFO Channel 07/0 : 0[0] -> 1[1] via P2P/IPC
+main:1264:1264 [3] NCCL INFO Channel 08/0 : 3[3] -> 4[4] via P2P/IPC
+main:1265:1265 [4] NCCL INFO Channel 10/0 : 4[4] -> 5[5] via P2P/IPC
+main:1263:1263 [2] NCCL INFO Channel 10/0 : 2[2] -> 3[3] via P2P/IPC
+main:1266:1266 [5] NCCL INFO Channel 10/0 : 5[5] -> 6[6] via P2P/IPC
+main:1262:1262 [1] NCCL INFO Channel 12/0 : 1[1] -> 2[2] via P2P/IPC
+main:1267:1267 [6] NCCL INFO Channel 08/0 : 6[6] -> 7[7] via P2P/IPC
+main:1264:1264 [3] NCCL INFO Channel 09/0 : 3[3] -> 4[4] via P2P/IPC
+main:1268:1268 [7] NCCL INFO Channel 10/0 : 7[7] -> 0[0] via P2P/IPC
+main:1264:1264 [3] NCCL INFO Channel 10/0 : 3[3] -> 4[4] via P2P/IPC
+main:1263:1263 [2] NCCL INFO Channel 11/0 : 2[2] -> 3[3] via P2P/IPC
+main:1265:1265 [4] NCCL INFO Channel 11/0 : 4[4] -> 5[5] via P2P/IPC
+main:1267:1267 [6] NCCL INFO Channel 09/0 : 6[6] -> 7[7] via P2P/IPC
+main:1262:1262 [1] NCCL INFO Channel 13/0 : 1[1] -> 2[2] via P2P/IPC
+main:1266:1266 [5] NCCL INFO Channel 11/0 : 5[5] -> 6[6] via P2P/IPC
+main:1261:1261 [0] NCCL INFO Channel 08/0 : 0[0] -> 1[1] via P2P/IPC
+main:1268:1268 [7] NCCL INFO Channel 11/0 : 7[7] -> 0[0] via P2P/IPC
+main:1264:1264 [3] NCCL INFO Channel 11/0 : 3[3] -> 4[4] via P2P/IPC
+main:1261:1261 [0] NCCL INFO Channel 09/0 : 0[0] -> 1[1] via P2P/IPC
+main:1263:1263 [2] NCCL INFO Channel 12/0 : 2[2] -> 3[3] via P2P/IPC
+main:1266:1266 [5] NCCL INFO Channel 12/0 : 5[5] -> 6[6] via P2P/IPC
+main:1265:1265 [4] NCCL INFO Channel 12/0 : 4[4] -> 5[5] via P2P/IPC
+main:1264:1264 [3] NCCL INFO Channel 12/0 : 3[3] -> 4[4] via P2P/IPC
+main:1262:1262 [1] NCCL INFO Channel 14/0 : 1[1] -> 2[2] via P2P/IPC
+main:1268:1268 [7] NCCL INFO Channel 12/0 : 7[7] -> 0[0] via P2P/IPC
+main:1265:1265 [4] NCCL INFO Channel 13/0 : 4[4] -> 5[5] via P2P/IPC
+main:1263:1263 [2] NCCL INFO Channel 13/0 : 2[2] -> 3[3] via P2P/IPC
+main:1267:1267 [6] NCCL INFO Channel 10/0 : 6[6] -> 7[7] via P2P/IPC
+main:1266:1266 [5] NCCL INFO Channel 13/0 : 5[5] -> 6[6] via P2P/IPC
+main:1261:1261 [0] NCCL INFO Channel 10/0 : 0[0] -> 1[1] via P2P/IPC
+main:1264:1264 [3] NCCL INFO Channel 13/0 : 3[3] -> 4[4] via P2P/IPC
+main:1264:1264 [3] NCCL INFO Channel 14/0 : 3[3] -> 4[4] via P2P/IPC
+main:1266:1266 [5] NCCL INFO Channel 14/0 : 5[5] -> 6[6] via P2P/IPC
+main:1261:1261 [0] NCCL INFO Channel 11/0 : 0[0] -> 1[1] via P2P/IPC
+main:1262:1262 [1] NCCL INFO Channel 15/0 : 1[1] -> 2[2] via P2P/IPC
+main:1265:1265 [4] NCCL INFO Channel 14/0 : 4[4] -> 5[5] via P2P/IPC
+main:1268:1268 [7] NCCL INFO Channel 13/0 : 7[7] -> 0[0] via P2P/IPC
+main:1267:1267 [6] NCCL INFO Channel 11/0 : 6[6] -> 7[7] via P2P/IPC
+main:1263:1263 [2] NCCL INFO Channel 14/0 : 2[2] -> 3[3] via P2P/IPC
+main:1267:1267 [6] NCCL INFO Channel 12/0 : 6[6] -> 7[7] via P2P/IPC
+main:1266:1266 [5] NCCL INFO Channel 15/0 : 5[5] -> 6[6] via P2P/IPC
+main:1264:1264 [3] NCCL INFO Channel 15/0 : 3[3] -> 4[4] via P2P/IPC
+main:1262:1262 [1] NCCL INFO Channel 16/0 : 1[1] -> 2[2] via P2P/IPC
+main:1265:1265 [4] NCCL INFO Channel 15/0 : 4[4] -> 5[5] via P2P/IPC
+main:1263:1263 [2] NCCL INFO Channel 15/0 : 2[2] -> 3[3] via P2P/IPC
+main:1268:1268 [7] NCCL INFO Channel 14/0 : 7[7] -> 0[0] via P2P/IPC
+main:1261:1261 [0] NCCL INFO Channel 12/0 : 0[0] -> 1[1] via P2P/IPC
+main:1267:1267 [6] NCCL INFO Channel 13/0 : 6[6] -> 7[7] via P2P/IPC
+main:1265:1265 [4] NCCL INFO Channel 16/0 : 4[4] -> 5[5] via P2P/IPC
+main:1261:1261 [0] NCCL INFO Channel 13/0 : 0[0] -> 1[1] via P2P/IPC
+main:1263:1263 [2] NCCL INFO Channel 16/0 : 2[2] -> 3[3] via P2P/IPC
+main:1266:1266 [5] NCCL INFO Channel 16/0 : 5[5] -> 6[6] via P2P/IPC
+main:1268:1268 [7] NCCL INFO Channel 15/0 : 7[7] -> 0[0] via P2P/IPC
+main:1262:1262 [1] NCCL INFO Channel 17/0 : 1[1] -> 2[2] via P2P/IPC
+main:1267:1267 [6] NCCL INFO Channel 14/0 : 6[6] -> 7[7] via P2P/IPC
+main:1264:1264 [3] NCCL INFO Channel 16/0 : 3[3] -> 4[4] via P2P/IPC
+main:1267:1267 [6] NCCL INFO Channel 15/0 : 6[6] -> 7[7] via P2P/IPC
+main:1266:1266 [5] NCCL INFO Channel 17/0 : 5[5] -> 6[6] via P2P/IPC
+main:1261:1261 [0] NCCL INFO Channel 14/0 : 0[0] -> 1[1] via P2P/IPC
+main:1263:1263 [2] NCCL INFO Channel 17/0 : 2[2] -> 3[3] via P2P/IPC
+main:1268:1268 [7] NCCL INFO Channel 16/0 : 7[7] -> 0[0] via P2P/IPC
+main:1265:1265 [4] NCCL INFO Channel 17/0 : 4[4] -> 5[5] via P2P/IPC
+main:1262:1262 [1] NCCL INFO Channel 18/0 : 1[1] -> 2[2] via P2P/IPC
+main:1264:1264 [3] NCCL INFO Channel 17/0 : 3[3] -> 4[4] via P2P/IPC
+main:1268:1268 [7] NCCL INFO Channel 17/0 : 7[7] -> 0[0] via P2P/IPC
+main:1266:1266 [5] NCCL INFO Channel 18/0 : 5[5] -> 6[6] via P2P/IPC
+main:1265:1265 [4] NCCL INFO Channel 18/0 : 4[4] -> 5[5] via P2P/IPC
+main:1263:1263 [2] NCCL INFO Channel 18/0 : 2[2] -> 3[3] via P2P/IPC
+main:1267:1267 [6] NCCL INFO Channel 16/0 : 6[6] -> 7[7] via P2P/IPC
+main:1261:1261 [0] NCCL INFO Channel 15/0 : 0[0] -> 1[1] via P2P/IPC
+main:1264:1264 [3] NCCL INFO Channel 18/0 : 3[3] -> 4[4] via P2P/IPC
+main:1262:1262 [1] NCCL INFO Channel 19/0 : 1[1] -> 2[2] via P2P/IPC
+main:1268:1268 [7] NCCL INFO Channel 18/0 : 7[7] -> 0[0] via P2P/IPC
+main:1262:1262 [1] NCCL INFO Channel 20/0 : 1[1] -> 2[2] via P2P/IPC
+main:1262:1262 [1] NCCL INFO Channel 21/0 : 1[1] -> 2[2] via P2P/IPC
+main:1265:1265 [4] NCCL INFO Channel 19/0 : 4[4] -> 5[5] via P2P/IPC
+main:1268:1268 [7] NCCL INFO Channel 19/0 : 7[7] -> 0[0] via P2P/IPC
+main:1261:1261 [0] NCCL INFO Channel 16/0 : 0[0] -> 1[1] via P2P/IPC
+main:1263:1263 [2] NCCL INFO Channel 19/0 : 2[2] -> 3[3] via P2P/IPC
+main:1266:1266 [5] NCCL INFO Channel 19/0 : 5[5] -> 6[6] via P2P/IPC
+main:1267:1267 [6] NCCL INFO Channel 17/0 : 6[6] -> 7[7] via P2P/IPC
+main:1264:1264 [3] NCCL INFO Channel 19/0 : 3[3] -> 4[4] via P2P/IPC
+main:1265:1265 [4] NCCL INFO Channel 20/0 : 4[4] -> 5[5] via P2P/IPC
+main:1262:1262 [1] NCCL INFO Channel 22/0 : 1[1] -> 2[2] via P2P/IPC
+main:1267:1267 [6] NCCL INFO Channel 18/0 : 6[6] -> 7[7] via P2P/IPC
+main:1262:1262 [1] NCCL INFO Channel 23/0 : 1[1] -> 2[2] via P2P/IPC
+main:1265:1265 [4] NCCL INFO Channel 21/0 : 4[4] -> 5[5] via P2P/IPC
+main:1268:1268 [7] NCCL INFO Channel 20/0 : 7[7] -> 0[0] via P2P/IPC
+main:1264:1264 [3] NCCL INFO Channel 20/0 : 3[3] -> 4[4] via P2P/IPC
+main:1263:1263 [2] NCCL INFO Channel 20/0 : 2[2] -> 3[3] via P2P/IPC
+main:1261:1261 [0] NCCL INFO Channel 17/0 : 0[0] -> 1[1] via P2P/IPC
+main:1266:1266 [5] NCCL INFO Channel 20/0 : 5[5] -> 6[6] via P2P/IPC
+main:1266:1266 [5] NCCL INFO Channel 21/0 : 5[5] -> 6[6] via P2P/IPC
+main:1267:1267 [6] NCCL INFO Channel 19/0 : 6[6] -> 7[7] via P2P/IPC
+main:1263:1263 [2] NCCL INFO Channel 21/0 : 2[2] -> 3[3] via P2P/IPC
+main:1264:1264 [3] NCCL INFO Channel 21/0 : 3[3] -> 4[4] via P2P/IPC
+main:1268:1268 [7] NCCL INFO Channel 21/0 : 7[7] -> 0[0] via P2P/IPC
+main:1261:1261 [0] NCCL INFO Channel 18/0 : 0[0] -> 1[1] via P2P/IPC
+main:1263:1263 [2] NCCL INFO Channel 22/0 : 2[2] -> 3[3] via P2P/IPC
+main:1264:1264 [3] NCCL INFO Channel 22/0 : 3[3] -> 4[4] via P2P/IPC
+main:1265:1265 [4] NCCL INFO Channel 22/0 : 4[4] -> 5[5] via P2P/IPC
+main:1266:1266 [5] NCCL INFO Channel 22/0 : 5[5] -> 6[6] via P2P/IPC
+main:1267:1267 [6] NCCL INFO Channel 20/0 : 6[6] -> 7[7] via P2P/IPC
+main:1268:1268 [7] NCCL INFO Channel 22/0 : 7[7] -> 0[0] via P2P/IPC
+main:1261:1261 [0] NCCL INFO Channel 19/0 : 0[0] -> 1[1] via P2P/IPC
+main:1263:1263 [2] NCCL INFO Channel 23/0 : 2[2] -> 3[3] via P2P/IPC
+main:1267:1267 [6] NCCL INFO Channel 21/0 : 6[6] -> 7[7] via P2P/IPC
+main:1265:1265 [4] NCCL INFO Channel 23/0 : 4[4] -> 5[5] via P2P/IPC
+main:1266:1266 [5] NCCL INFO Channel 23/0 : 5[5] -> 6[6] via P2P/IPC
+main:1261:1261 [0] NCCL INFO Channel 20/0 : 0[0] -> 1[1] via P2P/IPC
+main:1268:1268 [7] NCCL INFO Channel 23/0 : 7[7] -> 0[0] via P2P/IPC
+main:1264:1264 [3] NCCL INFO Channel 23/0 : 3[3] -> 4[4] via P2P/IPC
+main:1267:1267 [6] NCCL INFO Channel 22/0 : 6[6] -> 7[7] via P2P/IPC
+main:1261:1261 [0] NCCL INFO Channel 21/0 : 0[0] -> 1[1] via P2P/IPC
+main:1267:1267 [6] NCCL INFO Channel 23/0 : 6[6] -> 7[7] via P2P/IPC
+main:1261:1261 [0] NCCL INFO Channel 22/0 : 0[0] -> 1[1] via P2P/IPC
+main:1261:1261 [0] NCCL INFO Channel 23/0 : 0[0] -> 1[1] via P2P/IPC
+main:1268:1268 [7] NCCL INFO Connected all rings, use ring PXN 0 GDR 1
+main:1262:1262 [1] NCCL INFO Connected all rings, use ring PXN 0 GDR 1
+main:1261:1261 [0] NCCL INFO Connected all rings, use ring PXN 0 GDR 1
+main:1263:1263 [2] NCCL INFO Connected all rings, use ring PXN 0 GDR 1
+main:1266:1266 [5] NCCL INFO Connected all rings, use ring PXN 0 GDR 1
+main:1267:1267 [6] NCCL INFO Connected all rings, use ring PXN 0 GDR 1
+main:1265:1265 [4] NCCL INFO Connected all rings, use ring PXN 0 GDR 1
+main:1264:1264 [3] NCCL INFO Connected all rings, use ring PXN 0 GDR 1
+main:1268:1268 [7] NCCL INFO Channel 00/0 : 7[7] -> 6[6] via P2P/IPC
+main:1268:1268 [7] NCCL INFO Channel 01/0 : 7[7] -> 6[6] via P2P/IPC
+main:1268:1268 [7] NCCL INFO Channel 02/0 : 7[7] -> 6[6] via P2P/IPC
+main:1268:1268 [7] NCCL INFO Channel 03/0 : 7[7] -> 6[6] via P2P/IPC
+main:1268:1268 [7] NCCL INFO Channel 04/0 : 7[7] -> 6[6] via P2P/IPC
+main:1268:1268 [7] NCCL INFO Channel 05/0 : 7[7] -> 6[6] via P2P/IPC
+main:1268:1268 [7] NCCL INFO Channel 06/0 : 7[7] -> 6[6] via P2P/IPC
+main:1268:1268 [7] NCCL INFO Channel 07/0 : 7[7] -> 6[6] via P2P/IPC
+main:1268:1268 [7] NCCL INFO Channel 08/0 : 7[7] -> 6[6] via P2P/IPC
+main:1268:1268 [7] NCCL INFO Channel 09/0 : 7[7] -> 6[6] via P2P/IPC
+main:1268:1268 [7] NCCL INFO Channel 10/0 : 7[7] -> 6[6] via P2P/IPC
+main:1268:1268 [7] NCCL INFO Channel 11/0 : 7[7] -> 6[6] via P2P/IPC
+main:1268:1268 [7] NCCL INFO Channel 12/0 : 7[7] -> 6[6] via P2P/IPC
+main:1268:1268 [7] NCCL INFO Channel 13/0 : 7[7] -> 6[6] via P2P/IPC
+main:1268:1268 [7] NCCL INFO Channel 14/0 : 7[7] -> 6[6] via P2P/IPC
+main:1268:1268 [7] NCCL INFO Channel 15/0 : 7[7] -> 6[6] via P2P/IPC
+main:1268:1268 [7] NCCL INFO Channel 16/0 : 7[7] -> 6[6] via P2P/IPC
+main:1268:1268 [7] NCCL INFO Channel 17/0 : 7[7] -> 6[6] via P2P/IPC
+main:1268:1268 [7] NCCL INFO Channel 18/0 : 7[7] -> 6[6] via P2P/IPC
+main:1268:1268 [7] NCCL INFO Channel 19/0 : 7[7] -> 6[6] via P2P/IPC
+main:1265:1265 [4] NCCL INFO Channel 00/0 : 4[4] -> 3[3] via P2P/IPC
+main:1265:1265 [4] NCCL INFO Channel 01/0 : 4[4] -> 3[3] via P2P/IPC
+main:1268:1268 [7] NCCL INFO Channel 20/0 : 7[7] -> 6[6] via P2P/IPC
+main:1265:1265 [4] NCCL INFO Channel 02/0 : 4[4] -> 3[3] via P2P/IPC
+main:1266:1266 [5] NCCL INFO Channel 00/0 : 5[5] -> 4[4] via P2P/IPC
+main:1262:1262 [1] NCCL INFO Channel 00/0 : 1[1] -> 0[0] via P2P/IPC
+main:1268:1268 [7] NCCL INFO Channel 21/0 : 7[7] -> 6[6] via P2P/IPC
+main:1265:1265 [4] NCCL INFO Channel 03/0 : 4[4] -> 3[3] via P2P/IPC
+main:1266:1266 [5] NCCL INFO Channel 01/0 : 5[5] -> 4[4] via P2P/IPC
+main:1263:1263 [2] NCCL INFO Channel 00/0 : 2[2] -> 1[1] via P2P/IPC
+main:1263:1263 [2] NCCL INFO Channel 01/0 : 2[2] -> 1[1] via P2P/IPC
+main:1268:1268 [7] NCCL INFO Channel 22/0 : 7[7] -> 6[6] via P2P/IPC
+main:1266:1266 [5] NCCL INFO Channel 02/0 : 5[5] -> 4[4] via P2P/IPC
+main:1264:1264 [3] NCCL INFO Channel 00/0 : 3[3] -> 2[2] via P2P/IPC
+main:1262:1262 [1] NCCL INFO Channel 01/0 : 1[1] -> 0[0] via P2P/IPC
+main:1265:1265 [4] NCCL INFO Channel 04/0 : 4[4] -> 3[3] via P2P/IPC
+main:1267:1267 [6] NCCL INFO Channel 00/0 : 6[6] -> 5[5] via P2P/IPC
+main:1268:1268 [7] NCCL INFO Channel 23/0 : 7[7] -> 6[6] via P2P/IPC
+main:1262:1262 [1] NCCL INFO Channel 02/0 : 1[1] -> 0[0] via P2P/IPC
+main:1267:1267 [6] NCCL INFO Channel 01/0 : 6[6] -> 5[5] via P2P/IPC
+main:1263:1263 [2] NCCL INFO Channel 02/0 : 2[2] -> 1[1] via P2P/IPC
+main:1264:1264 [3] NCCL INFO Channel 01/0 : 3[3] -> 2[2] via P2P/IPC
+main:1265:1265 [4] NCCL INFO Channel 05/0 : 4[4] -> 3[3] via P2P/IPC
+main:1266:1266 [5] NCCL INFO Channel 03/0 : 5[5] -> 4[4] via P2P/IPC
+main:1262:1262 [1] NCCL INFO Channel 03/0 : 1[1] -> 0[0] via P2P/IPC
+main:1262:1262 [1] NCCL INFO Channel 04/0 : 1[1] -> 0[0] via P2P/IPC
+main:1267:1267 [6] NCCL INFO Channel 02/0 : 6[6] -> 5[5] via P2P/IPC
+main:1264:1264 [3] NCCL INFO Channel 02/0 : 3[3] -> 2[2] via P2P/IPC
+main:1263:1263 [2] NCCL INFO Channel 03/0 : 2[2] -> 1[1] via P2P/IPC
+main:1265:1265 [4] NCCL INFO Channel 06/0 : 4[4] -> 3[3] via P2P/IPC
+main:1263:1263 [2] NCCL INFO Channel 04/0 : 2[2] -> 1[1] via P2P/IPC
+main:1264:1264 [3] NCCL INFO Channel 03/0 : 3[3] -> 2[2] via P2P/IPC
+main:1266:1266 [5] NCCL INFO Channel 04/0 : 5[5] -> 4[4] via P2P/IPC
+main:1262:1262 [1] NCCL INFO Channel 05/0 : 1[1] -> 0[0] via P2P/IPC
+main:1267:1267 [6] NCCL INFO Channel 03/0 : 6[6] -> 5[5] via P2P/IPC
+main:1265:1265 [4] NCCL INFO Channel 07/0 : 4[4] -> 3[3] via P2P/IPC
+main:1264:1264 [3] NCCL INFO Channel 04/0 : 3[3] -> 2[2] via P2P/IPC
+main:1267:1267 [6] NCCL INFO Channel 04/0 : 6[6] -> 5[5] via P2P/IPC
+main:1265:1265 [4] NCCL INFO Channel 08/0 : 4[4] -> 3[3] via P2P/IPC
+main:1264:1264 [3] NCCL INFO Channel 05/0 : 3[3] -> 2[2] via P2P/IPC
+main:1262:1262 [1] NCCL INFO Channel 06/0 : 1[1] -> 0[0] via P2P/IPC
+main:1263:1263 [2] NCCL INFO Channel 05/0 : 2[2] -> 1[1] via P2P/IPC
+main:1265:1265 [4] NCCL INFO Channel 09/0 : 4[4] -> 3[3] via P2P/IPC
+main:1267:1267 [6] NCCL INFO Channel 05/0 : 6[6] -> 5[5] via P2P/IPC
+main:1266:1266 [5] NCCL INFO Channel 05/0 : 5[5] -> 4[4] via P2P/IPC
+main:1264:1264 [3] NCCL INFO Channel 06/0 : 3[3] -> 2[2] via P2P/IPC
+main:1263:1263 [2] NCCL INFO Channel 06/0 : 2[2] -> 1[1] via P2P/IPC
+main:1263:1263 [2] NCCL INFO Channel 07/0 : 2[2] -> 1[1] via P2P/IPC
+main:1267:1267 [6] NCCL INFO Channel 06/0 : 6[6] -> 5[5] via P2P/IPC
+main:1264:1264 [3] NCCL INFO Channel 07/0 : 3[3] -> 2[2] via P2P/IPC
+main:1262:1262 [1] NCCL INFO Channel 07/0 : 1[1] -> 0[0] via P2P/IPC
+main:1265:1265 [4] NCCL INFO Channel 10/0 : 4[4] -> 3[3] via P2P/IPC
+main:1266:1266 [5] NCCL INFO Channel 06/0 : 5[5] -> 4[4] via P2P/IPC
+main:1262:1262 [1] NCCL INFO Channel 08/0 : 1[1] -> 0[0] via P2P/IPC
+main:1267:1267 [6] NCCL INFO Channel 07/0 : 6[6] -> 5[5] via P2P/IPC
+main:1265:1265 [4] NCCL INFO Channel 11/0 : 4[4] -> 3[3] via P2P/IPC
+main:1263:1263 [2] NCCL INFO Channel 08/0 : 2[2] -> 1[1] via P2P/IPC
+main:1265:1265 [4] NCCL INFO Channel 12/0 : 4[4] -> 3[3] via P2P/IPC
+main:1266:1266 [5] NCCL INFO Channel 07/0 : 5[5] -> 4[4] via P2P/IPC
+main:1264:1264 [3] NCCL INFO Channel 08/0 : 3[3] -> 2[2] via P2P/IPC
+main:1262:1262 [1] NCCL INFO Channel 09/0 : 1[1] -> 0[0] via P2P/IPC
+main:1267:1267 [6] NCCL INFO Channel 08/0 : 6[6] -> 5[5] via P2P/IPC
+main:1263:1263 [2] NCCL INFO Channel 09/0 : 2[2] -> 1[1] via P2P/IPC
+main:1264:1264 [3] NCCL INFO Channel 09/0 : 3[3] -> 2[2] via P2P/IPC
+main:1265:1265 [4] NCCL INFO Channel 13/0 : 4[4] -> 3[3] via P2P/IPC
+main:1266:1266 [5] NCCL INFO Channel 08/0 : 5[5] -> 4[4] via P2P/IPC
+main:1267:1267 [6] NCCL INFO Channel 09/0 : 6[6] -> 5[5] via P2P/IPC
+main:1267:1267 [6] NCCL INFO Channel 10/0 : 6[6] -> 5[5] via P2P/IPC
+main:1262:1262 [1] NCCL INFO Channel 10/0 : 1[1] -> 0[0] via P2P/IPC
+main:1263:1263 [2] NCCL INFO Channel 10/0 : 2[2] -> 1[1] via P2P/IPC
+main:1265:1265 [4] NCCL INFO Channel 14/0 : 4[4] -> 3[3] via P2P/IPC
+main:1264:1264 [3] NCCL INFO Channel 10/0 : 3[3] -> 2[2] via P2P/IPC
+main:1266:1266 [5] NCCL INFO Channel 09/0 : 5[5] -> 4[4] via P2P/IPC
+main:1267:1267 [6] NCCL INFO Channel 11/0 : 6[6] -> 5[5] via P2P/IPC
+main:1262:1262 [1] NCCL INFO Channel 11/0 : 1[1] -> 0[0] via P2P/IPC
+main:1263:1263 [2] NCCL INFO Channel 11/0 : 2[2] -> 1[1] via P2P/IPC
+main:1266:1266 [5] NCCL INFO Channel 10/0 : 5[5] -> 4[4] via P2P/IPC
+main:1265:1265 [4] NCCL INFO Channel 15/0 : 4[4] -> 3[3] via P2P/IPC
+main:1267:1267 [6] NCCL INFO Channel 12/0 : 6[6] -> 5[5] via P2P/IPC
+main:1262:1262 [1] NCCL INFO Channel 12/0 : 1[1] -> 0[0] via P2P/IPC
+main:1264:1264 [3] NCCL INFO Channel 11/0 : 3[3] -> 2[2] via P2P/IPC
+main:1263:1263 [2] NCCL INFO Channel 12/0 : 2[2] -> 1[1] via P2P/IPC
+main:1265:1265 [4] NCCL INFO Channel 16/0 : 4[4] -> 3[3] via P2P/IPC
+main:1266:1266 [5] NCCL INFO Channel 11/0 : 5[5] -> 4[4] via P2P/IPC
+main:1265:1265 [4] NCCL INFO Channel 17/0 : 4[4] -> 3[3] via P2P/IPC
+main:1267:1267 [6] NCCL INFO Channel 13/0 : 6[6] -> 5[5] via P2P/IPC
+main:1266:1266 [5] NCCL INFO Channel 12/0 : 5[5] -> 4[4] via P2P/IPC
+main:1262:1262 [1] NCCL INFO Channel 13/0 : 1[1] -> 0[0] via P2P/IPC
+main:1263:1263 [2] NCCL INFO Channel 13/0 : 2[2] -> 1[1] via P2P/IPC
+main:1264:1264 [3] NCCL INFO Channel 12/0 : 3[3] -> 2[2] via P2P/IPC
+main:1267:1267 [6] NCCL INFO Channel 14/0 : 6[6] -> 5[5] via P2P/IPC
+main:1265:1265 [4] NCCL INFO Channel 18/0 : 4[4] -> 3[3] via P2P/IPC
+main:1267:1267 [6] NCCL INFO Channel 15/0 : 6[6] -> 5[5] via P2P/IPC
+main:1262:1262 [1] NCCL INFO Channel 14/0 : 1[1] -> 0[0] via P2P/IPC
+main:1265:1265 [4] NCCL INFO Channel 19/0 : 4[4] -> 3[3] via P2P/IPC
+main:1266:1266 [5] NCCL INFO Channel 13/0 : 5[5] -> 4[4] via P2P/IPC
+main:1263:1263 [2] NCCL INFO Channel 14/0 : 2[2] -> 1[1] via P2P/IPC
+main:1266:1266 [5] NCCL INFO Channel 14/0 : 5[5] -> 4[4] via P2P/IPC
+main:1265:1265 [4] NCCL INFO Channel 20/0 : 4[4] -> 3[3] via P2P/IPC
+main:1264:1264 [3] NCCL INFO Channel 13/0 : 3[3] -> 2[2] via P2P/IPC
+main:1267:1267 [6] NCCL INFO Channel 16/0 : 6[6] -> 5[5] via P2P/IPC
+main:1262:1262 [1] NCCL INFO Channel 15/0 : 1[1] -> 0[0] via P2P/IPC
+main:1263:1263 [2] NCCL INFO Channel 15/0 : 2[2] -> 1[1] via P2P/IPC
+main:1262:1262 [1] NCCL INFO Channel 16/0 : 1[1] -> 0[0] via P2P/IPC
+main:1267:1267 [6] NCCL INFO Channel 17/0 : 6[6] -> 5[5] via P2P/IPC
+main:1265:1265 [4] NCCL INFO Channel 21/0 : 4[4] -> 3[3] via P2P/IPC
+main:1266:1266 [5] NCCL INFO Channel 15/0 : 5[5] -> 4[4] via P2P/IPC
+main:1263:1263 [2] NCCL INFO Channel 16/0 : 2[2] -> 1[1] via P2P/IPC
+main:1264:1264 [3] NCCL INFO Channel 14/0 : 3[3] -> 2[2] via P2P/IPC
+main:1262:1262 [1] NCCL INFO Channel 17/0 : 1[1] -> 0[0] via P2P/IPC
+main:1265:1265 [4] NCCL INFO Channel 22/0 : 4[4] -> 3[3] via P2P/IPC
+main:1267:1267 [6] NCCL INFO Channel 18/0 : 6[6] -> 5[5] via P2P/IPC
+main:1264:1264 [3] NCCL INFO Channel 15/0 : 3[3] -> 2[2] via P2P/IPC
+main:1262:1262 [1] NCCL INFO Channel 18/0 : 1[1] -> 0[0] via P2P/IPC
+main:1266:1266 [5] NCCL INFO Channel 16/0 : 5[5] -> 4[4] via P2P/IPC
+main:1263:1263 [2] NCCL INFO Channel 17/0 : 2[2] -> 1[1] via P2P/IPC
+main:1267:1267 [6] NCCL INFO Channel 19/0 : 6[6] -> 5[5] via P2P/IPC
+main:1265:1265 [4] NCCL INFO Channel 23/0 : 4[4] -> 3[3] via P2P/IPC
+main:1264:1264 [3] NCCL INFO Channel 16/0 : 3[3] -> 2[2] via P2P/IPC
+main:1262:1262 [1] NCCL INFO Channel 19/0 : 1[1] -> 0[0] via P2P/IPC
+main:1266:1266 [5] NCCL INFO Channel 17/0 : 5[5] -> 4[4] via P2P/IPC
+main:1263:1263 [2] NCCL INFO Channel 18/0 : 2[2] -> 1[1] via P2P/IPC
+main:1262:1262 [1] NCCL INFO Channel 20/0 : 1[1] -> 0[0] via P2P/IPC
+main:1263:1263 [2] NCCL INFO Channel 19/0 : 2[2] -> 1[1] via P2P/IPC
+main:1267:1267 [6] NCCL INFO Channel 20/0 : 6[6] -> 5[5] via P2P/IPC
+main:1266:1266 [5] NCCL INFO Channel 18/0 : 5[5] -> 4[4] via P2P/IPC
+main:1264:1264 [3] NCCL INFO Channel 17/0 : 3[3] -> 2[2] via P2P/IPC
+main:1262:1262 [1] NCCL INFO Channel 21/0 : 1[1] -> 0[0] via P2P/IPC
+main:1263:1263 [2] NCCL INFO Channel 20/0 : 2[2] -> 1[1] via P2P/IPC
+main:1267:1267 [6] NCCL INFO Channel 21/0 : 6[6] -> 5[5] via P2P/IPC
+main:1266:1266 [5] NCCL INFO Channel 19/0 : 5[5] -> 4[4] via P2P/IPC
+main:1264:1264 [3] NCCL INFO Channel 18/0 : 3[3] -> 2[2] via P2P/IPC
+main:1262:1262 [1] NCCL INFO Channel 22/0 : 1[1] -> 0[0] via P2P/IPC
+main:1266:1266 [5] NCCL INFO Channel 20/0 : 5[5] -> 4[4] via P2P/IPC
+main:1264:1264 [3] NCCL INFO Channel 19/0 : 3[3] -> 2[2] via P2P/IPC
+main:1267:1267 [6] NCCL INFO Channel 22/0 : 6[6] -> 5[5] via P2P/IPC
+main:1262:1262 [1] NCCL INFO Channel 23/0 : 1[1] -> 0[0] via P2P/IPC
+main:1263:1263 [2] NCCL INFO Channel 21/0 : 2[2] -> 1[1] via P2P/IPC
+main:1266:1266 [5] NCCL INFO Channel 21/0 : 5[5] -> 4[4] via P2P/IPC
+main:1267:1267 [6] NCCL INFO Channel 23/0 : 6[6] -> 5[5] via P2P/IPC
+main:1263:1263 [2] NCCL INFO Channel 22/0 : 2[2] -> 1[1] via P2P/IPC
+main:1264:1264 [3] NCCL INFO Channel 20/0 : 3[3] -> 2[2] via P2P/IPC
+main:1266:1266 [5] NCCL INFO Channel 22/0 : 5[5] -> 4[4] via P2P/IPC
+main:1264:1264 [3] NCCL INFO Channel 21/0 : 3[3] -> 2[2] via P2P/IPC
+main:1263:1263 [2] NCCL INFO Channel 23/0 : 2[2] -> 1[1] via P2P/IPC
+main:1266:1266 [5] NCCL INFO Channel 23/0 : 5[5] -> 4[4] via P2P/IPC
+main:1264:1264 [3] NCCL INFO Channel 22/0 : 3[3] -> 2[2] via P2P/IPC
+main:1264:1264 [3] NCCL INFO Channel 23/0 : 3[3] -> 2[2] via P2P/IPC
+main:1261:1261 [0] NCCL INFO Connected all trees
+main:1261:1261 [0] NCCL INFO NCCL_NVLS_CHUNKSIZE set by environment to 524288.
+main:1263:1263 [2] NCCL INFO Connected all trees
+main:1263:1263 [2] NCCL INFO NCCL_NVLS_CHUNKSIZE set by environment to 524288.
+main:1262:1262 [1] NCCL INFO Connected all trees
+main:1262:1262 [1] NCCL INFO NCCL_NVLS_CHUNKSIZE set by environment to 524288.
+main:1264:1264 [3] NCCL INFO Connected all trees
+main:1264:1264 [3] NCCL INFO NCCL_NVLS_CHUNKSIZE set by environment to 524288.
+main:1265:1265 [4] NCCL INFO Connected all trees
+main:1265:1265 [4] NCCL INFO NCCL_NVLS_CHUNKSIZE set by environment to 524288.
+main:1266:1266 [5] NCCL INFO Connected all trees
+main:1266:1266 [5] NCCL INFO NCCL_NVLS_CHUNKSIZE set by environment to 524288.
+main:1268:1268 [7] NCCL INFO Connected all trees
+main:1268:1268 [7] NCCL INFO NCCL_NVLS_CHUNKSIZE set by environment to 524288.
+main:1267:1267 [6] NCCL INFO Connected all trees
+main:1267:1267 [6] NCCL INFO NCCL_NVLS_CHUNKSIZE set by environment to 524288.
+main:1262:1262 [1] NCCL INFO NVLS comm 0xeb7f310 headRank 1 nHeads 8 nvlsRanks 8 buffSize 4194304 nvlsPerRankSize 134217728 nvlsTotalSize 1073741824
+main:1265:1265 [4] NCCL INFO NVLS comm 0x3cd09e50 headRank 4 nHeads 8 nvlsRanks 8 buffSize 4194304 nvlsPerRankSize 134217728 nvlsTotalSize 1073741824
+main:1266:1266 [5] NCCL INFO NVLS comm 0x4e4dc960 headRank 5 nHeads 8 nvlsRanks 8 buffSize 4194304 nvlsPerRankSize 134217728 nvlsTotalSize 1073741824
+main:1267:1267 [6] NCCL INFO NVLS comm 0x3e6bcfe0 headRank 6 nHeads 8 nvlsRanks 8 buffSize 4194304 nvlsPerRankSize 134217728 nvlsTotalSize 1073741824
+main:1261:1261 [0] NCCL INFO NVLS comm 0x24eaf370 headRank 0 nHeads 8 nvlsRanks 8 buffSize 4194304 nvlsPerRankSize 134217728 nvlsTotalSize 1073741824
+main:1268:1268 [7] NCCL INFO NVLS comm 0x1afab1d0 headRank 7 nHeads 8 nvlsRanks 8 buffSize 4194304 nvlsPerRankSize 134217728 nvlsTotalSize 1073741824
+main:1263:1263 [2] NCCL INFO NVLS comm 0x1fd821e0 headRank 2 nHeads 8 nvlsRanks 8 buffSize 4194304 nvlsPerRankSize 134217728 nvlsTotalSize 1073741824
+main:1264:1264 [3] NCCL INFO NVLS comm 0x47ecba20 headRank 3 nHeads 8 nvlsRanks 8 buffSize 4194304 nvlsPerRankSize 134217728 nvlsTotalSize 1073741824
+main:1267:1393 [0] NCCL INFO [Proxy Progress] Device 6 CPU core 74
+main:1268:1394 [0] NCCL INFO [Proxy Progress] Device 7 CPU core 157
+main:1265:1396 [0] NCCL INFO [Proxy Progress] Device 4 CPU core 75
+main:1263:1395 [0] NCCL INFO [Proxy Progress] Device 2 CPU core 132
+main:1266:1397 [0] NCCL INFO [Proxy Progress] Device 5 CPU core 152
+main:1264:1398 [0] NCCL INFO [Proxy Progress] Device 3 CPU core 136
+main:1262:1399 [0] NCCL INFO [Proxy Progress] Device 1 CPU core 25
+main:1261:1400 [0] NCCL INFO [Proxy Progress] Device 0 CPU core 133
+main:1268:1268 [7] NCCL INFO TUNER/Plugin: Could not find: libnccl-tuner.so
+main:1268:1268 [7] NCCL INFO threadThresholds 8/8/64 | 64/8/64 | 512 | 512
+main:1268:1268 [7] NCCL INFO 24 coll channels, 24 collnet channels, 16 nvls channels, 32 p2p channels, 32 p2p channels per peer
+main:1268:1268 [7] NCCL INFO Symmetric memory is not supported. cuMemEnable 0, globalGinSupport 0, globalNicFused 0 cuMemGdrSupport 1
+main:1263:1263 [2] NCCL INFO TUNER/Plugin: Could not find: libnccl-tuner.so
+main:1265:1265 [4] NCCL INFO TUNER/Plugin: Could not find: libnccl-tuner.so
+main:1265:1265 [4] NCCL INFO threadThresholds 8/8/64 | 64/8/64 | 512 | 512
+main:1265:1265 [4] NCCL INFO 24 coll channels, 24 collnet channels, 16 nvls channels, 32 p2p channels, 32 p2p channels per peer
+main:1265:1265 [4] NCCL INFO Symmetric memory is not supported. cuMemEnable 0, globalGinSupport 0, globalNicFused 0 cuMemGdrSupport 1
+main:1263:1263 [2] NCCL INFO threadThresholds 8/8/64 | 64/8/64 | 512 | 512
+main:1263:1263 [2] NCCL INFO 24 coll channels, 24 collnet channels, 16 nvls channels, 32 p2p channels, 32 p2p channels per peer
+main:1262:1262 [1] NCCL INFO TUNER/Plugin: Could not find: libnccl-tuner.so
+main:1262:1262 [1] NCCL INFO threadThresholds 8/8/64 | 64/8/64 | 512 | 512
+main:1262:1262 [1] NCCL INFO 24 coll channels, 24 collnet channels, 16 nvls channels, 32 p2p channels, 32 p2p channels per peer
+main:1262:1262 [1] NCCL INFO Symmetric memory is not supported. cuMemEnable 0, globalGinSupport 0, globalNicFused 0 cuMemGdrSupport 1
+main:1267:1267 [6] NCCL INFO TUNER/Plugin: Could not find: libnccl-tuner.so
+main:1266:1266 [5] NCCL INFO TUNER/Plugin: Could not find: libnccl-tuner.so
+main:1264:1264 [3] NCCL INFO TUNER/Plugin: Could not find: libnccl-tuner.so
+main:1266:1266 [5] NCCL INFO threadThresholds 8/8/64 | 64/8/64 | 512 | 512
+main:1266:1266 [5] NCCL INFO 24 coll channels, 24 collnet channels, 16 nvls channels, 32 p2p channels, 32 p2p channels per peer
+main:1267:1267 [6] NCCL INFO threadThresholds 8/8/64 | 64/8/64 | 512 | 512
+main:1264:1264 [3] NCCL INFO threadThresholds 8/8/64 | 64/8/64 | 512 | 512
+main:1267:1267 [6] NCCL INFO 24 coll channels, 24 collnet channels, 16 nvls channels, 32 p2p channels, 32 p2p channels per peer
+main:1264:1264 [3] NCCL INFO 24 coll channels, 24 collnet channels, 16 nvls channels, 32 p2p channels, 32 p2p channels per peer
+main:1266:1266 [5] NCCL INFO Symmetric memory is not supported. cuMemEnable 0, globalGinSupport 0, globalNicFused 0 cuMemGdrSupport 1
+main:1263:1263 [2] NCCL INFO Symmetric memory is not supported. cuMemEnable 0, globalGinSupport 0, globalNicFused 0 cuMemGdrSupport 1
+main:1261:1261 [0] NCCL INFO TUNER/Plugin: Could not find: libnccl-tuner.so
+main:1261:1261 [0] NCCL INFO threadThresholds 8/8/64 | 64/8/64 | 512 | 512
+main:1261:1261 [0] NCCL INFO 24 coll channels, 24 collnet channels, 16 nvls channels, 32 p2p channels, 32 p2p channels per peer
+main:1261:1261 [0] NCCL INFO Symmetric memory is not supported. cuMemEnable 0, globalGinSupport 0, globalNicFused 0 cuMemGdrSupport 1
+main:1264:1264 [3] NCCL INFO Symmetric memory is not supported. cuMemEnable 0, globalGinSupport 0, globalNicFused 0 cuMemGdrSupport 1
+main:1267:1267 [6] NCCL INFO Symmetric memory is not supported. cuMemEnable 0, globalGinSupport 0, globalNicFused 0 cuMemGdrSupport 1
+main:1261:1261 [0] NCCL INFO CC Off, workFifoBytes 1048576
+main:1266:1266 [5] NCCL INFO ncclCommInitRankConfig comm 0x4e4dc960 rank 5 nranks 8 cudaDev 5 nvmlDev 5 busId a8000 commId 0xb8797bd71184e95d - Init COMPLETE
+main:1266:1266 [5] NCCL INFO Init timings - ncclCommInitRankConfig: rank 5 nranks 8 total 2.78 (kernels 0.32, alloc 1.79, bootstmain:1264:1264 [3] NCCL INFO ncclCommInitRankConfig comm 0x47ecba20 rank 3 nranks 8 cudaDev 3 nvmlDev 3 busId 86000 commId 0xb87rap 0.05, allgathers 0.01, topo 0.08, graphs 0.02, connections 0.52, rest 0.01)
+97bd71184e95d - Init COMPLETE
+main:1264:1264 [3] NCCL INFO Init timings - ncclCommInitRankConfig: rank 3 nranks 8 total 2.78 (kernels 0.32, alloc 1.72, bootstrap 0.12, allgathers 0.00, topo 0.08, graphs 0.02, connections 0.52, rest 0.01)
+main:1265:1265 [4] NCCL INFO ncclCommInitRankConfig comm 0x3cd09e50 rank 4 nranks 8 cudaDev 4 nvmlDev 4 busId 97000 commId 0xb8797bd71184e95d - Init COMPLETE
+main:1265:1265 [4] NCCL INFO Init timings - ncclCommInitRankConfig: rank 4 nranks 8 total 2.78 (kernels 0.32, alloc 1.83, bootstrap 0.01, allgathers 0.01, topo 0.07, graphs 0.02, connections 0.52, rest 0.01)
+main:1262:1262 [1] NCCL INFO ncclCommInitRankConfig comm 0xeb7f310 rank 1 nranks 8 cudaDev 1 nvmlDev 1 busId 64000 commId 0xb8797bd71184e95d - Init COMPLETE
+main:1262:1262 [1] NCCL INFO Init timings - ncclCommInitRankConfig: rank 1 nranks 8 total 2.78 (kernels 0.32, alloc 1.66, bootstrap 0.18, allgathers 0.00, topo 0.08, graphs 0.02, connections 0.52, rest 0.00)
+main:1268:1268 [7] NCCL INFO ncclCommInitRankConfig comm 0x1afab1d0 rank 7 nranks 8 cudaDev 7 nvmlDev 7 busId ca000 commId 0xb8797bd71184e95d - Init COMPLETE
+main:1268:1268 [7] NCCL INFO Init timings - ncclCommInitRankConfig: rank 7 nranks 8 total 2.78 (kernels 0.38, alloc 1.78, bootstrap 0.00, allgathers 0.00, topo 0.08, graphs 0.02, connections 0.52, rest 0.01)
+main:1263:1263 [2] NCCL INFO ncclCommInitRankConfig comm 0x1fd821e0 rank 2 nranks 8 cudaDev 2 nvmlDev 2 busId 75000 commId 0xb8797bd71184e95d - Init COMPLETE
+main:1263:1263 [2] NCCL INFO Init timings - ncclCommInitRankConfig: rank 2 nranks 8 total 2.78 (kernels 0.33, alloc 1.83, bootstmain:1261:1261 [0] NCCL INFO ncclCommInitRankConfig comm 0x24eaf370 rank 0 nranks 8 cudaDev 0 nvmlDev 0 busId 53000 commId 0xb87rap 0.00, allgathers 0.00, topo 0.08, graphs 0.02, connections 0.52, rest 0.01)
+97bd71184e95d - Init COMPLETE
+main:1261:1261 [0] NCCL INFO Init timings - ncclCommInitRankConfig: rank 0 nranks 8 total 2.78 (kernels 0.32, alloc 1.80, bootstrap 0.03, allgathers 0.01, topo 0.07, graphs 0.02, connections 0.52, rest 0.00)
+main:1267:1267 [6] NCCL INFO ncclCommInitRankConfig comm 0x3e6bcfe0 rank 6 nranks 8 cudaDev 6 nvmlDev 6 busId b9000 commId 0xb8797bd71184e95d - Init COMPLETE
+main:1267:1267 [6] NCCL INFO Init timings - ncclCommInitRankConfig: rank 6 nranks 8 total 2.78 (kernels 0.32, alloc 1.78, bootstrap 0.06, allgathers 0.00, topo 0.08, graphs 0.02, connections 0.52, rest 0.01)
+PriorDataset(
+  task: classification
+  prior_type: graph_scm
+  batch_size: 8
+  batch_size_per_gp: 4
+  features: 1 - 100
+  max classes: 10
+  seq_len: None - 1024
+  sequence length varies across groups: True
+  train_size: 0.3 - 0.9
+  device: cpu
+)
+Using Muon optimizer.
+No checkpoint found, starting from scratch.
+Automatic Mixed Precision is enabled.
+No checkpoint found, starting from scratch.
+/databricks/python3/lib/python3.12/site-packages/torch/utils/data/dataloader.py:1102: UserWarning: pin_memory_device is deprecated, the current accelerator will be used as the device,ignore pin_memory_device='cuda:1'.
+  super().__init__(loader)
+Step:   0%|          | 0/100 [00:00<?, ?it/s]/databricks/python3/lib/python3.12/site-packages/torch/utils/data/dataloader.py:1102: UserWarning: pin_memory_device is deprecated, the current accelerator will be used as the device,ignore pin_memory_device='cuda:0'.
+  super().__init__(loader)
+No checkpoint found, starting from scratch.
+/databricks/python3/lib/python3.12/site-packages/torch/utils/data/dataloader.py:1102: UserWarning: pin_memory_device is deprecated, the current accelerator will be used as the device,ignore pin_memory_device='cuda:4'.
+  super().__init__(loader)
+No checkpoint found, starting from scratch.
+/databricks/python3/lib/python3.12/site-packages/torch/utils/data/dataloader.py:1102: UserWarning: pin_memory_device is deprecated, the current accelerator will be used as the device,ignore pin_memory_device='cuda:5'.
+  super().__init__(loader)
+No checkpoint found, starting from scratch.
+/databricks/python3/lib/python3.12/site-packages/torch/utils/data/dataloader.py:1102: UserWarning: pin_memory_device is deprecated, the current accelerator will be used as the device,ignore pin_memory_device='cuda:3'.
+  super().__init__(loader)
+No checkpoint found, starting from scratch.
+/databricks/python3/lib/python3.12/site-packages/torch/utils/data/dataloader.py:1102: UserWarning: pin_memory_device is deprecated, the current accelerator will be used as the device,ignore pin_memory_device='cuda:7'.
+  super().__init__(loader)
+No checkpoint found, starting from scratch.
+No checkpoint found, starting from scratch.
+/databricks/python3/lib/python3.12/site-packages/torch/utils/data/dataloader.py:1102: UserWarning: pin_memory_device is deprecated, the current accelerator will be used as the device,ignore pin_memory_device='cuda:6'.
+  super().__init__(loader)
+/databricks/python3/lib/python3.12/site-packages/torch/utils/data/dataloader.py:1102: UserWarning: pin_memory_device is deprecated, the current accelerator will be used as the device,ignore pin_memory_device='cuda:2'.
+  super().__init__(loader)
+/databricks/python3/lib/python3.12/site-packages/huggingface_hub/constants.py:298: FutureWarning: The `HF_HUB_ENABLE_HF_TRANSFER` environment variable is deprecated as 'hf_transfer' is not used anymore. Please use `HF_XET_HIGH_PERFORMANCE` instead to enable high performance transfer with Xet. Visit https://huggingface.co/docs/huggingface_hub/package_reference/environment_variables#hfxethighperformance for more details.
+  warnings.warn(
+/databricks/python3/lib/python3.12/site-packages/huggingface_hub/constants.py:298: FutureWarning: The `HF_HUB_ENABLE_HF_TRANSFER` environment variable is deprecated as 'hf_transfer' is not used anymore. Please use `HF_XET_HIGH_PERFORMANCE` instead to enable high performance transfer with Xet. Visit https://huggingface.co/docs/huggingface_hub/package_reference/environment_variables#hfxethighperformance for more details.
+  warnings.warn(
+/databricks/python3/lib/python3.12/site-packages/huggingface_hub/constants.py:298: FutureWarning: The `HF_HUB_ENABLE_HF_TRANSFER` environment variable is deprecated as 'hf_transfer' is not used anymore. Please use `HF_XET_HIGH_PERFORMANCE` instead to enable high performance transfer with Xet. Visit https://huggingface.co/docs/huggingface_hub/package_reference/environment_variables#hfxethighperformance for more details.
+  warnings.warn(
+/databricks/python3/lib/python3.12/site-packages/huggingface_hub/constants.py:298: FutureWarning: The `HF_HUB_ENABLE_HF_TRANSFER` environment variable is deprecated as 'hf_transfer' is not used anymore. Please use `HF_XET_HIGH_PERFORMANCE` instead to enable high performance transfer with Xet. Visit https://huggingface.co/docs/huggingface_hub/package_reference/environment_variables#hfxethighperformance for more details.
+  warnings.warn(
+/databricks/python3/lib/python3.12/site-packages/huggingface_hub/constants.py:298: FutureWarning: The `HF_HUB_ENABLE_HF_TRANSFER` environment variable is deprecated as 'hf_transfer' is not used anymore. Please use `HF_XET_HIGH_PERFORMANCE` instead to enable high performance transfer with Xet. Visit https://huggingface.co/docs/huggingface_hub/package_reference/environment_variables#hfxethighperformance for more details.
+  warnings.warn(
+/databricks/python3/lib/python3.12/site-packages/huggingface_hub/constants.py:298: FutureWarning: The `HF_HUB_ENABLE_HF_TRANSFER` environment variable is deprecated as 'hf_transfer' is not used anymore. Please use `HF_XET_HIGH_PERFORMANCE` instead to enable high performance transfer with Xet. Visit https://huggingface.co/docs/huggingface_hub/package_reference/environment_variables#hfxethighperformance for more details.
+  warnings.warn(
+Initializing worker 1 with seed 2134003009
+/databricks/python3/lib/python3.12/site-packages/huggingface_hub/constants.py:298: FutureWarning: The `HF_HUB_ENABLE_HF_TRANSFER` environment variable is deprecated as 'hf_transfer' is not used anymore. Please use `HF_XET_HIGH_PERFORMANCE` instead to enable high performance transfer with Xet. Visit https://huggingface.co/docs/huggingface_hub/package_reference/environment_variables#hfxethighperformance for more details.
+  warnings.warn(
+Initializing worker 0 with seed 3421126067
+/databricks/python3/lib/python3.12/site-packages/huggingface_hub/constants.py:298: FutureWarning: The `HF_HUB_ENABLE_HF_TRANSFER` environment variable is deprecated as 'hf_transfer' is not used anymore. Please use `HF_XET_HIGH_PERFORMANCE` instead to enable high performance transfer with Xet. Visit https://huggingface.co/docs/huggingface_hub/package_reference/environment_variables#hfxethighperformance for more details.
+  warnings.warn(
+/databricks/python3/lib/python3.12/site-packages/huggingface_hub/constants.py:298: FutureWarning: The `HF_HUB_ENABLE_HF_TRANSFER` environment variable is deprecated as 'hf_transfer' is not used anymore. Please use `HF_XET_HIGH_PERFORMANCE` instead to enable high performance transfer with Xet. Visit https://huggingface.co/docs/huggingface_hub/package_reference/environment_variables#hfxethighperformance for more details.
+  warnings.warn(
+/databricks/python3/lib/python3.12/site-packages/huggingface_hub/constants.py:298: FutureWarning: The `HF_HUB_ENABLE_HF_TRANSFER` environment variable is deprecated as 'hf_transfer' is not used anymore. Please use `HF_XET_HIGH_PERFORMANCE` instead to enable high performance transfer with Xet. Visit https://huggingface.co/docs/huggingface_hub/package_reference/environment_variables#hfxethighperformance for more details.
+  warnings.warn(
+Initializing worker 0 with seed 2134003008
+/databricks/python3/lib/python3.12/site-packages/huggingface_hub/constants.py:298: FutureWarning: The `HF_HUB_ENABLE_HF_TRANSFER` environment variable is deprecated as 'hf_transfer' is not used anymore. Please use `HF_XET_HIGH_PERFORMANCE` instead to enable high performance transfer with Xet. Visit https://huggingface.co/docs/huggingface_hub/package_reference/environment_variables#hfxethighperformance for more details.
+  warnings.warn(
+/databricks/python3/lib/python3.12/site-packages/huggingface_hub/constants.py:298: FutureWarning: The `HF_HUB_ENABLE_HF_TRANSFER` environment variable is deprecated as 'hf_transfer' is not used anymore. Please use `HF_XET_HIGH_PERFORMANCE` instead to enable high performance transfer with Xet. Visit https://huggingface.co/docs/huggingface_hub/package_reference/environment_variables#hfxethighperformance for more details.
+  warnings.warn(
+Initializing worker 0 with seed 1307974046
+/databricks/python3/lib/python3.12/site-packages/huggingface_hub/constants.py:298: FutureWarning: The `HF_HUB_ENABLE_HF_TRANSFER` environment variable is deprecated as 'hf_transfer' is not used anymore. Please use `HF_XET_HIGH_PERFORMANCE` instead to enable high performance transfer with Xet. Visit https://huggingface.co/docs/huggingface_hub/package_reference/environment_variables#hfxethighperformance for more details.
+  warnings.warn(
+/databricks/python3/lib/python3.12/site-packages/huggingface_hub/constants.py:298: FutureWarning: The `HF_HUB_ENABLE_HF_TRANSFER` environment variable is deprecated as 'hf_transfer' is not used anymore. Please use `HF_XET_HIGH_PERFORMANCE` instead to enable high performance transfer with Xet. Visit https://huggingface.co/docs/huggingface_hub/package_reference/environment_variables#hfxethighperformance for more details.
+  warnings.warn(
+/databricks/python3/lib/python3.12/site-packages/huggingface_hub/constants.py:298: FutureWarning: The `HF_HUB_ENABLE_HF_TRANSFER` environment variable is deprecated as 'hf_transfer' is not used anymore. Please use `HF_XET_HIGH_PERFORMANCE` instead to enable high performance transfer with Xet. Visit https://huggingface.co/docs/huggingface_hub/package_reference/environment_variables#hfxethighperformance for more details.
+  warnings.warn(
+Initializing worker 1 with seed 3658270599
+/databricks/python3/lib/python3.12/site-packages/huggingface_hub/constants.py:298: FutureWarning: The `HF_HUB_ENABLE_HF_TRANSFER` environment variable is deprecated as 'hf_transfer' is not used anymore. Please use `HF_XET_HIGH_PERFORMANCE` instead to enable high performance transfer with Xet. Visit https://huggingface.co/docs/huggingface_hub/package_reference/environment_variables#hfxethighperformance for more details.
+  warnings.warn(
+/databricks/python3/lib/python3.12/site-packages/huggingface_hub/constants.py:298: FutureWarning: The `HF_HUB_ENABLE_HF_TRANSFER` environment variable is deprecated as 'hf_transfer' is not used anymore. Please use `HF_XET_HIGH_PERFORMANCE` instead to enable high performance transfer with Xet. Visit https://huggingface.co/docs/huggingface_hub/package_reference/environment_variables#hfxethighperformance for more details.
+  warnings.warn(
+/databricks/python3/lib/python3.12/site-packages/huggingface_hub/constants.py:298: FutureWarning: The `HF_HUB_ENABLE_HF_TRANSFER` environment variable is deprecated as 'hf_transfer' is not used anymore. Please use `HF_XET_HIGH_PERFORMANCE` instead to enable high performance transfer with Xet. Visit https://huggingface.co/docs/huggingface_hub/package_reference/environment_variables#hfxethighperformance for more details.
+  warnings.warn(
+/databricks/python3/lib/python3.12/site-packages/huggingface_hub/constants.py:298: FutureWarning: The `HF_HUB_ENABLE_HF_TRANSFER` environment variable is deprecated as 'hf_transfer' is not used anymore. Please use `HF_XET_HIGH_PERFORMANCE` instead to enable high performance transfer with Xet. Visit https://huggingface.co/docs/huggingface_hub/package_reference/environment_variables#hfxethighperformance for more details.
+  warnings.warn(
+/databricks/python3/lib/python3.12/site-packages/huggingface_hub/constants.py:298: FutureWarning: The `HF_HUB_ENABLE_HF_TRANSFER` environment variable is deprecated as 'hf_transfer' is not used anymore. Please use `HF_XET_HIGH_PERFORMANCE` instead to enable high performance transfer with Xet. Visit https://huggingface.co/docs/huggingface_hub/package_reference/environment_variables#hfxethighperformance for more details.
+  warnings.warn(
+/databricks/python3/lib/python3.12/site-packages/huggingface_hub/constants.py:298: FutureWarning: The `HF_HUB_ENABLE_HF_TRANSFER` environment variable is deprecated as 'hf_transfer' is not used anymore. Please use `HF_XET_HIGH_PERFORMANCE` instead to enable high performance transfer with Xet. Visit https://huggingface.co/docs/huggingface_hub/package_reference/environment_variables#hfxethighperformance for more details.
+  warnings.warn(
+/databricks/python3/lib/python3.12/site-packages/huggingface_hub/constants.py:298: FutureWarning: The `HF_HUB_ENABLE_HF_TRANSFER` environment variable is deprecated as 'hf_transfer' is not used anymore. Please use `HF_XET_HIGH_PERFORMANCE` instead to enable high performance transfer with Xet. Visit https://huggingface.co/docs/huggingface_hub/package_reference/environment_variables#hfxethighperformance for more details.
+  warnings.warn(
+/databricks/python3/lib/python3.12/site-packages/huggingface_hub/constants.py:298: FutureWarning: The `HF_HUB_ENABLE_HF_TRANSFER` environment variable is deprecated as 'hf_transfer' is not used anymore. Please use `HF_XET_HIGH_PERFORMANCE` instead to enable high performance transfer with Xet. Visit https://huggingface.co/docs/huggingface_hub/package_reference/environment_variables#hfxethighperformance for more details.
+  warnings.warn(
+/databricks/python3/lib/python3.12/site-packages/huggingface_hub/constants.py:298: FutureWarning: The `HF_HUB_ENABLE_HF_TRANSFER` environment variable is deprecated as 'hf_transfer' is not used anymore. Please use `HF_XET_HIGH_PERFORMANCE` instead to enable high performance transfer with Xet. Visit https://huggingface.co/docs/huggingface_hub/package_reference/environment_variables#hfxethighperformance for more details.
+  warnings.warn(
+/databricks/python3/lib/python3.12/site-packages/huggingface_hub/constants.py:298: FutureWarning: The `HF_HUB_ENABLE_HF_TRANSFER` environment variable is deprecated as 'hf_transfer' is not used anymore. Please use `HF_XET_HIGH_PERFORMANCE` instead to enable high performance transfer with Xet. Visit https://huggingface.co/docs/huggingface_hub/package_reference/environment_variables#hfxethighperformance for more details.
+  warnings.warn(
+/databricks/python3/lib/python3.12/site-packages/huggingface_hub/constants.py:298: FutureWarning: The `HF_HUB_ENABLE_HF_TRANSFER` environment variable is deprecated as 'hf_transfer' is not used anymore. Please use `HF_XET_HIGH_PERFORMANCE` instead to enable high performance transfer with Xet. Visit https://huggingface.co/docs/huggingface_hub/package_reference/environment_variables#hfxethighperformance for more details.
+  warnings.warn(
+/databricks/python3/lib/python3.12/site-packages/huggingface_hub/constants.py:298: FutureWarning: The `HF_HUB_ENABLE_HF_TRANSFER` environment variable is deprecated as 'hf_transfer' is not used anymore. Please use `HF_XET_HIGH_PERFORMANCE` instead to enable high performance transfer with Xet. Visit https://huggingface.co/docs/huggingface_hub/package_reference/environment_variables#hfxethighperformance for more details.
+  warnings.warn(
+Initializing worker 0 with seed 3658270598
+/databricks/python3/lib/python3.12/site-packages/huggingface_hub/constants.py:298: FutureWarning: The `HF_HUB_ENABLE_HF_TRANSFER` environment variable is deprecated as 'hf_transfer' is not used anymore. Please use `HF_XET_HIGH_PERFORMANCE` instead to enable high performance transfer with Xet. Visit https://huggingface.co/docs/huggingface_hub/package_reference/environment_variables#hfxethighperformance for more details.
+  warnings.warn(
+Initializing worker 0 with seed 1857752483
+/databricks/python3/lib/python3.12/site-packages/huggingface_hub/constants.py:298: FutureWarning: The `HF_HUB_ENABLE_HF_TRANSFER` environment variable is deprecated as 'hf_transfer' is not used anymore. Please use `HF_XET_HIGH_PERFORMANCE` instead to enable high performance transfer with Xet. Visit https://huggingface.co/docs/huggingface_hub/package_reference/environment_variables#hfxethighperformance for more details.
+  warnings.warn(
+/databricks/python3/lib/python3.12/site-packages/huggingface_hub/constants.py:298: FutureWarning: The `HF_HUB_ENABLE_HF_TRANSFER` environment variable is deprecated as 'hf_transfer' is not used anymore. Please use `HF_XET_HIGH_PERFORMANCE` instead to enable high performance transfer with Xet. Visit https://huggingface.co/docs/huggingface_hub/package_reference/environment_variables#hfxethighperformance for more details.
+  warnings.warn(
+/databricks/python3/lib/python3.12/site-packages/huggingface_hub/constants.py:298: FutureWarning: The `HF_HUB_ENABLE_HF_TRANSFER` environment variable is deprecated as 'hf_transfer' is not used anymore. Please use `HF_XET_HIGH_PERFORMANCE` instead to enable high performance transfer with Xet. Visit https://huggingface.co/docs/huggingface_hub/package_reference/environment_variables#hfxethighperformance for more details.
+  warnings.warn(
+Initializing worker 1 with seed 1307974047
+/databricks/python3/lib/python3.12/site-packages/huggingface_hub/constants.py:298: FutureWarning: The `HF_HUB_ENABLE_HF_TRANSFER` environment variable is deprecated as 'hf_transfer' is not used anymore. Please use `HF_XET_HIGH_PERFORMANCE` instead to enable high performance transfer with Xet. Visit https://huggingface.co/docs/huggingface_hub/package_reference/environment_variables#hfxethighperformance for more details.
+  warnings.warn(
+/databricks/python3/lib/python3.12/site-packages/huggingface_hub/constants.py:298: FutureWarning: The `HF_HUB_ENABLE_HF_TRANSFER` environment variable is deprecated as 'hf_transfer' is not used anymore. Please use `HF_XET_HIGH_PERFORMANCE` instead to enable high performance transfer with Xet. Visit https://huggingface.co/docs/huggingface_hub/package_reference/environment_variables#hfxethighperformance for more details.
+  warnings.warn(
+/databricks/python3/lib/python3.12/site-packages/huggingface_hub/constants.py:298: FutureWarning: The `HF_HUB_ENABLE_HF_TRANSFER` environment variable is deprecated as 'hf_transfer' is not used anymore. Please use `HF_XET_HIGH_PERFORMANCE` instead to enable high performance transfer with Xet. Visit https://huggingface.co/docs/huggingface_hub/package_reference/environment_variables#hfxethighperformance for more details.
+  warnings.warn(
+/databricks/python3/lib/python3.12/site-packages/huggingface_hub/constants.py:298: FutureWarning: The `HF_HUB_ENABLE_HF_TRANSFER` environment variable is deprecated as 'hf_transfer' is not used anymore. Please use `HF_XET_HIGH_PERFORMANCE` instead to enable high performance transfer with Xet. Visit https://huggingface.co/docs/huggingface_hub/package_reference/environment_variables#hfxethighperformance for more details.
+  warnings.warn(
+/databricks/python3/lib/python3.12/site-packages/huggingface_hub/constants.py:298: FutureWarning: The `HF_HUB_ENABLE_HF_TRANSFER` environment variable is deprecated as 'hf_transfer' is not used anymore. Please use `HF_XET_HIGH_PERFORMANCE` instead to enable high performance transfer with Xet. Visit https://huggingface.co/docs/huggingface_hub/package_reference/environment_variables#hfxethighperformance for more details.
+  warnings.warn(
+/databricks/python3/lib/python3.12/site-packages/huggingface_hub/constants.py:298: FutureWarning: The `HF_HUB_ENABLE_HF_TRANSFER` environment variable is deprecated as 'hf_transfer' is not used anymore. Please use `HF_XET_HIGH_PERFORMANCE` instead to enable high performance transfer with Xet. Visit https://huggingface.co/docs/huggingface_hub/package_reference/environment_variables#hfxethighperformance for more details.
+  warnings.warn(
+Initializing worker 0 with seed 1108302661
+/databricks/python3/lib/python3.12/site-packages/huggingface_hub/constants.py:298: FutureWarning: The `HF_HUB_ENABLE_HF_TRANSFER` environment variable is deprecated as 'hf_transfer' is not used anymore. Please use `HF_XET_HIGH_PERFORMANCE` instead to enable high performance transfer with Xet. Visit https://huggingface.co/docs/huggingface_hub/package_reference/environment_variables#hfxethighperformance for more details.
+  warnings.warn(
+Initializing worker 1 with seed 1857752484
+/databricks/python3/lib/python3.12/site-packages/huggingface_hub/constants.py:298: FutureWarning: The `HF_HUB_ENABLE_HF_TRANSFER` environment variable is deprecated as 'hf_transfer' is not used anymore. Please use `HF_XET_HIGH_PERFORMANCE` instead to enable high performance transfer with Xet. Visit https://huggingface.co/docs/huggingface_hub/package_reference/environment_variables#hfxethighperformance for more details.
+  warnings.warn(
+/databricks/python3/lib/python3.12/site-packages/huggingface_hub/constants.py:298: FutureWarning: The `HF_HUB_ENABLE_HF_TRANSFER` environment variable is deprecated as 'hf_transfer' is not used anymore. Please use `HF_XET_HIGH_PERFORMANCE` instead to enable high performance transfer with Xet. Visit https://huggingface.co/docs/huggingface_hub/package_reference/environment_variables#hfxethighperformance for more details.
+  warnings.warn(
+/databricks/python3/lib/python3.12/site-packages/huggingface_hub/constants.py:298: FutureWarning: The `HF_HUB_ENABLE_HF_TRANSFER` environment variable is deprecated as 'hf_transfer' is not used anymore. Please use `HF_XET_HIGH_PERFORMANCE` instead to enable high performance transfer with Xet. Visit https://huggingface.co/docs/huggingface_hub/package_reference/environment_variables#hfxethighperformance for more details.
+  warnings.warn(
+Initializing worker 0 with seed 1831733811
+Initializing worker 1 with seed 1108302662
+/databricks/python3/lib/python3.12/site-packages/huggingface_hub/constants.py:298: FutureWarning: The `HF_HUB_ENABLE_HF_TRANSFER` environment variable is deprecated as 'hf_transfer' is not used anymore. Please use `HF_XET_HIGH_PERFORMANCE` instead to enable high performance transfer with Xet. Visit https://huggingface.co/docs/huggingface_hub/package_reference/environment_variables#hfxethighperformance for more details.
+  warnings.warn(
+/databricks/python3/lib/python3.12/site-packages/huggingface_hub/constants.py:298: FutureWarning: The `HF_HUB_ENABLE_HF_TRANSFER` environment variable is deprecated as 'hf_transfer' is not used anymore. Please use `HF_XET_HIGH_PERFORMANCE` instead to enable high performance transfer with Xet. Visit https://huggingface.co/docs/huggingface_hub/package_reference/environment_variables#hfxethighperformance for more details.
+  warnings.warn(
+/databricks/python3/lib/python3.12/site-packages/huggingface_hub/constants.py:298: FutureWarning: The `HF_HUB_ENABLE_HF_TRANSFER` environment variable is deprecated as 'hf_transfer' is not used anymore. Please use `HF_XET_HIGH_PERFORMANCE` instead to enable high performance transfer with Xet. Visit https://huggingface.co/docs/huggingface_hub/package_reference/environment_variables#hfxethighperformance for more details.
+  warnings.warn(
+Initializing worker 0 with seed 2034685613
+/databricks/python3/lib/python3.12/site-packages/huggingface_hub/constants.py:298: FutureWarning: The `HF_HUB_ENABLE_HF_TRANSFER` environment variable is deprecated as 'hf_transfer' is not used anymore. Please use `HF_XET_HIGH_PERFORMANCE` instead to enable high performance transfer with Xet. Visit https://huggingface.co/docs/huggingface_hub/package_reference/environment_variables#hfxethighperformance for more details.
+  warnings.warn(
+/databricks/python3/lib/python3.12/site-packages/huggingface_hub/constants.py:298: FutureWarning: The `HF_HUB_ENABLE_HF_TRANSFER` environment variable is deprecated as 'hf_transfer' is not used anymore. Please use `HF_XET_HIGH_PERFORMANCE` instead to enable high performance transfer with Xet. Visit https://huggingface.co/docs/huggingface_hub/package_reference/environment_variables#hfxethighperformance for more details.
+  warnings.warn(
+/databricks/python3/lib/python3.12/site-packages/huggingface_hub/constants.py:298: FutureWarning: The `HF_HUB_ENABLE_HF_TRANSFER` environment variable is deprecated as 'hf_transfer' is not used anymore. Please use `HF_XET_HIGH_PERFORMANCE` instead to enable high performance transfer with Xet. Visit https://huggingface.co/docs/huggingface_hub/package_reference/environment_variables#hfxethighperformance for more details.
+  warnings.warn(
+/databricks/python3/lib/python3.12/site-packages/huggingface_hub/constants.py:298: FutureWarning: The `HF_HUB_ENABLE_HF_TRANSFER` environment variable is deprecated as 'hf_transfer' is not used anymore. Please use `HF_XET_HIGH_PERFORMANCE` instead to enable high performance transfer with Xet. Visit https://huggingface.co/docs/huggingface_hub/package_reference/environment_variables#hfxethighperformance for more details.
+  warnings.warn(
+/databricks/python3/lib/python3.12/site-packages/huggingface_hub/constants.py:298: FutureWarning: The `HF_HUB_ENABLE_HF_TRANSFER` environment variable is deprecated as 'hf_transfer' is not used anymore. Please use `HF_XET_HIGH_PERFORMANCE` instead to enable high performance transfer with Xet. Visit https://huggingface.co/docs/huggingface_hub/package_reference/environment_variables#hfxethighperformance for more details.
+  warnings.warn(
+/databricks/python3/lib/python3.12/site-packages/huggingface_hub/constants.py:298: FutureWarning: The `HF_HUB_ENABLE_HF_TRANSFER` environment variable is deprecated as 'hf_transfer' is not used anymore. Please use `HF_XET_HIGH_PERFORMANCE` instead to enable high performance transfer with Xet. Visit https://huggingface.co/docs/huggingface_hub/package_reference/environment_variables#hfxethighperformance for more details.
+  warnings.warn(
+/databricks/python3/lib/python3.12/site-packages/huggingface_hub/constants.py:298: FutureWarning: The `HF_HUB_ENABLE_HF_TRANSFER` environment variable is deprecated as 'hf_transfer' is not used anymore. Please use `HF_XET_HIGH_PERFORMANCE` instead to enable high performance transfer with Xet. Visit https://huggingface.co/docs/huggingface_hub/package_reference/environment_variables#hfxethighperformance for more details.
+  warnings.warn(
+/databricks/python3/lib/python3.12/site-packages/huggingface_hub/constants.py:298: FutureWarning: The `HF_HUB_ENABLE_HF_TRANSFER` environment variable is deprecated as 'hf_transfer' is not used anymore. Please use `HF_XET_HIGH_PERFORMANCE` instead to enable high performance transfer with Xet. Visit https://huggingface.co/docs/huggingface_hub/package_reference/environment_variables#hfxethighperformance for more details.
+  warnings.warn(
+/databricks/python3/lib/python3.12/site-packages/huggingface_hub/constants.py:298: FutureWarning: The `HF_HUB_ENABLE_HF_TRANSFER` environment variable is deprecated as 'hf_transfer' is not used anymore. Please use `HF_XET_HIGH_PERFORMANCE` instead to enable high performance transfer with Xet. Visit https://huggingface.co/docs/huggingface_hub/package_reference/environment_variables#hfxethighperformance for more details.
+  warnings.warn(
+Initializing worker 5 with seed 3421126072
+/databricks/python3/lib/python3.12/site-packages/huggingface_hub/constants.py:298: FutureWarning: The `HF_HUB_ENABLE_HF_TRANSFER` environment variable is deprecated as 'hf_transfer' is not used anymore. Please use `HF_XET_HIGH_PERFORMANCE` instead to enable high performance transfer with Xet. Visit https://huggingface.co/docs/huggingface_hub/package_reference/environment_variables#hfxethighperformance for more details.
+  warnings.warn(
+/databricks/python3/lib/python3.12/site-packages/huggingface_hub/constants.py:298: FutureWarning: The `HF_HUB_ENABLE_HF_TRANSFER` environment variable is deprecated as 'hf_transfer' is not used anymore. Please use `HF_XET_HIGH_PERFORMANCE` instead to enable high performance transfer with Xet. Visit https://huggingface.co/docs/huggingface_hub/package_reference/environment_variables#hfxethighperformance for more details.
+  warnings.warn(
+/databricks/python3/lib/python3.12/site-packages/huggingface_hub/constants.py:298: FutureWarning: The `HF_HUB_ENABLE_HF_TRANSFER` environment variable is deprecated as 'hf_transfer' is not used anymore. Please use `HF_XET_HIGH_PERFORMANCE` instead to enable high performance transfer with Xet. Visit https://huggingface.co/docs/huggingface_hub/package_reference/environment_variables#hfxethighperformance for more details.
+  warnings.warn(
+/databricks/python3/lib/python3.12/site-packages/huggingface_hub/constants.py:298: FutureWarning: The `HF_HUB_ENABLE_HF_TRANSFER` environment variable is deprecated as 'hf_transfer' is not used anymore. Please use `HF_XET_HIGH_PERFORMANCE` instead to enable high performance transfer with Xet. Visit https://huggingface.co/docs/huggingface_hub/package_reference/environment_variables#hfxethighperformance for more details.
+  warnings.warn(
+/databricks/python3/lib/python3.12/site-packages/huggingface_hub/constants.py:298: FutureWarning: The `HF_HUB_ENABLE_HF_TRANSFER` environment variable is deprecated as 'hf_transfer' is not used anymore. Please use `HF_XET_HIGH_PERFORMANCE` instead to enable high performance transfer with Xet. Visit https://huggingface.co/docs/huggingface_hub/package_reference/environment_variables#hfxethighperformance for more details.
+  warnings.warn(
+/databricks/python3/lib/python3.12/site-packages/huggingface_hub/constants.py:298: FutureWarning: The `HF_HUB_ENABLE_HF_TRANSFER` environment variable is deprecated as 'hf_transfer' is not used anymore. Please use `HF_XET_HIGH_PERFORMANCE` instead to enable high performance transfer with Xet. Visit https://huggingface.co/docs/huggingface_hub/package_reference/environment_variables#hfxethighperformance for more details.
+  warnings.warn(
+/databricks/python3/lib/python3.12/site-packages/huggingface_hub/constants.py:298: FutureWarning: The `HF_HUB_ENABLE_HF_TRANSFER` environment variable is deprecated as 'hf_transfer' is not used anymore. Please use `HF_XET_HIGH_PERFORMANCE` instead to enable high performance transfer with Xet. Visit https://huggingface.co/docs/huggingface_hub/package_reference/environment_variables#hfxethighperformance for more details.
+  warnings.warn(
+/databricks/python3/lib/python3.12/site-packages/huggingface_hub/constants.py:298: FutureWarning: The `HF_HUB_ENABLE_HF_TRANSFER` environment variable is deprecated as 'hf_transfer' is not used anymore. Please use `HF_XET_HIGH_PERFORMANCE` instead to enable high performance transfer with Xet. Visit https://huggingface.co/docs/huggingface_hub/package_reference/environment_variables#hfxethighperformance for more details.
+  warnings.warn(
+/databricks/python3/lib/python3.12/site-packages/huggingface_hub/constants.py:298: FutureWarning: The `HF_HUB_ENABLE_HF_TRANSFER` environment variable is deprecated as 'hf_transfer' is not used anymore. Please use `HF_XET_HIGH_PERFORMANCE` instead to enable high performance transfer with Xet. Visit https://huggingface.co/docs/huggingface_hub/package_reference/environment_variables#hfxethighperformance for more details.
+  warnings.warn(
+Initializing worker 1 with seed 2034685614
+/databricks/python3/lib/python3.12/site-packages/huggingface_hub/constants.py:298: FutureWarning: The `HF_HUB_ENABLE_HF_TRANSFER` environment variable is deprecated as 'hf_transfer' is not used anymore. Please use `HF_XET_HIGH_PERFORMANCE` instead to enable high performance transfer with Xet. Visit https://huggingface.co/docs/huggingface_hub/package_reference/environment_variables#hfxethighperformance for more details.
+  warnings.warn(
+Initializing worker 7 with seed 2134003015
+/databricks/python3/lib/python3.12/site-packages/huggingface_hub/constants.py:298: FutureWarning: The `HF_HUB_ENABLE_HF_TRANSFER` environment variable is deprecated as 'hf_transfer' is not used anymore. Please use `HF_XET_HIGH_PERFORMANCE` instead to enable high performance transfer with Xet. Visit https://huggingface.co/docs/huggingface_hub/package_reference/environment_variables#hfxethighperformance for more details.
+  warnings.warn(
+Initializing worker 3 with seed 1307974049Initializing worker 2 with seed 3421126069
+
+Initializing worker 6 with seed 1307974052
+Initializing worker 4 with seed 3421126071
+Initializing worker 4 with seed 1307974050
+Initializing worker 5 with seed 2134003013
+Initializing worker 2 with seed 2134003010
+Initializing worker 3 with seed 3421126070
+Initializing worker 7 with seed 1857752490
+Initializing worker 2 with seed 1307974048
+Initializing worker 6 with seed 2134003014
+Initializing worker 5 with seed 1307974051
+Initializing worker 4 with seed 2134003012
+Initializing worker 1 with seed 3421126068
+Initializing worker 2 with seed 1857752485
+Initializing worker 3 with seed 2134003011
+Initializing worker 3 with seed 1857752486
+Initializing worker 7 with seed 1307974053Initializing worker 4 with seed 1857752487
+
+Initializing worker 6 with seed 1857752489
+Initializing worker 1 with seed 1831733812
+Initializing worker 6 with seed 3421126073
+Initializing worker 7 with seed 3421126074
+Initializing worker 5 with seed 1857752488
+Initializing worker 6 with seed 2034685619
+Initializing worker 2 with seed 3658270600
+Initializing worker 4 with seed 3658270602
+Initializing worker 5 with seed 3658270603
+Initializing worker 4 with seed 1108302665Initializing worker 5 with seed 1108302666
+
+Initializing worker 2 with seed 1108302663
+Initializing worker 4 with seed 2034685617
+Initializing worker 5 with seed 2034685618
+Initializing worker 3 with seed 3658270601
+Initializing worker 3 with seed 2034685616
+Initializing worker 3 with seed 1108302664
+Initializing worker 7 with seed 1108302668
+Initializing worker 7 with seed 1831733818
+Initializing worker 4 with seed 1831733815
+Initializing worker 6 with seed 1108302667
+Initializing worker 2 with seed 1831733813
+Initializing worker 7 with seed 2034685620
+Initializing worker 5 with seed 1831733816
+Initializing worker 6 with seed 1831733817
+Initializing worker 2 with seed 2034685615
+Initializing worker 3 with seed 1831733814
+Initializing worker 6 with seed 3658270604
+Initializing worker 7 with seed 3658270605
+Step:   0%|          | 0/100 [00:10<?, ?it/s, accuracy=0.055, ce=2.28, prior_time=6.55, train_time=3.78]Step:   1%|          | 1/100 [00:10<17:36, 10.67s/it, accuracy=0.055, ce=2.28, prior_time=6.55, train_time=3.78]Step:   1%|          | 1/100 [00:12<17:36, 10.67s/it, accuracy=0.141, ce=2.3, prior_time=0, train_time=1.06]    Step:   2%|▏         | 2/100 [00:12<08:35,  5.26s/it, accuracy=0.141, ce=2.3, prior_time=0, train_time=1.06]Step:   2%|▏         | 2/100 [00:13<08:35,  5.26s/it, accuracy=0.154, ce=2.26, prior_time=0, train_time=0.83]Step:   3%|▎         | 3/100 [00:13<05:30,  3.41s/it, accuracy=0.154, ce=2.26, prior_time=0, train_time=0.83]Step:   3%|▎         | 3/100 [00:14<05:30,  3.41s/it, accuracy=0.274, ce=2.11, prior_time=0, train_time=0.964]Step:   4%|▍         | 4/100 [00:14<04:08,  2.59s/it, accuracy=0.274, ce=2.11, prior_time=0, train_time=0.964]Step:   4%|▍         | 4/100 [00:16<04:08,  2.59s/it, accuracy=0.413, ce=1.88, prior_time=0, train_time=0.913]Step:   5%|▌         | 5/100 [00:16<03:30,  2.21s/it, accuracy=0.413, ce=1.88, prior_time=0, train_time=0.913]Step:   5%|▌         | 5/100 [00:17<03:30,  2.21s/it, accuracy=0.447, ce=1.73, prior_time=0, train_time=1.19] Step:   6%|▌         | 6/100 [00:17<03:03,  1.96s/it, accuracy=0.447, ce=1.73, prior_time=0, train_time=1.19]Step:   6%|▌         | 6/100 [00:19<03:03,  1.96s/it, accuracy=0.498, ce=1.55, prior_time=0, train_time=0.924]Step:   7%|▋         | 7/100 [00:19<02:43,  1.76s/it, accuracy=0.498, ce=1.55, prior_time=0, train_time=0.924]Step:   7%|▋         | 7/100 [00:20<02:43,  1.76s/it, accuracy=0.349, ce=1.71, prior_time=0, train_time=0.777]Step:   8%|▊         | 8/100 [00:20<02:21,  1.54s/it, accuracy=0.349, ce=1.71, prior_time=0, train_time=0.777]Step:   8%|▊         | 8/100 [00:21<02:21,  1.54s/it, accuracy=0.442, ce=1.63, prior_time=0, train_time=0.938]Step:   9%|▉         | 9/100 [00:21<02:11,  1.45s/it, accuracy=0.442, ce=1.63, prior_time=0, train_time=0.938]Step:   9%|▉         | 9/100 [00:22<02:11,  1.45s/it, accuracy=0.348, ce=1.61, prior_time=0, train_time=0.894]Step:  10%|█         | 10/100 [00:22<02:03,  1.37s/it, accuracy=0.348, ce=1.61, prior_time=0, train_time=0.894]Step:  10%|█         | 10/100 [00:23<02:03,  1.37s/it, accuracy=0.325, ce=1.69, prior_time=0, train_time=0.904]Step:  11%|█         | 11/100 [00:23<01:58,  1.33s/it, accuracy=0.325, ce=1.69, prior_time=0, train_time=0.904]Step:  11%|█         | 11/100 [00:25<01:58,  1.33s/it, accuracy=0.337, ce=1.79, prior_time=0, train_time=1.08] Step:  12%|█▏        | 12/100 [00:25<02:00,  1.37s/it, accuracy=0.337, ce=1.79, prior_time=0, train_time=1.08]Step:  12%|█▏        | 12/100 [00:26<02:00,  1.37s/it, accuracy=0.303, ce=1.87, prior_time=0, train_time=0.877]Step:  13%|█▎        | 13/100 [00:26<01:54,  1.32s/it, accuracy=0.303, ce=1.87, prior_time=0, train_time=0.877]Step:  13%|█▎        | 13/100 [00:27<01:54,  1.32s/it, accuracy=0.259, ce=1.96, prior_time=0, train_time=0.913]Step:  14%|█▍        | 14/100 [00:27<01:53,  1.31s/it, accuracy=0.259, ce=1.96, prior_time=0, train_time=0.913]Step:  14%|█▍        | 14/100 [00:28<01:53,  1.31s/it, accuracy=0.322, ce=1.77, prior_time=0, train_time=0.845]Step:  15%|█▌        | 15/100 [00:28<01:49,  1.28s/it, accuracy=0.322, ce=1.77, prior_time=0, train_time=0.845]Step:  15%|█▌        | 15/100 [00:30<01:49,  1.28s/it, accuracy=0.521, ce=1.27, prior_time=0, train_time=0.908]Step:  16%|█▌        | 16/100 [00:30<01:49,  1.31s/it, accuracy=0.521, ce=1.27, prior_time=0, train_time=0.908]Step:  16%|█▌        | 16/100 [00:31<01:49,  1.31s/it, accuracy=0.301, ce=1.78, prior_time=0, train_time=0.754]Step:  17%|█▋        | 17/100 [00:31<01:42,  1.24s/it, accuracy=0.301, ce=1.78, prior_time=0, train_time=0.754]Step:  17%|█▋        | 17/100 [00:32<01:42,  1.24s/it, accuracy=0.366, ce=1.69, prior_time=0, train_time=0.897]Step:  18%|█▊        | 18/100 [00:32<01:43,  1.27s/it, accuracy=0.366, ce=1.69, prior_time=0, train_time=0.897]Step:  18%|█▊        | 18/100 [00:33<01:43,  1.27s/it, accuracy=0.378, ce=1.52, prior_time=0, train_time=0.776]Step:  19%|█▉        | 19/100 [00:33<01:38,  1.22s/it, accuracy=0.378, ce=1.52, prior_time=0, train_time=0.776]Step:  19%|█▉        | 19/100 [00:34<01:38,  1.22s/it, accuracy=0.401, ce=1.44, prior_time=0, train_time=0.842]Step:  20%|██        | 20/100 [00:34<01:34,  1.18s/it, accuracy=0.401, ce=1.44, prior_time=0, train_time=0.842]Step:  20%|██        | 20/100 [00:36<01:34,  1.18s/it, accuracy=0.479, ce=1.36, prior_time=0, train_time=0.953]Step:  21%|██        | 21/100 [00:36<01:33,  1.19s/it, accuracy=0.479, ce=1.36, prior_time=0, train_time=0.953]Step:  21%|██        | 21/100 [00:37<01:33,  1.19s/it, accuracy=0.48, ce=1.32, prior_time=0, train_time=0.936] Step:  22%|██▏       | 22/100 [00:37<01:31,  1.17s/it, accuracy=0.48, ce=1.32, prior_time=0, train_time=0.936]Step:  22%|██▏       | 22/100 [00:38<01:31,  1.17s/it, accuracy=0.313, ce=1.68, prior_time=0, train_time=1.11]Step:  23%|██▎       | 23/100 [00:38<01:38,  1.28s/it, accuracy=0.313, ce=1.68, prior_time=0, train_time=1.11]Step:  23%|██▎       | 23/100 [00:40<01:38,  1.28s/it, accuracy=0.409, ce=1.5, prior_time=0, train_time=0.838]Step:  24%|██▍       | 24/100 [00:40<01:36,  1.27s/it, accuracy=0.409, ce=1.5, prior_time=0, train_time=0.838]Step:  24%|██▍       | 24/100 [00:41<01:36,  1.27s/it, accuracy=0.55, ce=1.22, prior_time=0, train_time=0.82] Step:  25%|██▌       | 25/100 [00:41<01:32,  1.23s/it, accuracy=0.55, ce=1.22, prior_time=0, train_time=0.82]Step:  25%|██▌       | 25/100 [00:42<01:32,  1.23s/it, accuracy=0.453, ce=1.48, prior_time=0, train_time=0.898]Step:  26%|██▌       | 26/100 [00:42<01:31,  1.23s/it, accuracy=0.453, ce=1.48, prior_time=0, train_time=0.898]Step:  26%|██▌       | 26/100 [00:43<01:31,  1.23s/it, accuracy=0.456, ce=1.4, prior_time=0, train_time=0.86]  Step:  27%|██▋       | 27/100 [00:43<01:30,  1.24s/it, accuracy=0.456, ce=1.4, prior_time=0, train_time=0.86]Step:  27%|██▋       | 27/100 [00:44<01:30,  1.24s/it, accuracy=0.525, ce=1.04, prior_time=0, train_time=0.811]Step:  28%|██▊       | 28/100 [00:44<01:26,  1.20s/it, accuracy=0.525, ce=1.04, prior_time=0, train_time=0.811]Step:  28%|██▊       | 28/100 [00:46<01:26,  1.20s/it, accuracy=0.349, ce=1.6, prior_time=0, train_time=0.883] Step:  29%|██▉       | 29/100 [00:46<01:26,  1.22s/it, accuracy=0.349, ce=1.6, prior_time=0, train_time=0.883]Step:  29%|██▉       | 29/100 [00:47<01:26,  1.22s/it, accuracy=0.414, ce=1.38, prior_time=0, train_time=1.3] Step:  30%|███       | 30/100 [00:47<01:34,  1.36s/it, accuracy=0.414, ce=1.38, prior_time=0, train_time=1.3]Step:  30%|███       | 30/100 [00:48<01:34,  1.36s/it, accuracy=0.42, ce=1.36, prior_time=0, train_time=0.773]Step:  31%|███       | 31/100 [00:48<01:28,  1.28s/it, accuracy=0.42, ce=1.36, prior_time=0, train_time=0.773]Step:  31%|███       | 31/100 [00:50<01:28,  1.28s/it, accuracy=0.339, ce=1.74, prior_time=0, train_time=0.866]Step:  32%|███▏      | 32/100 [00:50<01:25,  1.26s/it, accuracy=0.339, ce=1.74, prior_time=0, train_time=0.866]Step:  32%|███▏      | 32/100 [00:51<01:25,  1.26s/it, accuracy=0.498, ce=1.21, prior_time=0, train_time=0.818]Step:  33%|███▎      | 33/100 [00:51<01:21,  1.22s/it, accuracy=0.498, ce=1.21, prior_time=0, train_time=0.818]Step:  33%|███▎      | 33/100 [00:52<01:21,  1.22s/it, accuracy=0.399, ce=1.59, prior_time=0, train_time=0.879]Step:  34%|███▍      | 34/100 [00:52<01:19,  1.21s/it, accuracy=0.399, ce=1.59, prior_time=0, train_time=0.879]Step:  34%|███▍      | 34/100 [00:53<01:19,  1.21s/it, accuracy=0.332, ce=1.74, prior_time=0, train_time=0.946]Step:  35%|███▌      | 35/100 [00:53<01:20,  1.24s/it, accuracy=0.332, ce=1.74, prior_time=0, train_time=0.946]Step:  35%|███▌      | 35/100 [00:54<01:20,  1.24s/it, accuracy=0.274, ce=1.86, prior_time=0, train_time=0.829]Step:  36%|███▌      | 36/100 [00:54<01:19,  1.25s/it, accuracy=0.274, ce=1.86, prior_time=0, train_time=0.829]Step:  36%|███▌      | 36/100 [00:56<01:19,  1.25s/it, accuracy=0.438, ce=1.41, prior_time=0, train_time=0.787]Step:  37%|███▋      | 37/100 [00:56<01:16,  1.21s/it, accuracy=0.438, ce=1.41, prior_time=0, train_time=0.787]Step:  37%|███▋      | 37/100 [00:57<01:16,  1.21s/it, accuracy=0.544, ce=1.23, prior_time=0, train_time=0.851]Step:  38%|███▊      | 38/100 [00:57<01:13,  1.18s/it, accuracy=0.544, ce=1.23, prior_time=0, train_time=0.851]Step:  38%|███▊      | 38/100 [00:58<01:13,  1.18s/it, accuracy=0.379, ce=1.45, prior_time=0, train_time=0.961]Step:  39%|███▉      | 39/100 [00:58<01:11,  1.18s/it, accuracy=0.379, ce=1.45, prior_time=0, train_time=0.961]Step:  39%|███▉      | 39/100 [00:59<01:11,  1.18s/it, accuracy=0.462, ce=1.4, prior_time=0, train_time=1.01]  Step:  40%|████      | 40/100 [00:59<01:13,  1.22s/it, accuracy=0.462, ce=1.4, prior_time=0, train_time=1.01]Step:  40%|████      | 40/100 [01:00<01:13,  1.22s/it, accuracy=0.275, ce=1.89, prior_time=0, train_time=0.933]Step:  41%|████      | 41/100 [01:00<01:13,  1.24s/it, accuracy=0.275, ce=1.89, prior_time=0, train_time=0.933]Step:  41%|████      | 41/100 [01:02<01:13,  1.24s/it, accuracy=0.376, ce=1.66, prior_time=0, train_time=0.941]Step:  42%|████▏     | 42/100 [01:02<01:10,  1.22s/it, accuracy=0.376, ce=1.66, prior_time=0, train_time=0.941]Step:  42%|████▏     | 42/100 [01:03<01:10,  1.22s/it, accuracy=0.42, ce=1.5, prior_time=0, train_time=0.943]  Step:  43%|████▎     | 43/100 [01:03<01:11,  1.25s/it, accuracy=0.42, ce=1.5, prior_time=0, train_time=0.943]Step:  43%|████▎     | 43/100 [01:04<01:11,  1.25s/it, accuracy=0.426, ce=1.43, prior_time=0, train_time=0.795]Step:  44%|████▍     | 44/100 [01:04<01:07,  1.21s/it, accuracy=0.426, ce=1.43, prior_time=0, train_time=0.795]Step:  44%|████▍     | 44/100 [01:05<01:07,  1.21s/it, accuracy=0.434, ce=1.52, prior_time=0, train_time=0.98] Step:  45%|████▌     | 45/100 [01:05<01:07,  1.23s/it, accuracy=0.434, ce=1.52, prior_time=0, train_time=0.98]Step:  45%|████▌     | 45/100 [01:06<01:07,  1.23s/it, accuracy=0.504, ce=1.27, prior_time=0, train_time=0.886]Step:  46%|████▌     | 46/100 [01:06<01:04,  1.19s/it, accuracy=0.504, ce=1.27, prior_time=0, train_time=0.886]Step:  46%|████▌     | 46/100 [01:08<01:04,  1.19s/it, accuracy=0.6, ce=1.07, prior_time=0, train_time=0.966]  Step:  47%|████▋     | 47/100 [01:08<01:04,  1.21s/it, accuracy=0.6, ce=1.07, prior_time=0, train_time=0.966]Step:  47%|████▋     | 47/100 [01:09<01:04,  1.21s/it, accuracy=0.33, ce=1.77, prior_time=0, train_time=0.907]Step:  48%|████▊     | 48/100 [01:09<01:02,  1.20s/it, accuracy=0.33, ce=1.77, prior_time=0, train_time=0.907]Step:  48%|████▊     | 48/100 [01:10<01:02,  1.20s/it, accuracy=0.443, ce=1.41, prior_time=0, train_time=0.884]Step:  49%|████▉     | 49/100 [01:10<01:02,  1.23s/it, accuracy=0.443, ce=1.41, prior_time=0, train_time=0.884]Step:  49%|████▉     | 49/100 [01:11<01:02,  1.23s/it, accuracy=0.31, ce=1.68, prior_time=0, train_time=0.788] Step:  50%|█████     | 50/100 [01:12<01:05,  1.31s/it, accuracy=0.31, ce=1.68, prior_time=0, train_time=0.788]Step:  50%|█████     | 50/100 [01:13<01:05,  1.31s/it, accuracy=0.517, ce=1.23, prior_time=0, train_time=0.637]Step:  51%|█████     | 51/100 [01:13<00:58,  1.20s/it, accuracy=0.517, ce=1.23, prior_time=0, train_time=0.637]Step:  51%|█████     | 51/100 [01:14<00:58,  1.20s/it, accuracy=0.3, ce=1.79, prior_time=0, train_time=0.946]  Step:  52%|█████▏    | 52/100 [01:14<00:58,  1.22s/it, accuracy=0.3, ce=1.79, prior_time=0, train_time=0.946]Step:  52%|█████▏    | 52/100 [01:15<00:58,  1.22s/it, accuracy=0.542, ce=1.1, prior_time=0, train_time=0.948]Step:  53%|█████▎    | 53/100 [01:15<01:00,  1.28s/it, accuracy=0.542, ce=1.1, prior_time=0, train_time=0.948]Step:  53%|█████▎    | 53/100 [01:17<01:00,  1.28s/it, accuracy=0.463, ce=1.3, prior_time=0, train_time=1.1]  Step:  54%|█████▍    | 54/100 [01:17<01:02,  1.35s/it, accuracy=0.463, ce=1.3, prior_time=0, train_time=1.1]Step:  54%|█████▍    | 54/100 [01:18<01:02,  1.35s/it, accuracy=0.364, ce=1.52, prior_time=0, train_time=0.845]Step:  55%|█████▌    | 55/100 [01:18<00:57,  1.29s/it, accuracy=0.364, ce=1.52, prior_time=0, train_time=0.845]Step:  55%|█████▌    | 55/100 [01:19<00:57,  1.29s/it, accuracy=0.375, ce=1.42, prior_time=0, train_time=0.918]Step:  56%|█████▌    | 56/100 [01:19<00:54,  1.24s/it, accuracy=0.375, ce=1.42, prior_time=0, train_time=0.918]Step:  56%|█████▌    | 56/100 [01:20<00:54,  1.24s/it, accuracy=0.325, ce=1.7, prior_time=0, train_time=0.911] Step:  57%|█████▋    | 57/100 [01:20<00:52,  1.23s/it, accuracy=0.325, ce=1.7, prior_time=0, train_time=0.911]Step:  57%|█████▋    | 57/100 [01:22<00:52,  1.23s/it, accuracy=0.3, ce=1.67, prior_time=0, train_time=0.993] Step:  58%|█████▊    | 58/100 [01:22<00:51,  1.24s/it, accuracy=0.3, ce=1.67, prior_time=0, train_time=0.993]Step:  58%|█████▊    | 58/100 [01:23<00:51,  1.24s/it, accuracy=0.502, ce=1.33, prior_time=0, train_time=0.996]Step:  59%|█████▉    | 59/100 [01:23<00:52,  1.29s/it, accuracy=0.502, ce=1.33, prior_time=0, train_time=0.996]Step:  59%|█████▉    | 59/100 [01:24<00:52,  1.29s/it, accuracy=0.412, ce=1.5, prior_time=0, train_time=0.819] Step:  60%|██████    | 60/100 [01:24<00:49,  1.25s/it, accuracy=0.412, ce=1.5, prior_time=0, train_time=0.819]Step:  60%|██████    | 60/100 [01:25<00:49,  1.25s/it, accuracy=0.459, ce=1.09, prior_time=0, train_time=0.902]Step:  61%|██████    | 61/100 [01:25<00:48,  1.24s/it, accuracy=0.459, ce=1.09, prior_time=0, train_time=0.902]Step:  61%|██████    | 61/100 [01:27<00:48,  1.24s/it, accuracy=0.466, ce=1.43, prior_time=0, train_time=0.882]Step:  62%|██████▏   | 62/100 [01:27<00:47,  1.26s/it, accuracy=0.466, ce=1.43, prior_time=0, train_time=0.882]Step:  62%|██████▏   | 62/100 [01:28<00:47,  1.26s/it, accuracy=0.419, ce=1.28, prior_time=0, train_time=0.848]Step:  63%|██████▎   | 63/100 [01:28<00:46,  1.26s/it, accuracy=0.419, ce=1.28, prior_time=0, train_time=0.848]Step:  63%|██████▎   | 63/100 [01:29<00:46,  1.26s/it, accuracy=0.478, ce=1.38, prior_time=0, train_time=0.869]Step:  64%|██████▍   | 64/100 [01:29<00:44,  1.24s/it, accuracy=0.478, ce=1.38, prior_time=0, train_time=0.869]Step:  64%|██████▍   | 64/100 [01:30<00:44,  1.24s/it, accuracy=0.415, ce=1.48, prior_time=0, train_time=0.912]Step:  65%|██████▌   | 65/100 [01:30<00:41,  1.20s/it, accuracy=0.415, ce=1.48, prior_time=0, train_time=0.912]Step:  65%|██████▌   | 65/100 [01:32<00:41,  1.20s/it, accuracy=0.439, ce=1.27, prior_time=0, train_time=1.04] Step:  66%|██████▌   | 66/100 [01:32<00:43,  1.27s/it, accuracy=0.439, ce=1.27, prior_time=0, train_time=1.04]Step:  66%|██████▌   | 66/100 [01:33<00:43,  1.27s/it, accuracy=0.515, ce=1.12, prior_time=0, train_time=0.869]Step:  67%|██████▋   | 67/100 [01:33<00:41,  1.24s/it, accuracy=0.515, ce=1.12, prior_time=0, train_time=0.869]Step:  67%|██████▋   | 67/100 [01:34<00:41,  1.24s/it, accuracy=0.456, ce=1.31, prior_time=0, train_time=0.899]Step:  68%|██████▊   | 68/100 [01:34<00:37,  1.17s/it, accuracy=0.456, ce=1.31, prior_time=0, train_time=0.899]Step:  68%|██████▊   | 68/100 [01:35<00:37,  1.17s/it, accuracy=0.346, ce=1.64, prior_time=0, train_time=1.11] Step:  69%|██████▉   | 69/100 [01:35<00:38,  1.25s/it, accuracy=0.346, ce=1.64, prior_time=0, train_time=1.11]Step:  69%|██████▉   | 69/100 [01:36<00:38,  1.25s/it, accuracy=0.43, ce=1.43, prior_time=0, train_time=0.966]Step:  70%|███████   | 70/100 [01:36<00:37,  1.26s/it, accuracy=0.43, ce=1.43, prior_time=0, train_time=0.966]Step:  70%|███████   | 70/100 [01:38<00:37,  1.26s/it, accuracy=0.548, ce=1.2, prior_time=0, train_time=0.883]Step:  71%|███████   | 71/100 [01:38<00:35,  1.22s/it, accuracy=0.548, ce=1.2, prior_time=0, train_time=0.883]Step:  71%|███████   | 71/100 [01:39<00:35,  1.22s/it, accuracy=0.447, ce=1.4, prior_time=0, train_time=0.956]Step:  72%|███████▏  | 72/100 [01:39<00:34,  1.23s/it, accuracy=0.447, ce=1.4, prior_time=0, train_time=0.956]Step:  72%|███████▏  | 72/100 [01:40<00:34,  1.23s/it, accuracy=0.436, ce=1.39, prior_time=0, train_time=0.884]Step:  73%|███████▎  | 73/100 [01:40<00:32,  1.22s/it, accuracy=0.436, ce=1.39, prior_time=0, train_time=0.884]Step:  73%|███████▎  | 73/100 [01:41<00:32,  1.22s/it, accuracy=0.428, ce=1.45, prior_time=0, train_time=0.937]Step:  74%|███████▍  | 74/100 [01:41<00:32,  1.24s/it, accuracy=0.428, ce=1.45, prior_time=0, train_time=0.937]Step:  74%|███████▍  | 74/100 [01:42<00:32,  1.24s/it, accuracy=0.485, ce=1.26, prior_time=0, train_time=0.836]Step:  75%|███████▌  | 75/100 [01:42<00:30,  1.20s/it, accuracy=0.485, ce=1.26, prior_time=0, train_time=0.836]Step:  75%|███████▌  | 75/100 [01:44<00:30,  1.20s/it, accuracy=0.402, ce=1.44, prior_time=0, train_time=0.952]Step:  76%|███████▌  | 76/100 [01:44<00:28,  1.17s/it, accuracy=0.402, ce=1.44, prior_time=0, train_time=0.952]Step:  76%|███████▌  | 76/100 [01:45<00:28,  1.17s/it, accuracy=0.452, ce=1.43, prior_time=0, train_time=1.06] Step:  77%|███████▋  | 77/100 [01:45<00:27,  1.20s/it, accuracy=0.452, ce=1.43, prior_time=0, train_time=1.06]Step:  77%|███████▋  | 77/100 [01:47<00:27,  1.20s/it, accuracy=0.386, ce=1.52, prior_time=0, train_time=1.45]Step:  78%|███████▊  | 78/100 [01:47<00:29,  1.36s/it, accuracy=0.386, ce=1.52, prior_time=0, train_time=1.45]Step:  78%|███████▊  | 78/100 [01:48<00:29,  1.36s/it, accuracy=0.534, ce=1.12, prior_time=0, train_time=0.981]Step:  79%|███████▉  | 79/100 [01:48<00:27,  1.33s/it, accuracy=0.534, ce=1.12, prior_time=0, train_time=0.981]Step:  79%|███████▉  | 79/100 [01:49<00:27,  1.33s/it, accuracy=0.406, ce=1.44, prior_time=0, train_time=0.887]Step:  80%|████████  | 80/100 [01:49<00:25,  1.26s/it, accuracy=0.406, ce=1.44, prior_time=0, train_time=0.887]Step:  80%|████████  | 80/100 [01:50<00:25,  1.26s/it, accuracy=0.503, ce=1.27, prior_time=0, train_time=0.961]Step:  81%|████████  | 81/100 [01:50<00:23,  1.25s/it, accuracy=0.503, ce=1.27, prior_time=0, train_time=0.961]Step:  81%|████████  | 81/100 [01:51<00:23,  1.25s/it, accuracy=0.456, ce=1.31, prior_time=0, train_time=0.959]Step:  82%|████████▏ | 82/100 [01:51<00:22,  1.25s/it, accuracy=0.456, ce=1.31, prior_time=0, train_time=0.959]Step:  82%|████████▏ | 82/100 [01:53<00:22,  1.25s/it, accuracy=0.428, ce=1.36, prior_time=0, train_time=0.97] Step:  83%|████████▎ | 83/100 [01:53<00:21,  1.26s/it, accuracy=0.428, ce=1.36, prior_time=0, train_time=0.97]Step:  83%|████████▎ | 83/100 [01:54<00:21,  1.26s/it, accuracy=0.456, ce=1.25, prior_time=0, train_time=0.875]Step:  84%|████████▍ | 84/100 [01:54<00:19,  1.22s/it, accuracy=0.456, ce=1.25, prior_time=0, train_time=0.875]Step:  84%|████████▍ | 84/100 [01:55<00:19,  1.22s/it, accuracy=0.403, ce=1.6, prior_time=0, train_time=1.02]  Step:  85%|████████▌ | 85/100 [01:55<00:18,  1.25s/it, accuracy=0.403, ce=1.6, prior_time=0, train_time=1.02]Step:  85%|████████▌ | 85/100 [01:56<00:18,  1.25s/it, accuracy=0.474, ce=1.4, prior_time=0, train_time=0.975]Step:  86%|████████▌ | 86/100 [01:56<00:17,  1.23s/it, accuracy=0.474, ce=1.4, prior_time=0, train_time=0.975]Step:  86%|████████▌ | 86/100 [01:58<00:17,  1.23s/it, accuracy=0.414, ce=1.41, prior_time=0, train_time=0.999]Step:  87%|████████▋ | 87/100 [01:58<00:16,  1.27s/it, accuracy=0.414, ce=1.41, prior_time=0, train_time=0.999]Step:  87%|████████▋ | 87/100 [01:59<00:16,  1.27s/it, accuracy=0.423, ce=1.46, prior_time=0, train_time=0.836]Step:  88%|████████▊ | 88/100 [01:59<00:14,  1.25s/it, accuracy=0.423, ce=1.46, prior_time=0, train_time=0.836]Step:  88%|████████▊ | 88/100 [02:00<00:14,  1.25s/it, accuracy=0.618, ce=1.09, prior_time=0, train_time=0.838]Step:  89%|████████▉ | 89/100 [02:00<00:12,  1.18s/it, accuracy=0.618, ce=1.09, prior_time=0, train_time=0.838]Step:  89%|████████▉ | 89/100 [02:01<00:12,  1.18s/it, accuracy=0.482, ce=1.14, prior_time=0, train_time=1.03] Step:  90%|█████████ | 90/100 [02:01<00:12,  1.22s/it, accuracy=0.482, ce=1.14, prior_time=0, train_time=1.03]Step:  90%|█████████ | 90/100 [02:03<00:12,  1.22s/it, accuracy=0.429, ce=1.51, prior_time=0, train_time=0.969]Step:  91%|█████████ | 91/100 [02:03<00:11,  1.25s/it, accuracy=0.429, ce=1.51, prior_time=0, train_time=0.969]Step:  91%|█████████ | 91/100 [02:04<00:11,  1.25s/it, accuracy=0.453, ce=1.36, prior_time=0, train_time=0.87] Step:  92%|█████████▏| 92/100 [02:04<00:10,  1.26s/it, accuracy=0.453, ce=1.36, prior_time=0, train_time=0.87]Step:  92%|█████████▏| 92/100 [02:05<00:10,  1.26s/it, accuracy=0.518, ce=1.21, prior_time=0, train_time=0.746]Step:  93%|█████████▎| 93/100 [02:05<00:08,  1.19s/it, accuracy=0.518, ce=1.21, prior_time=0, train_time=0.746]Step:  93%|█████████▎| 93/100 [02:06<00:08,  1.19s/it, accuracy=0.529, ce=1.17, prior_time=0, train_time=0.88] Step:  94%|█████████▍| 94/100 [02:06<00:06,  1.17s/it, accuracy=0.529, ce=1.17, prior_time=0, train_time=0.88]Step:  94%|█████████▍| 94/100 [02:07<00:06,  1.17s/it, accuracy=0.436, ce=1.4, prior_time=0, train_time=1.12] Step:  95%|█████████▌| 95/100 [02:07<00:06,  1.23s/it, accuracy=0.436, ce=1.4, prior_time=0, train_time=1.12]Step:  95%|█████████▌| 95/100 [02:08<00:06,  1.23s/it, accuracy=0.301, ce=1.78, prior_time=0, train_time=0.94]Step:  96%|█████████▌| 96/100 [02:08<00:04,  1.21s/it, accuracy=0.301, ce=1.78, prior_time=0, train_time=0.94]Step:  96%|█████████▌| 96/100 [02:10<00:04,  1.21s/it, accuracy=0.51, ce=1.29, prior_time=0, train_time=0.963]Step:  97%|█████████▋| 97/100 [02:10<00:03,  1.19s/it, accuracy=0.51, ce=1.29, prior_time=0, train_time=0.963]Step:  97%|█████████▋| 97/100 [02:11<00:03,  1.19s/it, accuracy=0.443, ce=1.29, prior_time=0, train_time=0.946]Step:  98%|█████████▊| 98/100 [02:11<00:02,  1.20s/it, accuracy=0.443, ce=1.29, prior_time=0, train_time=0.946]Step:  98%|█████████▊| 98/100 [02:12<00:02,  1.20s/it, accuracy=0.398, ce=1.37, prior_time=0, train_time=0.907]Step:  99%|█████████▉| 99/100 [02:12<00:01,  1.24s/it, accuracy=0.398, ce=1.37, prior_time=0, train_time=0.907]Step:  99%|█████████▉| 99/100 [02:13<00:01,  1.24s/it, accuracy=0.458, ce=1.27, prior_time=0, train_time=0.791]Step: 100%|██████████| 100/100 [02:13<00:00,  1.26s/it, accuracy=0.458, ce=1.27, prior_time=0, train_time=0.791]Step: 100%|██████████| 100/100 [02:13<00:00,  1.34s/it, accuracy=0.458, ce=1.27, prior_time=0, train_time=0.791]
+main:1268:1268 [7] NCCL INFO comm 0x1afab1d0 rank 7 nranks 8 cudaDev 7 busId ca000 - Destroy COMPLETE
+main:1266:1266 [5] NCCL INFO comm 0x4e4dc960 rank 5 nranks 8 cudaDev 5 busId a8000 - Destroy COMPLETE
+main:1262:1262 [1] NCCL INFO comm 0xeb7f310 rank 1 nranks 8 cudaDev 1 busId 64000 - Destroy COMPLETE
+main:1265:1265 [4] NCCL INFO comm 0x3cd09e50 rank 4 nranks 8 cudaDev 4 busId 97000 - Destroy COMPLETE
+main:1263:1263 [2] NCCL INFO comm 0x1fd821e0 rank 2 nranks 8 cudaDev 2 busId 75000 - Destroy COMPLETE
+main:1264:1264 [3] NCCL INFO comm 0x47ecba20 rank 3 nranks 8 cudaDev 3 busId 86000 - Destroy COMPLETE
+main:1267:1267 [6] NCCL INFO comm 0x3e6bcfe0 rank 6 nranks 8 cudaDev 6 busId b9000 - Destroy COMPLETE
+main:1261:1261 [0] NCCL INFO comm 0x24eaf370 rank 0 nranks 8 cudaDev 0 busId 53000 - Destroy COMPLETE
+terminate called without an active exception
+terminate called without an active exception
+terminate called without an active exception
+terminate called without an active exception
+terminate called without an active exception
+terminate called without an active exception
+terminate called without an active exception
+main:1263:1263 [2] NCCL INFO ENV/Plugin: Closing env plugin ncclEnvDefault
+terminate called without an active exception
+main:1267:1267 [6] NCCL INFO ENV/Plugin: Closing env plugin ncclEnvDefault
+main:1261:1261 [0] NCCL INFO ENV/Plugin: Closing env plugin ncclEnvDefault
+terminate called without an active exception
+main:1268:1268 [7] NCCL INFO ENV/Plugin: Closing env plugin ncclEnvDefault
+main:1266:1266 [5] NCCL INFO ENV/Plugin: Closing env plugin ncclEnvDefault
+main:1265:1265 [4] NCCL INFO ENV/Plugin: Closing env plugin ncclEnvDefault
+main:1264:1264 [3] NCCL INFO ENV/Plugin: Closing env plugin ncclEnvDefault
+main:1262:1262 [1] NCCL INFO ENV/Plugin: Closing env plugin ncclEnvDefault
+--- checkpoints written:
+total 431056
+drwxr-xr-x. 2 root root      4096 Aug  5 17:23 .
+drwxr-xr-x. 3 root root      4096 Aug  5 17:22 ..
+-rw-r--r--. 1 root root 220695800 Aug  5 17:23 step-100.ckpt
+-rw-r--r--. 1 root root 220694437 Aug  5 17:22 step-50.ckpt
+================================
+Execution Summary
+================================
+Total time: 469s
+User code execution time: 444s
+Completed at Wed Aug  5 05:28:22 PM UTC 2026
+================================

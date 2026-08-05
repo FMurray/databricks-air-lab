@@ -139,6 +139,42 @@ platform exonerated.**
 - Next rung when wanted: H100 (bigger micro-batches dodge the A10 OOM→skip path entirely),
   or upstream issue for the DDP bug.
 
+#### PoL rungs 2+3 — pre-registered (2026-08-05, before submit)
+
+Same wrapper/trainer (tabicl==2.1.1 @ 46b9196), e2, MAX_STEPS=100, timeout 120 min.
+- **Rung 2, 1×H100**: hypothesis — 80GB absorbs the micro-batch that OOM'd the A10, so the
+  skip-on-OOM path never triggers and the run completes 100 steps + writes checkpoints.
+  Success = SUCCESS + step 100 reached + `checkpoints written` listing non-empty. Key
+  measurements: steps/s after warmup (step-1 prior_time includes cold prior-gen; the
+  informative number is steady-state s/it), and prior_time:train_time ratio on this node's
+  vCPU count (wrapper prints `cpus`). If it OOM-skips even at 80GB → upstream bug bites
+  everywhere; report upstream with both tracebacks.
+- **Rung 3, 8×H100 NPROC=8**: hypothesis — torchrun 8-rank DDP works single-node (fabric
+  not involved; NVLink only). Success = SUCCESS + 100 steps + all 8 ranks alive at exit.
+  Key measurement: does 8× the prior-gen demand (8 ranks × N_JOBS=8 workers on one node's
+  CPUs) starve the GPUs — steady-state s/it vs rung 2's, and the prior:train ratio. This is
+  THE dataloader-bound datapoint for the customer's "most efficient pretrain setup" question
+  (their scripts assume 4×H100/node; nodes here are 8×).
+Failure attribution rule stays: env/launcher = platform; in-trainer = upstream (their code,
+their recipe, pinned commit).
+
+**RESULTS — ✅ BOTH RUNGS PASS (2026-08-05).**
+- Rung 2, 1×H100 (run 765994843027630, 16 vCPUs): **100/100 steps in 7:55**, steady-state
+  ~4.75 s/it, ce 2.16→1.34, accuracy 0.05→0.464, `step-100.ckpt` (220MB) written. The A10
+  micro-batch OOM never triggered at 80GB — upstream's skip-on-OOM bug is real but moot on
+  right-sized GPUs.
+- Rung 3, 8×H100 NPROC=8 (run 661368351202999, **192 vCPUs**): **100/100 in 2:13**,
+  1.26–1.34 s/it, ce 1.27, ckpt written. 8-rank single-node DDP works as published;
+  64 prior-gen workers on 192 vCPUs → no starvation. Wall speedup vs rung 2: **3.6×**
+  (measured; not 8× — per-step batch semantics unchanged, so label as wall-clock ratio only).
+- **CORRECTION to the 83%-CPU-bound finding: it is a COLD-START effect, not steady state.**
+  Steady-state `prior_time=0` on both rungs — the CPU prior-generation workers pipeline
+  ahead of the GPU once warm. The A10 step-1 measurement (56.5s prior / 68.7s step) stands
+  as a warmup datum on an 8-vCPU-class node, but the sizing guidance flips: at H100-node
+  vCPU counts (16 at 1×, 192 at 8×), **pretraining is GPU-bound at steady state**.
+  Open residual: rung-2 steady state shows train_time 2.41 of ~4.75 s/it — the other ~2.3s
+  is unattributed (optimizer/host sync?); label observed, not diagnosed.
+
 **Memory probe at 500 features, H100 — run 635048884698037** (FAILED at the last rung;
 ladder itself is the result). Measured:
 
