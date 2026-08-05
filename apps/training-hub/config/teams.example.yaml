@@ -7,16 +7,26 @@ reservation:
   accelerator_type: GPU_8xH100
   region: us-east-1
 
+# Admission caps the platform enforces per shape (measured by fail-fast; ask AIR team for actuals)
+platform_quotas:
+  GPU_8xH100: 4
+
 teams:
   - name: offers
     quota_nodes: 8
     members:
       - alice@example.com
       - bob@example.com
+    use_cases:
+      - name: recsys-ranking
+        description: recommendation model fine-tuning
+      - name: offers-propensity
   - name: risk
     quota_nodes: 4
     members:
       - carol@example.com
+    use_cases:
+      - name: fraud-detection
   - name: platform
     quota_nodes: 2
     members:
