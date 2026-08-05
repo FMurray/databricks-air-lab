@@ -1,0 +1,408 @@
+Root python environment activated successfully
+Environment setup started at Wed Aug  5 05:03:12 PM UTC 2026
+Hyperparameters path: /Workspace/Users/forrest.murray@databricks.com/.air/cli_launch/air-lab-tabicl-pol/tabicl-pol-stage1-smoke_4ce1e340284f40e9/training_config.yaml
+Inspecting tarball at /Workspace/Users/forrest.murray@databricks.com/.air/repo_snapshots/databricks-air-lab/databricks-air-lab_20260805_130235.tar.gz...
+tar: Ignoring unknown extended header keyword 'LIBARCHIVE.xattr.com.apple.provenance'
+tar: Ignoring unknown extended header keyword 'LIBARCHIVE.xattr.com.apple.provenance'
+tar: Ignoring unknown extended header keyword 'LIBARCHIVE.xattr.com.apple.provenance'
+Extracting code_source into /databricks/code_source...
+tar: Ignoring unknown extended header keyword 'LIBARCHIVE.xattr.com.apple.provenance'
+tar: Ignoring unknown extended header keyword 'LIBARCHIVE.xattr.com.apple.provenance'
+tar: Ignoring unknown extended header keyword 'LIBARCHIVE.xattr.com.apple.provenance'
+tar: Ignoring unknown extended header keyword 'LIBARCHIVE.xattr.com.apple.provenance'
+tar: Ignoring unknown extended header keyword 'LIBARCHIVE.xattr.com.apple.provenance'
+Tarball extraction completed in 1s
+Code source databricks-air-lab available at /databricks/code_source/databricks-air-lab
+requirements.yaml path: /Workspace/Users/forrest.murray@databricks.com/.air/cli_launch/air-lab-tabicl-pol/tabicl-pol-stage1-smoke_4ce1e340284f40e9/requirements.yaml
+uv not found in base environment; attempting to install it...
+uv installed.
+Installing dependencies...
+Installing 4 requirements.yaml dependencies with dependency resolution (via uv)...
+Using Python 3.12.3 environment at: /databricks/python3
+   Updating https://github.com/soda-inria/tabicl (HEAD)
+    Updated https://github.com/soda-inria/tabicl (46b91961db4f8873dd049ec09990698a435e1e29)
+Resolved 73 packages in 3.94s
+Downloading nvidia-nvjitlink (38.9MiB)
+   Building tabicl @ git+https://github.com/soda-inria/tabicl@46b91961db4f8873dd049ec09990698a435e1e29
+Downloading hf-xet (4.3MiB)
+Downloading nvidia-curand (56.8MiB)
+Downloading transformers (11.1MiB)
+Downloading networkx (2.0MiB)
+Downloading wandb (25.3MiB)
+Downloading xgboost (54.9MiB)
+Downloading nvidia-cuda-nvrtc (86.0MiB)
+Downloading cuda-bindings (6.3MiB)
+Downloading nvidia-cuda-runtime (2.1MiB)
+Downloading nvidia-cufile (1.2MiB)
+Downloading nvidia-nvshmem-cu13 (57.6MiB)
+Downloading triton (188.6MiB)
+Downloading nvidia-cusolver (191.6MiB)
+Downloading scikit-learn (8.7MiB)
+Downloading nvidia-cuda-cupti (10.2MiB)
+Downloading scipy (33.7MiB)
+Downloading sympy (6.0MiB)
+Downloading nvidia-cudnn-cu13 (349.2MiB)
+Downloading nvidia-cublas (403.5MiB)
+Downloading nvidia-nccl-cu13 (196.4MiB)
+Downloading nvidia-cusparselt-cu13 (162.3MiB)
+Downloading torch (502.2MiB)
+Downloading nvidia-cusparse (139.2MiB)
+Downloading nvidia-cufft (204.2MiB)
+      Built tabicl @ git+https://github.com/soda-inria/tabicl@46b91961db4f8873dd049ec09990698a435e1e29
+ Downloaded nvidia-cufile
+ Downloaded nvidia-cuda-runtime
+ Downloaded networkx
+ Downloaded hf-xet
+ Downloaded cuda-bindings
+ Downloaded nvidia-cuda-cupti
+ Downloaded scikit-learn
+ Downloaded sympy
+ Downloaded transformers
+ Downloaded nvidia-nvjitlink
+ Downloaded scipy
+ Downloaded wandb
+ Downloaded nvidia-curand
+ Downloaded nvidia-nvshmem-cu13
+ Downloaded xgboost
+ Downloaded nvidia-cuda-nvrtc
+ Downloaded nvidia-cusparse
+ Downloaded nvidia-cusparselt-cu13
+ Downloaded nvidia-cusolver
+ Downloaded nvidia-nccl-cu13
+ Downloaded triton
+ Downloaded nvidia-cufft
+ Downloaded nvidia-cudnn-cu13
+ Downloaded nvidia-cublas
+ Downloaded torch
+Prepared 40 packages in 19.36s
+Uninstalled 4 packages in 37ms
+Installed 40 packages in 769ms
+ - click==8.1.8
+ + click==8.4.2
+ + cuda-bindings==13.3.1
+ + cuda-pathfinder==1.6.0
+ + cuda-toolkit==13.0.3.0
+ + einops==0.8.2
+ - hf-xet==1.2.0
+ + hf-xet==1.6.0
+ - huggingface-hub==1.2.4
+ + huggingface-hub==1.26.0
+ + mpmath==1.3.0
+ + narwhals==2.24.0
+ + networkx==3.6.1
+ + nvidia-cublas==13.1.1.3
+ + nvidia-cuda-cupti==13.0.85
+ + nvidia-cuda-nvrtc==13.0.88
+ + nvidia-cuda-runtime==13.0.96
+ + nvidia-cudnn-cu13==9.20.0.48
+ + nvidia-cufft==12.0.0.61
+ + nvidia-cufile==1.15.1.6
+ + nvidia-curand==10.4.0.35
+ + nvidia-cusolver==12.0.4.66
+ + nvidia-cusparse==12.6.3.3
+ + nvidia-cusparselt-cu13==0.8.1
+ + nvidia-nccl-cu13==2.29.7
+ + nvidia-nvjitlink==13.3.33
+ + nvidia-nvshmem-cu13==3.4.5
+ + nvidia-nvtx==13.0.85
+ + platformdirs==4.11.0
+ - regex==2024.11.6
+ + regex==2026.7.19
+ + safetensors==0.8.0
+ + scikit-learn==1.9.0
+ + scipy==1.18.0
+ + sentry-sdk==2.66.1
+ + setuptools==83.0.0
+ + sympy==1.14.0
+ + tabicl==2.1.1 (from git+https://github.com/soda-inria/tabicl@46b91961db4f8873dd049ec09990698a435e1e29)
+ + torch==2.13.0
+ + transformers==5.14.1
+ + triton==3.7.1
+ + typer==0.27.1
+ + wandb==0.28.1
+ + xgboost==3.4.0
+warning: The package `tabicl @ git+https://github.com/soda-inria/tabicl@46b91961db4f8873dd049ec09990698a435e1e29` does not have an extra named `pretraining`
+Successfully installed all dependencies
+Dependency installation completed in 30s
+================================
+Environment setup completed at Wed Aug  5 05:03:43 PM UTC 2026
+Environment setup time: 31s
+================================
+Wed Aug  5 17:03:43 2026       
++-----------------------------------------------------------------------------------------+
+| NVIDIA-SMI 580.126.16             Driver Version: 580.126.16     CUDA Version: 13.0     |
++-----------------------------------------+------------------------+----------------------+
+| GPU  Name                 Persistence-M | Bus-Id          Disp.A | Volatile Uncorr. ECC |
+| Fan  Temp   Perf          Pwr:Usage/Cap |           Memory-Usage | GPU-Util  Compute M. |
+|                                         |                        |               MIG M. |
+|=========================================+========================+======================|
+|   0  NVIDIA A10G                    On  |   00000000:00:1E.0 Off |                    0 |
+|  0%   29C    P8             23W /  300W |       0MiB /  23028MiB |      0%      Default |
+|                                         |                        |                  N/A |
++-----------------------------------------+------------------------+----------------------+
+
++-----------------------------------------------------------------------------------------+
+| Processes:                                                                              |
+|  GPU   GI   CI              PID   Type   Process name                        GPU Memory |
+|        ID   ID                                                               Usage      |
+|=========================================================================================|
+|  No running processes found                                                             |
++-----------------------------------------------------------------------------------------+
+torch 2.13.0+cu130 | cuda True | gpus 1
+cpus 16
+/databricks/python3/lib/python3.12/site-packages/huggingface_hub/constants.py:298: FutureWarning: The `HF_HUB_ENABLE_HF_TRANSFER` environment variable is deprecated as 'hf_transfer' is not used anymore. Please use `HF_XET_HIGH_PERFORMANCE` instead to enable high performance transfer with Xet. Visit https://huggingface.co/docs/huggingface_hub/package_reference/environment_variables#hfxethighperformance for more details.
+  warnings.warn(
+DDP training with 1 processes
+Per-GPU batch size: 64
+Model has 27552250 parameters.
+/databricks/python3/lib/python3.12/site-packages/tabicl/train/_run.py:261: FutureWarning: `broadcast_buffers` is deprecated. Use `forward_sync_buffers` instead. IMPORTANT: unlike `broadcast_buffers=False`, `forward_sync_buffers=False` still syncs buffers at init. If you rely on buffers NOT being synced at init (e.g. rank-local buffers), keep using `broadcast_buffers=False` until `init_sync_buffers` is available.
+  self.model = DDP(model, device_ids=[self.ddp_local_rank], broadcast_buffers=False)
+main:650:650 [0] NCCL INFO ENV/Plugin: Could not find: libnccl-env.so
+main:650:650 [0] NCCL INFO Bootstrap: Using eth0:10.153.183.153<0>
+main:650:650 [0] NCCL INFO cudaDriverVersion 13000
+main:650:650 [0] NCCL INFO NCCL version 2.29.7+cuda13.2
+main:650:650 [0] NCCL INFO NCCL git version stable b81d6a5a3
+main:650:650 [0] NCCL INFO Comm config Blocking set to 1
+main:650:650 [0] NCCL INFO NET/Plugin: Loaded net plugin Libfabric (v10)
+main:650:650 [0] NCCL INFO Successfully loaded external network plugin /opt/aws-ofi-nccl/install/lib/libnccl-net.so
+main:650:650 [0] NCCL INFO NET/OFI Initializing aws-ofi-nccl 1.15.0
+main:650:650 [0] NCCL INFO NET/OFI Using Libfabric version 2.1
+main:650:650 [0] NCCL INFO NET/OFI Using CUDA driver version 13000 with runtime 12090
+main:650:650 [0] NCCL INFO NET/OFI Configuring AWS-specific options
+main:650:650 [0] NCCL INFO NET/OFI Setting provider_filter to efa
+main:650:650 [0] NCCL INFO NET/OFI Setting NCCL_NVLSTREE_MAX_CHUNKSIZE to 512KiB
+main:650:650 [0] NCCL INFO NET/OFI Setting NCCL_NVLS_CHUNKSIZE to 512KiB
+main:650:650 [0] NCCL INFO NET/OFI Internode latency set at 75.0 us
+main:650:650 [0] NCCL INFO NET/OFI No eligible providers were found
+
+[2026-08-05 17:04:04] main:650:650 [0] int nccl_net_ofi_create_plugin(nccl_net_ofi_plugin_t**):263 NCCL WARN NET/OFI Unable to find a protocol that worked.  Failing initialization.
+
+[2026-08-05 17:04:04] main:650:650 [0] int nccl_net_ofi_create_plugin(nccl_net_ofi_plugin_t**):354 NCCL WARN NET/OFI aws-ofi-nccl initialization failed
+
+[2026-08-05 17:04:04] main:650:650 [0] ncclResult_t nccl_net_ofi_init_v2(ncclDebugLogger_t):155 NCCL WARN NET/OFI Initializing plugin failed
+main:650:650 [0] NCCL INFO plugin/net/net_v10.cc:82 -> 3
+main:650:650 [0] NCCL INFO Failed to initialize NET plugin Libfabric
+main:650:650 [0] NCCL INFO NET/IB : No device found.
+main:650:650 [0] NCCL INFO NET/IB : Using [RO]; OOB eth0:10.153.183.153<0>
+main:650:650 [0] NCCL INFO Failed to initialize NET plugin IB
+main:650:650 [0] NCCL INFO NET/Socket : Using [0]eth0:10.153.183.153<0>
+main:650:650 [0] NCCL INFO Initialized NET plugin Socket
+main:650:650 [0] NCCL INFO Assigned NET plugin Socket to comm
+main:650:650 [0] NCCL INFO GIN/Plugin: Could not find: libnccl-gin.so
+main:650:650 [0] NCCL INFO Successfully loaded external gin plugin /opt/aws-ofi-nccl/install/lib/libnccl-net.so
+main:650:650 [0] NCCL INFO Failed to initialize any GIN plugin
+main:650:650 [0] NCCL INFO Using network Socket
+main:650:650 [0] NCCL INFO [Rank 0] ncclCommInitRankConfig comm 0x1beb5940 rank 0 nranks 1 cudaDev 0 nvmlDev 0 busId 1e0 commId 0x2e204e0e3d242ef3 - Init START
+main:650:650 [0] NCCL INFO RAS client listening socket at 127.0.0.1<28028>
+main:650:650 [0] NCCL INFO Bootstrap timings total 0.001792 (create 0.000184, send 0.000237, recv 0.000355, ring 0.000001, delay 0.000001)
+main:650:650 [0] NCCL INFO ncclTopoGetCpuAffinity: Affinity for GPU 0 is empty, ignoring. (GPU affinity =  ; CPU affinity = 0-15).
+main:650:650 [0] NCCL INFO comm 0x1beb5940 rank 0 nRanks 1 nNodes 1 localRanks 1 localRank 0 MNNVL 0
+main:650:650 [0] NCCL INFO Channel 00/64 : 0
+main:650:650 [0] NCCL INFO Channel 01/64 : 0
+main:650:650 [0] NCCL INFO Channel 02/64 : 0
+main:650:650 [0] NCCL INFO Channel 03/64 : 0
+main:650:650 [0] NCCL INFO Channel 04/64 : 0
+main:650:650 [0] NCCL INFO Channel 05/64 : 0
+main:650:650 [0] NCCL INFO Channel 06/64 : 0
+main:650:650 [0] NCCL INFO Channel 07/64 : 0
+main:650:650 [0] NCCL INFO Channel 08/64 : 0
+main:650:650 [0] NCCL INFO Channel 09/64 : 0
+main:650:650 [0] NCCL INFO Channel 10/64 : 0
+main:650:650 [0] NCCL INFO Channel 11/64 : 0
+main:650:650 [0] NCCL INFO Channel 12/64 : 0
+main:650:650 [0] NCCL INFO Channel 13/64 : 0
+main:650:650 [0] NCCL INFO Channel 14/64 : 0
+main:650:650 [0] NCCL INFO Channel 15/64 : 0
+main:650:650 [0] NCCL INFO Channel 16/64 : 0
+main:650:650 [0] NCCL INFO Channel 17/64 : 0
+main:650:650 [0] NCCL INFO Channel 18/64 : 0
+main:650:650 [0] NCCL INFO Channel 19/64 : 0
+main:650:650 [0] NCCL INFO Channel 20/64 : 0
+main:650:650 [0] NCCL INFO Channel 21/64 : 0
+main:650:650 [0] NCCL INFO Channel 22/64 : 0
+main:650:650 [0] NCCL INFO Channel 23/64 : 0
+main:650:650 [0] NCCL INFO Channel 24/64 : 0
+main:650:650 [0] NCCL INFO Channel 25/64 : 0
+main:650:650 [0] NCCL INFO Channel 26/64 : 0
+main:650:650 [0] NCCL INFO Channel 27/64 : 0
+main:650:650 [0] NCCL INFO Channel 28/64 : 0
+main:650:650 [0] NCCL INFO Channel 29/64 : 0
+main:650:650 [0] NCCL INFO Channel 30/64 : 0
+main:650:650 [0] NCCL INFO Channel 31/64 : 0
+main:650:650 [0] NCCL INFO Channel 32/64 : 0
+main:650:650 [0] NCCL INFO Channel 33/64 : 0
+main:650:650 [0] NCCL INFO Channel 34/64 : 0
+main:650:650 [0] NCCL INFO Channel 35/64 : 0
+main:650:650 [0] NCCL INFO Channel 36/64 : 0
+main:650:650 [0] NCCL INFO Channel 37/64 : 0
+main:650:650 [0] NCCL INFO Channel 38/64 : 0
+main:650:650 [0] NCCL INFO Channel 39/64 : 0
+main:650:650 [0] NCCL INFO Channel 40/64 : 0
+main:650:650 [0] NCCL INFO Channel 41/64 : 0
+main:650:650 [0] NCCL INFO Channel 42/64 : 0
+main:650:650 [0] NCCL INFO Channel 43/64 : 0
+main:650:650 [0] NCCL INFO Channel 44/64 : 0
+main:650:650 [0] NCCL INFO Channel 45/64 : 0
+main:650:650 [0] NCCL INFO Channel 46/64 : 0
+main:650:650 [0] NCCL INFO Channel 47/64 : 0
+main:650:650 [0] NCCL INFO Channel 48/64 : 0
+main:650:650 [0] NCCL INFO Channel 49/64 : 0
+main:650:650 [0] NCCL INFO Channel 50/64 : 0
+main:650:650 [0] NCCL INFO Channel 51/64 : 0
+main:650:650 [0] NCCL INFO Channel 52/64 : 0
+main:650:650 [0] NCCL INFO Channel 53/64 : 0
+main:650:650 [0] NCCL INFO Channel 54/64 : 0
+main:650:650 [0] NCCL INFO Channel 55/64 : 0
+main:650:650 [0] NCCL INFO Channel 56/64 : 0
+main:650:650 [0] NCCL INFO Channel 57/64 : 0
+main:650:650 [0] NCCL INFO Channel 58/64 : 0
+main:650:650 [0] NCCL INFO Channel 59/64 : 0
+main:650:650 [0] NCCL INFO Channel 60/64 : 0
+main:650:650 [0] NCCL INFO Channel 61/64 : 0
+main:650:650 [0] NCCL INFO Channel 62/64 : 0
+main:650:650 [0] NCCL INFO Channel 63/64 : 0
+main:650:650 [0] NCCL INFO Trees [0] -1/-1/-1->0->-1 [1] -1/-1/-1->0->-1 [2] -1/-1/-1->0->-1 [3] -1/-1/-1->0->-1 [4] -1/-1/-1->0->-1 [5] -1/-1/-1->0->-1 [6] -1/-1/-1->0->-1 [7] -1/-1/-1->0->-1 [8] -1/-1/-1->0->-1 [9] -1/-1/-1->0->-1 [10] -1/-1/-1->0->-1 [11] -1/-1/-1->0->-1 [12] -1/-1/-1->0->-1 [13] -1/-1/-1->0->-1 [14] -1/-1/-1->0->-1 [15] -1/-1/-1->0->-1 [16] -1/-1/-1->0->-1 [17] -1/-1/-1->0->-1 [18] -1/-1/-1->0->-1 [19] -1/-1/-1->0->-1 [20] -1/-1/-1->0->-1 [21] -1/-1/-1->0->-1 [22] -1/-1/-1->0->-1 [23] -1/-1/-1->0->-1 [24] -1/-1/-1->0->-1 [25] -1/-1/-1->0->-1 [26] -1/-1/-1->0->-1 [27] -1/-1/-1->0->-1 [28] -1/-1/-1->0->-1 [29] -1/-1/-1->0->-1 [30] -1/-1/-1->0->-1 [31] -1/-1/-1->0->-1 [32] -1/-1/-1->0->-1 [33] -1/-1/-1->0->-1 [34] -1/-1/-1->0->-1 [35] -1/-1/-1->0->-1 [36] -1/-1/-1->0->-1 [37] -1/-1/-1->0->-1 [38] -1/-1/-1->0->-1 [39] -1/-1/-1->0->-1 [40] -1/-1/-1->0->-1 [41] -1/-1/-1->0->-1 [42] -1/-1/-1->0->-1 [43] -1/-1/-1->0->-1 [44] -1/-1/-1->0->-1 [45] -1/-1/-1->0->-1 [46] -1/-1/-1->0->-1 [47] -1/-1/-1->0->-1 [48] -1/-1/-1->0->-1 [4
+main:650:650 [0] NCCL INFO P2P Chunksize set to 524288
+main:650:650 [0] NCCL INFO PROFILER/Plugin: Could not find: libnccl-profiler.so
+main:650:650 [0] NCCL INFO Check P2P Type isAllDirectP2p 1 directMode 0 isAllCudaP2p 1
+main:650:720 [0] NCCL INFO [Proxy Service] Device 0 CPU core 9
+main:650:721 [0] NCCL INFO [Proxy Service UDS] Device 0 CPU core 11
+main:650:650 [0] NCCL INFO TUNER/Plugin: Could not find: libnccl-tuner.so
+main:650:650 [0] NCCL INFO 64 coll channels, 64 collnet channels, 0 nvls channels, 64 p2p channels, 64 p2p channels per peer
+main:650:650 [0] NCCL INFO Symmetric VA size=24GB
+main:650:650 [0] NCCL INFO CC Off, workFifoBytes 1048576
+main:650:650 [0] NCCL INFO ncclCommInitRankConfig comm 0x1beb5940 rank 0 nranks 1 cudaDev 0 nvmlDev 0 busId 1e0 commId 0x2e204e0e3d242ef3 - Init COMPLETE
+main:650:650 [0] NCCL INFO Init timings - ncclCommInitRankConfig: rank 0 nranks 1 total 0.23 (kernels 0.15, alloc 0.05, bootstrap 0.00, allgathers 0.00, topo 0.00, graphs 0.00, connections 0.02, rest 0.00)
+PriorDataset(
+  task: classification
+  prior_type: graph_scm
+  batch_size: 64
+  batch_size_per_gp: 4
+  features: 1 - 100
+  max classes: 10
+  seq_len: None - 1024
+  sequence length varies across groups: True
+  train_size: 0.3 - 0.9
+  device: cpu
+)
+Using Muon optimizer.
+Automatic Mixed Precision is enabled.
+No checkpoint found, starting from scratch.
+Step:   0%|          | 0/100 [00:00<?, ?it/s]/databricks/python3/lib/python3.12/site-packages/torch/utils/data/dataloader.py:1102: UserWarning: pin_memory_device is deprecated, the current accelerator will be used as the device,ignore pin_memory_device='cuda:0'.
+  super().__init__(loader)
+/databricks/python3/lib/python3.12/site-packages/huggingface_hub/constants.py:298: FutureWarning: The `HF_HUB_ENABLE_HF_TRANSFER` environment variable is deprecated as 'hf_transfer' is not used anymore. Please use `HF_XET_HIGH_PERFORMANCE` instead to enable high performance transfer with Xet. Visit https://huggingface.co/docs/huggingface_hub/package_reference/environment_variables#hfxethighperformance for more details.
+  warnings.warn(
+/databricks/python3/lib/python3.12/site-packages/huggingface_hub/constants.py:298: FutureWarning: The `HF_HUB_ENABLE_HF_TRANSFER` environment variable is deprecated as 'hf_transfer' is not used anymore. Please use `HF_XET_HIGH_PERFORMANCE` instead to enable high performance transfer with Xet. Visit https://huggingface.co/docs/huggingface_hub/package_reference/environment_variables#hfxethighperformance for more details.
+  warnings.warn(
+/databricks/python3/lib/python3.12/site-packages/huggingface_hub/constants.py:298: FutureWarning: The `HF_HUB_ENABLE_HF_TRANSFER` environment variable is deprecated as 'hf_transfer' is not used anymore. Please use `HF_XET_HIGH_PERFORMANCE` instead to enable high performance transfer with Xet. Visit https://huggingface.co/docs/huggingface_hub/package_reference/environment_variables#hfxethighperformance for more details.
+  warnings.warn(
+/databricks/python3/lib/python3.12/site-packages/huggingface_hub/constants.py:298: FutureWarning: The `HF_HUB_ENABLE_HF_TRANSFER` environment variable is deprecated as 'hf_transfer' is not used anymore. Please use `HF_XET_HIGH_PERFORMANCE` instead to enable high performance transfer with Xet. Visit https://huggingface.co/docs/huggingface_hub/package_reference/environment_variables#hfxethighperformance for more details.
+  warnings.warn(
+/databricks/python3/lib/python3.12/site-packages/huggingface_hub/constants.py:298: FutureWarning: The `HF_HUB_ENABLE_HF_TRANSFER` environment variable is deprecated as 'hf_transfer' is not used anymore. Please use `HF_XET_HIGH_PERFORMANCE` instead to enable high performance transfer with Xet. Visit https://huggingface.co/docs/huggingface_hub/package_reference/environment_variables#hfxethighperformance for more details.
+  warnings.warn(
+Initializing worker 0 with seed 3421126067
+/databricks/python3/lib/python3.12/site-packages/huggingface_hub/constants.py:298: FutureWarning: The `HF_HUB_ENABLE_HF_TRANSFER` environment variable is deprecated as 'hf_transfer' is not used anymore. Please use `HF_XET_HIGH_PERFORMANCE` instead to enable high performance transfer with Xet. Visit https://huggingface.co/docs/huggingface_hub/package_reference/environment_variables#hfxethighperformance for more details.
+  warnings.warn(
+Initializing worker 2 with seed 3421126069
+Initializing worker 4 with seed 3421126071
+Initializing worker 6 with seed 3421126073
+/databricks/python3/lib/python3.12/site-packages/huggingface_hub/constants.py:298: FutureWarning: The `HF_HUB_ENABLE_HF_TRANSFER` environment variable is deprecated as 'hf_transfer' is not used anymore. Please use `HF_XET_HIGH_PERFORMANCE` instead to enable high performance transfer with Xet. Visit https://huggingface.co/docs/huggingface_hub/package_reference/environment_variables#hfxethighperformance for more details.
+  warnings.warn(
+Initializing worker 7 with seed 3421126074
+Initializing worker 5 with seed 3421126072
+/databricks/python3/lib/python3.12/site-packages/huggingface_hub/constants.py:298: FutureWarning: The `HF_HUB_ENABLE_HF_TRANSFER` environment variable is deprecated as 'hf_transfer' is not used anymore. Please use `HF_XET_HIGH_PERFORMANCE` instead to enable high performance transfer with Xet. Visit https://huggingface.co/docs/huggingface_hub/package_reference/environment_variables#hfxethighperformance for more details.
+  warnings.warn(
+Initializing worker 1 with seed 3421126068
+Initializing worker 3 with seed 3421126070
+[rank0]:[W805 17:05:04.056178245 CUDACachingAllocator.cpp:3933] memory allocation failed with OOM on device 0 while trying to allocate 377487360 bytes (free: 110559232, total: 23684841472).
+[rank0]:[W805 17:05:04.964241468 CUDACachingAllocator.cpp:3933] memory allocation failed with OOM on device 0 while trying to allocate 411041792 bytes (free: 274137088, total: 23684841472).
+[rank0]:[W805 17:05:05.198190393 CUDACachingAllocator.cpp:3933] memory allocation failed with OOM on device 0 while trying to allocate 1075838976 bytes (free: 305594368, total: 23684841472).
+[rank0]:[W805 17:05:10.961014136 CUDACachingAllocator.cpp:3933] memory allocation failed with OOM on device 0 while trying to allocate 427819008 bytes (free: 230096896, total: 23684841472).
+[rank0]:[W805 17:05:12.796999676 CUDACachingAllocator.cpp:3933] memory allocation failed with OOM on device 0 while trying to allocate 538968064 bytes (free: 93782016, total: 23684841472).
+[rank0]:[W805 17:05:12.813780155 CUDACachingAllocator.cpp:3933] memory allocation failed with OOM on device 0 while trying to allocate 538968064 bytes (free: 95879168, total: 23684841472).
+Warning: OOM error in micro-batch 16/16 at step 0. Skipping.
+Step:   0%|          | 0/100 [01:08<?, ?it/s, accuracy=0.05, ce=2.16, prior_time=56.5, train_time=11.9]Step:   1%|          | 1/100 [01:08<1:53:18, 68.67s/it, accuracy=0.05, ce=2.16, prior_time=56.5, train_time=11.9]Step:   1%|          | 1/100 [01:08<1:53:21, 68.71s/it, accuracy=0.05, ce=2.16, prior_time=56.5, train_time=11.9]
+main:650:650 [0] NCCL INFO comm 0x1beb5940 rank 0 nranks 1 cudaDev 0 busId 1e0 - Destroy COMPLETE
+[rank0]: Traceback (most recent call last):
+[rank0]:   File "<frozen runpy>", line 198, in _run_module_as_main
+[rank0]:   File "<frozen runpy>", line 88, in _run_code
+[rank0]:   File "/databricks/python3/lib/python3.12/site-packages/tabicl/train/__main__.py", line 16, in <module>
+[rank0]:     trainer.train()
+[rank0]:   File "/databricks/python3/lib/python3.12/site-packages/tabicl/train/_run.py", line 61, in wrapper
+[rank0]:     return func(self, *args, **kwargs)
+[rank0]:            ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[rank0]:   File "/databricks/python3/lib/python3.12/site-packages/tabicl/train/_run.py", line 515, in train
+[rank0]:     results = self.run_batch(batch)
+[rank0]:               ^^^^^^^^^^^^^^^^^^^^^
+[rank0]:   File "/databricks/python3/lib/python3.12/site-packages/tabicl/train/_run.py", line 742, in run_batch
+[rank0]:     micro_results = self.run_micro_batch(micro_batch, idx, num_micro_batches)
+[rank0]:                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[rank0]:   File "/databricks/python3/lib/python3.12/site-packages/tabicl/train/_run.py", line 682, in run_micro_batch
+[rank0]:     pred = self.model(micro_X, y_train, model_d)  # (B, test_size, max_classes)
+[rank0]:            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[rank0]:   File "/databricks/python3/lib/python3.12/site-packages/torch/nn/modules/module.py", line 1778, in _wrapped_call_impl
+[rank0]:     return self._call_impl(*args, **kwargs)
+[rank0]:            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[rank0]:   File "/databricks/python3/lib/python3.12/site-packages/torch/nn/modules/module.py", line 1789, in _call_impl
+[rank0]:     return forward_call(*args, **kwargs)
+[rank0]:            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[rank0]:   File "/databricks/python3/lib/python3.12/site-packages/torch/nn/parallel/distributed.py", line 1886, in forward
+[rank0]:     inputs, kwargs = self._pre_forward(*inputs, **kwargs)
+[rank0]:                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[rank0]:   File "/databricks/python3/lib/python3.12/site-packages/torch/nn/parallel/distributed.py", line 1775, in _pre_forward
+[rank0]:     if torch.is_grad_enabled() and self.reducer._rebuild_buckets():
+[rank0]:                                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[rank0]: RuntimeError: Expected to have finished reduction in the prior iteration before starting a new one. This error indicates that your module has parameters that were not used in producing loss. You can enable unused parameter detection by passing the keyword argument `find_unused_parameters=True` to `torch.nn.parallel.DistributedDataParallel`, and by 
+[rank0]: making sure all `forward` function outputs participate in calculating loss. 
+[rank0]: If you already have done the above, then the distributed data parallel module wasn't able to locate the output tensors in the return value of your module's `forward` function. Please include the loss function and the structure of the return value of `forward` of your module when reporting this issue (e.g. list, dict, iterable).
+[rank0]: Parameter indices which did not receive grad for rank 0: 0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 31 32 33 34 35 36 37 38 39 40 41 42 43 44 45 46 47 48 49 50 51 52 53 54 55 56 57 58 59 60 61 62 63 64 65 66 67 68 69 70 71 72 73 74 75 76 77 78 79 80 81 82 83 84 85 86 87 88 89 90 91 92 93 94 95 96 97 98 99 ...
+[rank0]:  In addition, you can set the environment variable TORCH_DISTRIBUTED_DEBUG to either INFO or DETAIL to print out information about which particular parameters did not receive gradient on this rank as part of this error
+terminate called without an active exception
+terminate called without an active exception
+terminate called without an active exception
+terminate called without an active exception
+terminate called without an active exception
+terminate called without an active exception
+terminate called without an active exception
+terminate called without an active exception
+main:650:650 [0] NCCL INFO ENV/Plugin: Closing env plugin ncclEnvDefault
+E0805 17:10:50.924000 611 torch/distributed/elastic/multiprocessing/api.py:1002] failed (exitcode: 1) local_rank: 0 (pid: 650) of binary: /databricks/python3/bin/python3
+Traceback (most recent call last):
+  File "/databricks/python3/bin/torchrun", line 10, in <module>
+    sys.exit(main())
+             ^^^^^^
+  File "/databricks/python3/lib/python3.12/site-packages/torch/distributed/elastic/multiprocessing/errors/__init__.py", line 367, in wrapper
+    return f(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^
+  File "/databricks/python3/lib/python3.12/site-packages/torch/distributed/run.py", line 1028, in main
+    run(args)
+  File "/databricks/python3/lib/python3.12/site-packages/torch/distributed/run.py", line 1019, in run
+    elastic_launch(
+  File "/databricks/python3/lib/python3.12/site-packages/torch/distributed/launcher/api.py", line 194, in __call__
+    return launch_agent(
+           ^^^^^^^^^^^^^
+  File "/databricks/python3/lib/python3.12/site-packages/torch/distributed/launcher/api.py", line 383, in launch_agent
+    raise ChildFailedError(
+torch.distributed.elastic.multiprocessing.errors.ChildFailedError: 
+============================================================
+tabicl.train FAILED
+------------------------------------------------------------
+Failures:
+  <NO_OTHER_FAILURES>
+------------------------------------------------------------
+Root Cause (first observed failure):
+[0]:
+  time      : 2026-08-05_17:10:50
+  host      : main.host.local
+  rank      : 0 (local_rank: 0)
+  exitcode  : 1 (pid: 650) 
+  error_file: <N/A>
+  traceback : To enable traceback see: https://pytorch.org/docs/stable/elastic/errors.html
+============================================================
+================================
+Execution Summary
+================================
+Total time: 459s
+User code execution time: 428s
+ERROR: Script failed with exit code 1 after 459s
+================================

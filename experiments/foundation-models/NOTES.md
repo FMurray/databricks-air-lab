@@ -115,12 +115,29 @@ is about their pretraining scripts. Two A10 submits on e2 (egress needed for HF/
 /tmp/tabicl-finetune)`. The quarterly-refresh path is now measured: **90 s on an A10**,
 fine-tune ≥ zero-shot, checkpoint written+reloaded. "Minutes-scale" is no longer an assumption.
 
-**Pretrain PoL rung 1 ❌→resubmitted.** Run 939327917565018 failed in env build — the AIR
-launcher **splits requirements on whitespace** before uv: `tabicl[pretraining] @ git+…`
-became 3 requirements and a bare `@` (verbatim: "error: Failed to parse: `@`").
-Platform-side; upstream code never ran (attribution per plan). Workaround: space-free
-PEP 508 `tabicl[pretraining]@git+…` — YAML fixed, resubmitted as run 529615913980817.
-Launcher bug worth reporting to eng: whitespace-splitting valid PEP 508 direct refs.
+**Pretrain PoL rung 1 — four attempts, final attribution: UPSTREAM BUG + undersized GPU;
+platform exonerated.**
+- Attempt 1 (939327917565018): env build fail — launcher **splits requirements on
+  whitespace** (`tabicl[pretraining] @ git+…` → 3 reqs, bare `@` parse error). Platform bug
+  #1, workaround: space-free PEP 508. Report to eng.
+- Attempt 2 (529615913980817): deps "Successfully installed", then
+  `ModuleNotFoundError: xgboost` — **extras dropped from git direct refs** during env
+  resolution. Platform bug #2, workaround: pin extras explicitly.
+- Attempt 3 (94698857812517): same for transformers (extras list completed).
+- Attempt 4 (629012463931175): **env clean, trainer RAN — one full training step executed
+  on AIR** (verbatim: `Step: 1%| 1/100 [01:08<1:53:18, 68.67s/it, accuracy=0.05, ce=2.16,
+  prior_time=56.5, train_time=11.9]`), then `Warning: OOM error in micro-batch 16/16 at
+  step 0. Skipping.` → `RuntimeError: Expected to have finished reduction in the prior
+  iteration…` — **upstream's skip-on-OOM path breaks DDP's reduction contract** (skipped
+  micro-batch ⇒ params unused in loss ⇒ crash). The 7/17 "code maturity, not AIR" ranking
+  holds: platform runs the loop; upstream crashes it.
+- **Bonus receipt — CPU-bound prior-gen hypothesis CONFIRMED (measured):** step 1 spent
+  56.5s generating priors (CPU, N_JOBS=8) vs 11.9s training (GPU) — **83% of wall-clock is
+  the CPU stage** on a 1xA10 node. This was ranked hypothesis #2 for "why tricky on AIR";
+  it's now a number. Right-sizing implication: pretrain rungs need high-CPU shapes or more
+  N_JOBS headroom, and GPU util gauges will read low regardless.
+- Next rung when wanted: H100 (bigger micro-batches dodge the A10 OOM→skip path entirely),
+  or upstream issue for the DDP bug.
 
 **Memory probe at 500 features, H100 — run 635048884698037** (FAILED at the last rung;
 ladder itself is the result). Measured:
