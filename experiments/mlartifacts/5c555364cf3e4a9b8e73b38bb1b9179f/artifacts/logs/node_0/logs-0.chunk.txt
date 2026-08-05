@@ -1,0 +1,132 @@
+Root python environment activated successfully
+Environment setup started at Wed Aug  5 09:30:12 PM UTC 2026
+Hyperparameters path: /Workspace/Users/forrest.murray@databricks.com/.air/cli_launch/air-lab-tabicl-regression/tabicl-regression-bench_895ae00de139408b/training_config.yaml
+Inspecting tarball at /Workspace/Users/forrest.murray@databricks.com/.air/repo_snapshots/databricks-air-lab/databricks-air-lab_20260805_172919.tar.gz...
+tar: Ignoring unknown extended header keyword 'LIBARCHIVE.xattr.com.apple.provenance'
+Extracting code_source into /databricks/code_source...
+tar: Ignoring unknown extended header keyword 'LIBARCHIVE.xattr.com.apple.provenance'
+tar: Ignoring unknown extended header keyword 'LIBARCHIVE.xattr.com.apple.provenance'
+tar: Ignoring unknown extended header keyword 'LIBARCHIVE.xattr.com.apple.provenance'
+tar: Ignoring unknown extended header keyword 'LIBARCHIVE.xattr.com.apple.provenance'
+tar: Ignoring unknown extended header keyword 'LIBARCHIVE.xattr.com.apple.provenance'
+tar: Ignoring unknown extended header keyword 'LIBARCHIVE.xattr.com.apple.provenance'
+tar: Ignoring unknown extended header keyword 'LIBARCHIVE.xattr.com.apple.provenance'
+tar: Ignoring unknown extended header keyword 'LIBARCHIVE.xattr.com.apple.provenance'
+tar: Ignoring unknown extended header keyword 'LIBARCHIVE.xattr.com.apple.provenance'
+tar: Ignoring unknown extended header keyword 'LIBARCHIVE.xattr.com.apple.provenance'
+tar: Ignoring unknown extended header keyword 'LIBARCHIVE.xattr.com.apple.provenance'
+tar: Ignoring unknown extended header keyword 'LIBARCHIVE.xattr.com.apple.provenance'
+Tarball extraction completed in 1s
+Code source databricks-air-lab available at /databricks/code_source/databricks-air-lab
+requirements.yaml path: /Workspace/Users/forrest.murray@databricks.com/.air/cli_launch/air-lab-tabicl-regression/tabicl-regression-bench_895ae00de139408b/requirements.yaml
+uv not found in base environment; attempting to install it...
+uv installed.
+Installing dependencies...
+Installing 2 requirements.yaml dependencies with dependency resolution (via uv)...
+Using Python 3.12.3 environment at: /databricks/python3
+Resolved 54 packages in 415ms
+Downloading sympy (6.0MiB)
+Downloading nvidia-cusolver (191.6MiB)
+Downloading networkx (2.0MiB)
+Downloading nvidia-cufile (1.2MiB)
+Downloading nvidia-cuda-runtime (2.1MiB)
+Downloading scipy (33.7MiB)
+Downloading scikit-learn (8.7MiB)
+Downloading nvidia-nvjitlink (38.9MiB)
+Downloading nvidia-cuda-cupti (10.2MiB)
+Downloading nvidia-curand (56.8MiB)
+Downloading nvidia-cufft (204.2MiB)
+Downloading nvidia-nvshmem-cu13 (57.6MiB)
+Downloading nvidia-cuda-nvrtc (86.0MiB)
+Downloading nvidia-cusparse (139.2MiB)
+Downloading xgboost (54.9MiB)
+Downloading torch (502.2MiB)
+Downloading nvidia-cudnn-cu13 (349.2MiB)
+Downloading nvidia-cublas (403.5MiB)
+Downloading nvidia-cusparselt-cu13 (162.3MiB)
+Downloading nvidia-nccl-cu13 (196.4MiB)
+Downloading triton (188.6MiB)
+Downloading cuda-bindings (6.3MiB)
+ Downloaded nvidia-cufile
+ Downloaded nvidia-cuda-runtime
+ Downloaded networkx
+ Downloaded cuda-bindings
+ Downloaded nvidia-cuda-cupti
+ Downloaded scikit-learn
+ Downloaded sympy
+ Downloaded nvidia-nvjitlink
+ Downloaded scipy
+ Downloaded nvidia-curand
+ Downloaded xgboost
+ Downloaded nvidia-nvshmem-cu13
+ Downloaded nvidia-cuda-nvrtc
+ Downloaded nvidia-cusparse
+ Downloaded nvidia-cusparselt-cu13
+ Downloaded nvidia-cusolver
+ Downloaded nvidia-nccl-cu13
+ Downloaded triton
+ Downloaded nvidia-cufft
+ Downloaded nvidia-cudnn-cu13
+ Downloaded nvidia-cublas
+ Downloaded torch
+Prepared 30 packages in 18.61s
+Installed 30 packages in 789ms
+ + cuda-bindings==13.3.1
+ + cuda-pathfinder==1.6.0
+ + cuda-toolkit==13.0.3.0
+ + einops==0.8.2
+ + mpmath==1.3.0
+ + narwhals==2.24.0
+ + networkx==3.6.1
+ + nvidia-cublas==13.1.1.3
+ + nvidia-cuda-cupti==13.0.85
+ + nvidia-cuda-nvrtc==13.0.88
+ + nvidia-cuda-runtime==13.0.96
+ + nvidia-cudnn-cu13==9.20.0.48
+ + nvidia-cufft==12.0.0.61
+ + nvidia-cufile==1.15.1.6
+ + nvidia-curand==10.4.0.35
+ + nvidia-cusolver==12.0.4.66
+ + nvidia-cusparse==12.6.3.3
+ + nvidia-cusparselt-cu13==0.8.1
+ + nvidia-nccl-cu13==2.29.7
+ + nvidia-nvjitlink==13.3.33
+ + nvidia-nvshmem-cu13==3.4.5
+ + nvidia-nvtx==13.0.85
+ + scikit-learn==1.9.0
+ + scipy==1.18.0
+ + setuptools==83.0.0
+ + sympy==1.14.0
+ + tabicl==2.1.1
+ + torch==2.13.0
+ + triton==3.7.1
+ + xgboost==3.4.0
+Successfully installed all dependencies
+Dependency installation completed in 26s
+================================
+Environment setup completed at Wed Aug  5 09:30:39 PM UTC 2026
+Environment setup time: 27s
+================================
+=== cpu-act (openml 197)
+Checkpoint 'tabicl-regressor-v2-20260212.ckpt' not cached.
+ Downloading from Hugging Face Hub (jingang/TabICL).
+
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+=== pol (openml 201)
+=== elevators (openml 216)
+=== house-sales (openml 42731)
+=== diamonds (openml 42225)
+    dataset  n_train  n_features  tabicl_s  tabicl_nrmse  tabicl_r2  tabicl_gpu_peak_gb  xgb_default_s  xgb_default_nrmse  xgb_default_r2  xgb_tuned_s  xgb_tuned_nrmse  xgb_tuned_r2
+    cpu-act     6553          21    5.0337        0.1051     0.9890              2.8370         0.1591             0.1603          0.9743      36.2546           0.1275        0.9838
+        pol    12000          48    3.1406        0.0843     0.9929              6.0698         0.1344             0.1259          0.9842      28.6285           0.1029        0.9894
+  elevators    13279          18    2.9367        0.2637     0.9305              4.9520         0.1234             0.3407          0.8839      15.8417           0.3097        0.9041
+house-sales    17290          21    4.1912        0.2840     0.9194              7.2594         0.1456             0.3202          0.8975      29.6906           0.3120        0.9026
+   diamonds    30000           9    7.1018        0.1271     0.9838              7.0832         0.1283             0.1429          0.9796      24.7050           0.1383        0.9809
+RESULT regression_bench tasks_completed=5/5
+================================
+Execution Summary
+================================
+Total time: 221s
+User code execution time: 194s
+Completed at Wed Aug  5 09:33:53 PM UTC 2026
+================================

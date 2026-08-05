@@ -115,11 +115,13 @@ def main():
     p.add_argument("--max-train-rows", type=int, default=30_000)
     p.add_argument("--tune-iters", type=int, default=15)
     p.add_argument("--n-estimators", type=int, default=8, help="TabICL ensemble size")
+    p.add_argument("--checkpoint", default="", help="alternate checkpoint (T3 forgetting check)")
     args = p.parse_args()
 
     from tabicl import TabICLClassifier
 
-    clf_tabicl = TabICLClassifier(n_estimators=args.n_estimators)
+    clf_tabicl = TabICLClassifier(n_estimators=args.n_estimators,
+                                  model_path=args.checkpoint or None)
     rows = []
     for name, data_id in OPENML_TASKS:
         try:

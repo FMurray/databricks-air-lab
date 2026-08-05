@@ -1,0 +1,33 @@
+# T3: continued training on synthetic timeseries tasks + BOTH delta evals, one run
+# (ckpt lives in /tmp — treatment and evals must share the container).
+# Success = TS_CONTINUED_PRETRAIN_OK + both eval RESULT lines with the custom checkpoint.
+experiment_name: air-lab-tabicl-ts-treatment
+
+environment:
+  version: "5"
+  dependencies:
+    - "tabicl[finetune]"
+    - aeon
+    - xgboost
+
+compute:
+  num_accelerators: 1
+  accelerator_type: GPU_1xH100   # chain of fine-tunes + 2 evals — H100 keeps wall sane
+
+code_source:
+  type: snapshot
+  snapshot:
+    root_path: ..
+    include_paths:
+      - experiments/foundation-models/tabicl/
+
+command: >-
+  bash -c 'set -e; cd $CODE_SOURCE_PATH/experiments/foundation-models/tabicl &&
+  HF_HOME=/tmp/hf python ts_continued_pretrain.py --n-tasks 16 --epochs 10 &&
+  CKPT=$(HF_HOME=/tmp/hf python -c "import glob,os; hits=sorted(glob.glob(\"/tmp/ts-continued/**/*.ckpt\",recursive=True),key=os.path.getmtime); print(hits[-1])") &&
+  HF_HOME=/tmp/hf python bench_timeseries.py --checkpoint "$CKPT" --run-name tabicl-ts-treatment-eval &&
+  HF_HOME=/tmp/hf python bench_sprawl.py --checkpoint "$CKPT"'
+
+max_retries: 0
+timeout_minutes: 120
+mlflow_run_name: tabicl-ts-treatment

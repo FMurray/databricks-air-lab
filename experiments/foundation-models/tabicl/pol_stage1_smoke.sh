@@ -2,15 +2,23 @@
 # TabICL v2 proof-of-life: stage-1 classifier pretraining, trimmed to a short smoke run.
 # Verbatim arg set from upstream scripts/train_v2_clf_stage1.sh (soda-inria/tabicl@main,
 # fetched 2026-07-17) — only these deviate: max_steps 500000→$MAX_STEPS, n_jobs 16→$N_JOBS,
-# save_temp_every 500→50, save_perm_every 5000→$MAX_STEPS, checkpoint dir, wandb disabled.
+# save_temp_every 500→50, save_perm_every 5000→$MAX_STEPS, checkpoint dir, and metrics go
+# to MLflow instead of wandb (train_with_mlflow.py wrapper + --wandb_log True; the shim
+# redirects wandb.init/log to the ambient AIR MLflow run — real wandb never imported).
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 NPROC="${NPROC_PER_NODE:-1}"                 # 1 for A10/1xH100 smoke; 8 on GPU_8xH100
 CKPT_DIR="${CKPT_DIR:-/tmp/tabicl-pol/ckpt}" # point at a UC volume for the restart test
 MAX_STEPS="${MAX_STEPS:-100}"
 N_JOBS="${N_JOBS:-8}"                        # CPU prior-gen workers PER RANK — watch GPU util vs this
-
-export WANDB_MODE=disabled
+# Continued pretraining (T1 / the customer's fusion->continue path): set CHECKPOINT_PATH to
+# start from existing weights (upstream: --checkpoint_path + --only_load_model True chains stages)
+CONTINUE_ARGS=""
+if [ -n "${CHECKPOINT_PATH:-}" ]; then
+  CONTINUE_ARGS="--checkpoint_path $CHECKPOINT_PATH --only_load_model True"
+  echo "CONTINUING from checkpoint: $CHECKPOINT_PATH"
+fi
 
 nvidia-smi || true
 python - <<'EOF'
@@ -19,8 +27,8 @@ print("torch", torch.__version__, "| cuda", torch.cuda.is_available(), "| gpus",
 print("cpus", os.cpu_count())
 EOF
 
-torchrun --standalone --nproc_per_node="$NPROC" -m tabicl.train \
-            --wandb_log False \
+torchrun --standalone --nproc_per_node="$NPROC" "$SCRIPT_DIR/train_with_mlflow.py" \
+            --wandb_log True \
             --device cuda \
             --dtype float32 \
             --np_seed 42 \
@@ -81,7 +89,8 @@ torchrun --standalone --nproc_per_node="$NPROC" -m tabicl.train \
             --use_flash_attn3 False \
             --checkpoint_dir "$CKPT_DIR" \
             --save_temp_every 50 \
-            --save_perm_every "$MAX_STEPS"
+            --save_perm_every "$MAX_STEPS" \
+            $CONTINUE_ARGS
 
 echo "--- checkpoints written:"
 ls -la "$CKPT_DIR" || true

@@ -1,15 +1,13 @@
 # TabICL v2 pretraining proof-of-life — stage-1 smoke on a single GPU.
 # Ladder: 1xA10 (this file) → 1xH100 → GPU_8xH100 NPROC=8 → stage-3 memory probe (open-q #17).
 # Schema source of truth: `air -h config` and `air -h config.<section>`
-experiment_name: air-lab-tabicl-pol
+experiment_name: air-lab-tabicl-continue
 
 environment:
   version: "5"   # v4 job-plane egress broken on hardened ws — see docs/06
   dependencies:
     # tabicl.train is packaged, so a git install is enough — no repo checkout needed.
-    # [pretraining] extra pulls transformers/xgboost/wandb. Metrics go to MLflow via the
-    # wandb shim in pol_stage1_smoke.sh (train_with_mlflow.py) — real wandb never imported,
-    # but keep the pin: the extras-dropped bug below applies to it same as xgboost.
+    # [pretraining] extra pulls transformers/xgboost/wandb (wandb disabled via env below).
     # NO SPACES in the spec: the AIR launcher splits requirements on whitespace before uv
     # sees them ("tabicl[pretraining] @ git+…" became 3 requirements and a bare `@` parse
     # error — run 939327917565018, 2026-08-05). Space-free PEP 508 works around it.
@@ -25,7 +23,7 @@ environment:
 
 compute:
   num_accelerators: 1
-  accelerator_type: GPU_1xA10   # rung 3: GPU_8xH100 + NPROC_PER_NODE=8
+  accelerator_type: GPU_1xH100  # A10 triggers the upstream OOM-skip defect
 
 code_source:
   type: snapshot
@@ -34,9 +32,9 @@ code_source:
     include_paths:
       - experiments/foundation-models/tabicl/
 
-command: NPROC_PER_NODE=1 MAX_STEPS=100 N_JOBS=8 bash $CODE_SOURCE_PATH/experiments/foundation-models/tabicl/pol_stage1_smoke.sh
+command: PHASE_STEPS=60 bash $CODE_SOURCE_PATH/experiments/foundation-models/tabicl/continued_pretrain_smoke.sh
 
 max_retries: 0            # PoL: fail loud; bump for restart-semantics test (open-q #10)
 timeout_minutes: 60
 # usage_policy_name: air-lab   # must exist in target workspace or validation fails
-mlflow_run_name: tabicl-pol-stage1-smoke
+mlflow_run_name: tabicl-continued-pretrain

@@ -13,6 +13,8 @@ from sklearn.metrics import roc_auc_score
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import LabelEncoder, OrdinalEncoder
 
+from mlflow_loggers import MLflowFinetuningLogger
+
 
 def main():
     p = argparse.ArgumentParser()
@@ -22,6 +24,12 @@ def main():
     args = p.parse_args()
 
     from tabicl import FinetunedTabICLClassifier, TabICLClassifier
+
+    # One run holds everything: per-step/epoch metrics from inside fit() plus the
+    # final AUCs. Setting up here means the logger attaches to this run instead of
+    # starting (and ending) its own inside fit().
+    tracker = MLflowFinetuningLogger(run_name="tabicl-finetune-smoke")
+    tracker.setup(vars(args))
 
     bunch = fetch_openml(data_id=args.data_id, as_frame=True)
     X, y = bunch.data.copy(), LabelEncoder().fit_transform(bunch.target)
@@ -39,17 +47,15 @@ def main():
 
     t0 = time.time()
     ft = FinetunedTabICLClassifier(epochs=args.epochs, eval_metric="roc_auc")
+    # Fresh instance, not `tracker`: fit() calls finish() on its logger, and only a
+    # non-owning attach (to the run tracker opened above) survives that as a no-op.
+    ft._make_experiment_logger = lambda: MLflowFinetuningLogger()
     ft.fit(X_tr, y_tr, X_val=X_val, y_val=y_val, output_dir=args.output_dir)
     auc_ft = roc_auc_score(y_te, ft.predict_proba(X_te)[:, 1])
     print(f"fine-tuned AUC: {auc_ft:.4f}  (delta {auc_ft - auc_zero:+.4f}, {time.time() - t0:.0f}s, ckpt -> {args.output_dir})")
 
-    try:
-        import mlflow
-        if mlflow.active_run() is None:
-            mlflow.start_run(run_name="tabicl-finetune-smoke")
-        mlflow.log_metrics({"auc_zero_shot": auc_zero, "auc_finetuned": auc_ft})
-    except Exception:
-        pass
+    tracker.log_metrics({"auc_zero_shot": auc_zero, "auc_finetuned": auc_ft})
+    tracker.finish()
 
 
 if __name__ == "__main__":

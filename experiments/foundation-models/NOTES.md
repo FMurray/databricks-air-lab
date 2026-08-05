@@ -476,6 +476,66 @@ verbatim; stdout unretrievable on this workspace as expected):
 Log delivery still broken as documented: zero log artifacts in the MLflow run (only the
 receipt + automatic system metrics) — the receipt pattern carried all evidence.
 
+#### Timeseries + regression program — pre-registered (2026-08-05, before submit)
+
+Driven by the [customer-model] deep dive (docs/private/2026-08-05-customer-deep-dive.md): consolidation
+targets are 85–90 reg+classification models; their training plan is fusion of internal
+TabICLv2 weights + continued pretraining with custom timeseries priors (likely TimEE-style,
+arXiv 2607.07500). Program: R1 regression bench, T1 continue-mechanics, T2 TS baseline,
+T3 treatment (blocked on T1+T2).
+
+- **R1** (`bench_regression.py`, 1×A10): TabICLRegressor vs XGB default/tuned on 5 OpenML
+  regression tasks; metrics nRMSE (RMSE/std) + R². Success = ≥4/5 tasks complete. Expectation
+  from the classification analogue: competitive-with-tuned-XGB; no pre-commitment on wins.
+- **T1** (`continued_pretrain_smoke.sh`, 1×H100): phase A 60 steps from scratch → ckpt;
+  phase B fresh trainer `--checkpoint_path <A> --only_load_model True` 60 more steps.
+  PASS = phase-B first logged ce **well below cold start** (~2.3 = ln(10) for 10-class
+  prior) — loaded weights vs silent re-init. Phase C: released HF inference ckpt into the
+  trainer — loads or not, both are findings (the [customer-internal]-weights format question).
+- **T2** (`bench_timeseries.py --finetune`, 1×A10): 5 UCR multi-class sets (5–24 classes,
+  series len 46–140 = columns, inside the customer's 100–500 range), TabICL zero-shot +
+  fine-tuned (100 epochs ≈ their oneshot recipe) vs XGB on identical tabular framing;
+  accuracy + macro-F1. Success = ≥4/5 complete. This is the T3 baseline; no directional
+  pre-commitment (TabICL's prior is not temporal — mid AUC vs XGB here is plausible and
+  would MOTIVATE the customer's timeseries-prior plan rather than undermine it).
+- **T3** (design, runs after T1+T2): synthetic regime-classification sequence generator →
+  continued-pretrain N steps from base → re-run T2 eval (delta = improvement claim) AND
+  re-run sprawl tasks (delta = catastrophic-forgetting check, the customer's explicit bar).
+  Both deltas are receipts regardless of sign.
+
+**R1 RESULTS — ✅ CLEAN SWEEP (run 1080666107616587, 1×A10, 2026-08-05): TabICL beats
+TUNED XGBoost on all 5/5 regression tasks, both metrics.** Verbatim table in run log
+(regression_bench.csv artifact):
+
+| task | TabICL nRMSE (s) | XGB-tuned nRMSE (s) | TabICL R² / XGB R² |
+|---|---|---|---|
+| cpu-act | **0.1051** (5.0s) | 0.1275 (36.3s) | **0.9890** / 0.9838 |
+| pol | **0.0843** (3.1s) | 0.1029 (28.6s) | **0.9929** / 0.9894 |
+| elevators | **0.2637** (2.9s) | 0.3097 (15.8s) | **0.9305** / 0.9041 |
+| house-sales | **0.2840** (4.2s) | 0.3120 (29.7s) | **0.9194** / 0.9026 |
+| diamonds | **0.1271** (7.1s) | 0.1383 (24.7s) | **0.9838** / 0.9809 |
+
+Stronger than the classification sprawl (2/5 wins there): zero-tuning TabICL regression
+wins 5/5 vs per-task tuned XGB, 4–12× faster than the tuning loop, ≤7.3GB GPU peak (A10-
+friendly). Directly relevant: most of the 85–90 consolidation targets are regression.
+First T2 submit also surfaced a bench bug class worth keeping: job state was SUCCESS with
+0/5 tasks completed (per-task try/except + exit 0) — bench scripts now raise SystemExit(1)
+on zero completions (exit code derived from results).
+
+**T1 RESULTS — ✅ ALL THREE PHASES (run 965728515658718, 1×H100, 2026-08-05):**
+- Phase A: 60 steps from scratch, ce 2.30→1.38, `step-60.ckpt` written.
+- Phase B: fresh trainer + `--checkpoint_path <A> --only_load_model True` → first-step
+  **ce=1.44 vs cold-start 2.30** — weights genuinely loaded, training continues (1.44→1.39
+  over the first 5 steps). The fusion→continue mechanics WORK on the platform.
+- Phase C: **the released HF inference checkpoint loads into the trainer** (verbatim:
+  `T1_PHASE_C_RELEASED_CKPT_LOADS=yes`) — the [customer-internal]-weights-format question answered:
+  published .ckpt chains into continued pretraining as-is.
+- Driver nit: the in-script B_CE grep printed empty (progress-bar \r); continuity numbers
+  extracted from the log directly. Fix with `tr '\r' '\n'` before T3 reuses the driver.
+- R1/T2 first submits failed on missing xgboost (my YAML-generation bug — the sed dropped
+  the [finetune] extra) + tabulate (to_markdown); both fixed (explicit xgboost dep,
+  to_string), resubmitted as runs 1080666107616587 (R1) / 405178255580469 (T2).
+
 #### AIR CLI schema findings (v0.1.0, verified via --dry-run 2026-07-17)
 
 - `environment.env_variables` **rejected** ("Unknown field"; only dependencies/docker_image/version).
