@@ -280,11 +280,15 @@ TESTS = [
         "why": "Answers which GPU size the workload needs",
         "expected": "Runs end-to-end; memory profile sizes the GPU",
         "criteria": "Completes; memory envelope identified",
-        "verdict": "PASS (1 gap)",
-        "result_note": "H100 handles 600K rows via chunking; A10 for smaller — big-memory GPU "
-                       "not needed",
+        "verdict": "PASS",
+        "result_note": "Customer shape 60Kx500 fits one H100 (~44GB chunked, ~2min); "
+                       "25Kx500 un-chunked peaks 71.8/80GB (documented edge); fine-tune "
+                       "verified 90s on A10 (AUC 0.9412->0.9429); host RAM is the off-GPU "
+                       "limit on both cards; pretrain PoL blocked by launcher dep-parsing "
+                       "bugs (platform-side, workarounds in YAML)",
         "workspace": "e2-demo-field-eng (open sandbox)",
-        "evidence": "e2-demo runs 949450981660633 / 1022517780681952",
+        "evidence": "e2 runs 949450981660633 / 1022517780681952 / 635048884698037 / "
+                    "327679047486914 / 751814235799561 — all archived to repo store",
     },
     {
         "id": "lora",

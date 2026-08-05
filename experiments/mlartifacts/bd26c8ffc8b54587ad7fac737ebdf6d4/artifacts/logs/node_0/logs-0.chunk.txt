@@ -1,0 +1,131 @@
+Root python environment activated successfully
+Environment setup started at Wed Aug  5 04:32:57 PM UTC 2026
+Hyperparameters path: /Workspace/Users/forrest.murray@databricks.com/.air/cli_launch/air-lab-tabicl-memprobe/tabicl-memprobe-h100-500feat_cd0d2ee5d3e240d2/training_config.yaml
+Inspecting tarball at /Workspace/Users/forrest.murray@databricks.com/.air/repo_snapshots/databricks-air-lab/databricks-air-lab_20260805_123225.tar.gz...
+tar: Ignoring unknown extended header keyword 'LIBARCHIVE.xattr.com.apple.provenance'
+tar: Ignoring unknown extended header keyword 'LIBARCHIVE.xattr.com.apple.provenance'
+tar: Ignoring unknown extended header keyword 'LIBARCHIVE.xattr.com.apple.provenance'
+Extracting code_source into /databricks/code_source...
+tar: Ignoring unknown extended header keyword 'LIBARCHIVE.xattr.com.apple.provenance'
+tar: Ignoring unknown extended header keyword 'LIBARCHIVE.xattr.com.apple.provenance'
+tar: Ignoring unknown extended header keyword 'LIBARCHIVE.xattr.com.apple.provenance'
+tar: Ignoring unknown extended header keyword 'LIBARCHIVE.xattr.com.apple.provenance'
+tar: Ignoring unknown extended header keyword 'LIBARCHIVE.xattr.com.apple.provenance'
+Tarball extraction completed in 0s
+Code source databricks-air-lab available at /databricks/code_source/databricks-air-lab
+requirements.yaml path: /Workspace/Users/forrest.murray@databricks.com/.air/cli_launch/air-lab-tabicl-memprobe/tabicl-memprobe-h100-500feat_cd0d2ee5d3e240d2/requirements.yaml
+uv not found in base environment; attempting to install it...
+uv installed.
+Installing dependencies...
+Installing 1 requirements.yaml dependencies with dependency resolution (via uv)...
+Using Python 3.12.3 environment at: /databricks/python3
+Resolved 53 packages in 375ms
+Downloading nvidia-cublas (403.5MiB)
+Downloading nvidia-cuda-runtime (2.1MiB)
+Downloading nvidia-cufile (1.2MiB)
+Downloading nvidia-curand (56.8MiB)
+Downloading nvidia-nvshmem-cu13 (57.6MiB)
+Downloading networkx (2.0MiB)
+Downloading nvidia-cusparse (139.2MiB)
+Downloading scikit-learn (8.7MiB)
+Downloading nvidia-cuda-nvrtc (86.0MiB)
+Downloading sympy (6.0MiB)
+Downloading torch (502.2MiB)
+Downloading cuda-bindings (6.3MiB)
+Downloading nvidia-cusparselt-cu13 (162.3MiB)
+Downloading triton (188.6MiB)
+Downloading nvidia-cusolver (191.6MiB)
+Downloading nvidia-nccl-cu13 (196.4MiB)
+Downloading scipy (33.7MiB)
+Downloading nvidia-cudnn-cu13 (349.2MiB)
+Downloading nvidia-cuda-cupti (10.2MiB)
+Downloading nvidia-nvjitlink (38.9MiB)
+Downloading nvidia-cufft (204.2MiB)
+ Downloaded nvidia-cufile
+ Downloaded nvidia-cuda-runtime
+ Downloaded networkx
+ Downloaded cuda-bindings
+ Downloaded nvidia-cuda-cupti
+ Downloaded scikit-learn
+ Downloaded sympy
+ Downloaded nvidia-nvjitlink
+ Downloaded scipy
+ Downloaded nvidia-curand
+ Downloaded nvidia-nvshmem-cu13
+ Downloaded nvidia-cuda-nvrtc
+ Downloaded nvidia-cusparse
+ Downloaded nvidia-cusparselt-cu13
+ Downloaded triton
+ Downloaded nvidia-cusolver
+ Downloaded nvidia-nccl-cu13
+ Downloaded nvidia-cufft
+ Downloaded nvidia-cudnn-cu13
+ Downloaded nvidia-cublas
+ Downloaded torch
+Prepared 29 packages in 17.88s
+Installed 29 packages in 516ms
+ + cuda-bindings==13.3.1
+ + cuda-pathfinder==1.6.0
+ + cuda-toolkit==13.0.3.0
+ + einops==0.8.2
+ + mpmath==1.3.0
+ + narwhals==2.24.0
+ + networkx==3.6.1
+ + nvidia-cublas==13.1.1.3
+ + nvidia-cuda-cupti==13.0.85
+ + nvidia-cuda-nvrtc==13.0.88
+ + nvidia-cuda-runtime==13.0.96
+ + nvidia-cudnn-cu13==9.20.0.48
+ + nvidia-cufft==12.0.0.61
+ + nvidia-cufile==1.15.1.6
+ + nvidia-curand==10.4.0.35
+ + nvidia-cusolver==12.0.4.66
+ + nvidia-cusparse==12.6.3.3
+ + nvidia-cusparselt-cu13==0.8.1
+ + nvidia-nccl-cu13==2.29.7
+ + nvidia-nvjitlink==13.3.33
+ + nvidia-nvshmem-cu13==3.4.5
+ + nvidia-nvtx==13.0.85
+ + scikit-learn==1.9.0
+ + scipy==1.18.0
+ + setuptools==83.0.0
+ + sympy==1.14.0
+ + tabicl==2.1.1
+ + torch==2.13.0
+ + triton==3.7.1
+Successfully installed all dependencies
+Dependency installation completed in 23s
+================================
+Environment setup completed at Wed Aug  5 04:33:21 PM UTC 2026
+Environment setup time: 24s
+================================
+device=NVIDIA H100 80GB HBM3 total=85GB features=500 offload=False
+INFO: You are downloading 'tabicl-classifier-v2-20260212.ckpt', the latest best-performing version, used in our TabICLv2 paper.
+
+Checkpoint 'tabicl-classifier-v2-20260212.ckpt' not cached.
+ Downloading from Hugging Face Hub (jingang/TabICL).
+
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+rows=  1,000  peak= 19.61 GB  wall=   9.4s
+rows=  5,000  peak= 50.22 GB  wall=   8.4s
+rows= 10,000  peak= 55.80 GB  wall=  12.5s
+[W805 16:34:16.548598687 CUDACachingAllocator.cpp:3933] memory allocation failed with OOM on device 0 while trying to allocate 6637486080 bytes (free: 5874319360, total: 85017493504).
+[W805 16:34:16.724283887 CUDACachingAllocator.cpp:3933] memory allocation failed with OOM on device 0 while trying to allocate 6637486080 bytes (free: 3433234432, total: 85017493504).
+[W805 16:34:17.249155597 CUDACachingAllocator.cpp:3933] memory allocation failed with OOM on device 0 while trying to allocate 6637486080 bytes (free: 2940403712, total: 85017493504).
+[W805 16:34:17.352102783 CUDACachingAllocator.cpp:3933] memory allocation failed with OOM on device 0 while trying to allocate 6637486080 bytes (free: 6012731392, total: 85017493504).
+[W805 16:34:21.102537658 CUDACachingAllocator.cpp:3933] memory allocation failed with OOM on device 0 while trying to allocate 6637486080 bytes (free: 5874319360, total: 85017493504).
+[W805 16:34:22.312123309 CUDACachingAllocator.cpp:3933] memory allocation failed with OOM on device 0 while trying to allocate 6637486080 bytes (free: 3433234432, total: 85017493504).
+[W805 16:34:22.849460986 CUDACachingAllocator.cpp:3933] memory allocation failed with OOM on device 0 while trying to allocate 6637486080 bytes (free: 2940403712, total: 85017493504).
+[W805 16:34:22.951336652 CUDACachingAllocator.cpp:3933] memory allocation failed with OOM on device 0 while trying to allocate 6637486080 bytes (free: 6012731392, total: 85017493504).
+rows= 25,000  peak= 71.84 GB  wall=  26.8s
+rows= 50,000  peak= 43.96 GB  wall=  89.4s
+rows=100,000  peak= 44.12 GB  wall= 159.5s
+rows=200,000  peak= 44.52 GB  wall= 485.4s
+/Workspace/Users/forrest.murray@databricks.com/.air/cli_launch/air-lab-tabicl-memprobe/tabicl-memprobe-h100-500feat_cd0d2ee5d3e240d2/command.sh: line 1:   486 Killed                  HF_HOME=/tmp/hf python $CODE_SOURCE_PATH/experiments/foundation-models/tabicl/mem_probe.py --features 500
+================================
+Execution Summary
+================================
+Total time: 1109s
+User code execution time: 1085s
+ERROR: Script failed with exit code 137 after 1109s
+================================

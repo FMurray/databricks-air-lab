@@ -1,0 +1,19 @@
+2026-07-17 21:46:36 - INFO - Recorded condition marker /databricks/work/main/main-main-68852892-281b-4020-8769-206f10e1912e-main-sxtcnu-07172146-i236s3np-main-794472.conditions/LauncherStarted
+2026-07-17 21:46:36 - INFO - SGC launcher startup: pod_name=68852892-281b-4020-8769-206f10e1912e-main-sxtcnu-07172146-i236s3np-main pod_rank=0
+2026-07-17 21:46:36 - INFO - SGC_DEBUG_INFO:
+2026-07-17 21:46:36 - INFO -   job_id=712006875698868
+2026-07-17 21:46:36 - INFO -   job_task_run_id=866502660301403
+2026-07-17 21:46:36 - INFO -   mlflow_experiment_id=4392293921068480
+2026-07-17 21:46:36 - INFO -   mlflow_run_id=8b80195159e24fb7bdbd903299923cb5
+2026-07-17 21:46:36 - INFO -   run_id=949450981660633
+2026-07-17 21:46:36 - INFO -   workload_id=68852892-281b-4020-8769-206f10e1912e
+2026-07-17 21:46:36 - INFO -   workspace_id=1444828305810485
+2026-07-17 21:46:36 - INFO - Network block passed, proceeding with command execution
+2026-07-17 21:46:36 - INFO - Configuring filesystem...
+2026-07-17 21:46:36 - INFO - Skipping UC FUSE auth - sidecar registered PE token
+2026-07-17 21:46:36 - INFO - Filesystem configuration finished
+2026-07-17 21:46:36 - INFO - ulimit set successfully
+2026-07-17 21:46:36 - INFO - Configuring CUDA compat...
+2026-07-17 21:46:36 - INFO - CUDA compat configuration finished
+2026-07-17 21:46:36 - INFO - Recorded condition marker /databricks/work/main/main-main-68852892-281b-4020-8769-206f10e1912e-main-sxtcnu-07172146-i236s3np-main-794472.conditions/UserCodeStarted
+2026-07-17 21:49:50 - INFO - User command exited with code 0

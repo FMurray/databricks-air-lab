@@ -1,0 +1,30 @@
+Root python environment activated successfully
+Environment setup started at Wed Aug  5 04:41:45 PM UTC 2026
+Hyperparameters path: /Workspace/Users/forrest.murray@databricks.com/.air/cli_launch/air-lab-tabicl-pol/tabicl-pol-stage1-smoke_2d422d57fd084e07/training_config.yaml
+Inspecting tarball at /Workspace/Users/forrest.murray@databricks.com/.air/repo_snapshots/databricks-air-lab/databricks-air-lab_20260805_124112.tar.gz...
+tar: Ignoring unknown extended header keyword 'LIBARCHIVE.xattr.com.apple.provenance'
+tar: Ignoring unknown extended header keyword 'LIBARCHIVE.xattr.com.apple.provenance'
+Extracting code_source into /databricks/code_source...
+tar: Ignoring unknown extended header keyword 'LIBARCHIVE.xattr.com.apple.provenance'
+tar: Ignoring unknown extended header keyword 'LIBARCHIVE.xattr.com.apple.provenance'
+tar: Ignoring unknown extended header keyword 'LIBARCHIVE.xattr.com.apple.provenance'
+tar: Ignoring unknown extended header keyword 'LIBARCHIVE.xattr.com.apple.provenance'
+tar: Ignoring unknown extended header keyword 'LIBARCHIVE.xattr.com.apple.provenance'
+Tarball extraction completed in 0s
+Code source databricks-air-lab available at /databricks/code_source/databricks-air-lab
+requirements.yaml path: /Workspace/Users/forrest.murray@databricks.com/.air/cli_launch/air-lab-tabicl-pol/tabicl-pol-stage1-smoke_2d422d57fd084e07/requirements.yaml
+uv not found in base environment; attempting to install it...
+uv installed.
+Installing dependencies...
+Installing 3 requirements.yaml dependencies with dependency resolution (via uv)...
+error: Failed to parse: `@`
+  Caused by: Expected package name starting with an alphanumeric character, found `@`
+    @
+    ^
+ERROR: Failed to install requirements.yaml dependencies
+================================
+Execution Summary
+================================
+Total time: 5s
+ERROR: Script failed with exit code 1 after 5s
+================================

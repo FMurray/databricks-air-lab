@@ -90,6 +90,84 @@ pipeline. GPU peak **10.4 GB at 30K rows × 16 features** on the 24GB A10 → me
 30K×100-feature tasks will need H100 (mem probe next). Node GPU-util metric read 0% throughout
 (sampling artifact? forward passes are seconds long) — don't trust that gauge for short jobs.
 
+#### Training-side receipts — pre-registered (2026-08-05, before submit)
+
+Review gap (correctly called): every TabICL receipt to date is inference/in-context scoring;
+the fine-tune and pretrain assets (7/17) were never run, while the customer conversation
+is about their pretraining scripts. Two A10 submits on e2 (egress needed for HF/pip):
+
+1. **Fine-tune smoke** (`tabicl-finetune.example.yaml` as-is, 10 epochs, bank-marketing).
+   Success = SUCCESS + prints zero-shot AUC then fine-tuned AUC on the same split +
+   reloaded-checkpoint AUC ≡ fine-tuned (reload works). Expectation: fine-tuned ≥ zero-shot
+   (0.9417 baseline); a *drop* is a finding (their quarterly path would inherit it), not a
+   failure. Wall-clock is the "minutes-scale" claim check — currently an assumption in the
+   deck; this run replaces it with a number.
+2. **Pretrain PoL rung 1** (`tabicl-pol.example.yaml` as-is: stage-1, MAX_STEPS=100,
+   NPROC=1). Success = env resolves the git dep, `tabicl.train` runs 100 steps, loss prints,
+   checkpoint written. This is the "can their pretraining script even run on the platform"
+   receipt — upstream self-describes v2 pretrain code as not tested end-to-end, so attribute
+   failures carefully (upstream vs platform) per the 7/17 plan.
+
+#### Training-side + 500-feature RESULTS (2026-08-05, e2-demo-field-eng, all archived)
+
+**Fine-tune smoke ✅ run 327679047486914** (A10, 10 epochs, bank-marketing), verbatim:
+`zero-shot AUC: 0.9412` → `fine-tuned AUC: 0.9429  (delta +0.0017, 90s, ckpt ->
+/tmp/tabicl-finetune)`. The quarterly-refresh path is now measured: **90 s on an A10**,
+fine-tune ≥ zero-shot, checkpoint written+reloaded. "Minutes-scale" is no longer an assumption.
+
+**Pretrain PoL rung 1 ❌→resubmitted.** Run 939327917565018 failed in env build — the AIR
+launcher **splits requirements on whitespace** before uv: `tabicl[pretraining] @ git+…`
+became 3 requirements and a bare `@` (verbatim: "error: Failed to parse: `@`").
+Platform-side; upstream code never ran (attribution per plan). Workaround: space-free
+PEP 508 `tabicl[pretraining]@git+…` — YAML fixed, resubmitted as run 529615913980817.
+Launcher bug worth reporting to eng: whitespace-splitting valid PEP 508 direct refs.
+
+**Memory probe at 500 features, H100 — run 635048884698037** (FAILED at the last rung;
+ladder itself is the result). Measured:
+
+| rows×500feat | peak GB | wall |
+|---|---|---|
+| 1K | 19.6 | 9.4s |
+| 5K | 50.2 | 8.4s |
+| 10K | 55.8 | 12.5s |
+| 25K | **71.8** (allocator OOM-retries, completed) | 26.8s |
+| 50K | 44.0 ← chunking kicks in | 89.4s |
+| 100K | 44.1 | 159.5s |
+| 200K | 44.5 | 485.4s |
+| 400K | **KILLED exit 137 — HOST RAM** (GPU fine) | — |
+
+Findings vs pre-registration: (1) **the customer shape 60K×500 FITS on one H100** —
+bracketed by the 50K/100K rungs at ~44 GB chunked, ~2 min wall; naive-5× hypothesis was
+wrong because chunking triggers on total elements, earlier at 500 feats. (2) Sharp edge:
+**~25K×500 is the danger zone** — unchunked peak 71.8 GB of 80, with allocator retries;
+slightly wider tables or fatter dtypes could tip it (offload/chunk-forcing knob is the
+mitigation to document). (3) Ceiling on this node type is again **host RAM** (400K×500,
+exit 137) — same constraint class as the A10 at 200K×100; the offload path binds on CPU
+memory, not GPU. B300 answer at THEIR shape: still no — with a receipt this time.
+
+#### Sprawl bench on H100 — pre-registered (2026-08-05, before submit)
+
+Gap flagged in review: sprawl bench had only the A10 run. H100 variant = same YAML +
+`--override compute.accelerator_type=GPU_1xH100`, e2-demo-field-eng (egress works there).
+Success = SUCCESS + all 5 tasks complete; expectations: **AUC within noise of the A10 run**
+(same model/checkpoint — accuracy is card-independent; a large delta means nondeterminism
+worth knowing about), TabICL wall-times ≲ A10's (20.4s bank-marketing is the headline),
+GPU peak ≤ A10's 10.4GB (same tensors, more headroom). Archive to local store after.
+
+#### Memory probe at 500 features — pre-registered (2026-08-05, before submit)
+
+The [customer-model]-shape gap: all prior memory data is 100-feature; the customer's tables are
+500+ wide, 60K rows stated. Run: same `mem_probe.py`, `--features 500`, 1×H100,
+e2-demo-field-eng (pip `tabicl` needs egress). Success = ladder runs until completion or
+OOM (an OOM rung IS a finding, not a failure). Pre-registered expectations:
+- The customer-relevant datum is **peak GB at the 50K–100K rungs** (brackets their 60K×500).
+- Naive scaling guess: ~5× the 100-feat footprint at the same rows (54.4GB at 50K×100 →
+  would NOT fit) — but chunking kicked in by 100K before; whether it triggers on width is
+  exactly what we don't know. Label: hypothesis, not prediction.
+- If 60K×500 fits under 80GB → the B300 answer stays "no" with their exact shape as receipt.
+  If it OOMs → the recommendation shifts to offload mode (`--offload` follow-up) or feature
+  chunking, still not B300, but with data instead of extrapolation.
+
 #### Memory probe — RESULTS (2026-07-22, e2-demo-field-eng, 100 synthetic features, n_estimators=8)
 
 H100 run 1022517780681952 (SUCCESS, 837s) · A10 run via `--override compute.accelerator_type`

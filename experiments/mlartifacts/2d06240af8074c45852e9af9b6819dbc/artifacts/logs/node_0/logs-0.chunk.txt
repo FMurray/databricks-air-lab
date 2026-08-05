@@ -1,0 +1,73 @@
+Root python environment activated successfully
+Environment setup started at Fri Jul 17 09:46:36 PM UTC 2026
+Hyperparameters path: /Workspace/Users/forrest.murray@databricks.com/.air/cli_launch/air-lab-tabicl-bench/tabicl-sprawl-bench_756e6e15139d40c6/training_config.yaml
+Inspecting tarball at /Workspace/Users/forrest.murray@databricks.com/.air/repo_snapshots/databricks-air-lab/databricks-air-lab_20260717_174453.tar.gz...
+tar: Ignoring unknown extended header keyword 'LIBARCHIVE.xattr.com.apple.provenance'
+Extracting code_source into /databricks/code_source...
+tar: Ignoring unknown extended header keyword 'LIBARCHIVE.xattr.com.apple.provenance'
+tar: Ignoring unknown extended header keyword 'LIBARCHIVE.xattr.com.apple.provenance'
+tar: Ignoring unknown extended header keyword 'LIBARCHIVE.xattr.com.apple.provenance'
+tar: Ignoring unknown extended header keyword 'LIBARCHIVE.xattr.com.apple.provenance'
+tar: Ignoring unknown extended header keyword 'LIBARCHIVE.xattr.com.apple.provenance'
+Tarball extraction completed in 0s
+Code source databricks-air-lab available at /databricks/code_source/databricks-air-lab
+requirements.yaml path: /Workspace/Users/forrest.murray@databricks.com/.air/cli_launch/air-lab-tabicl-bench/tabicl-sprawl-bench_756e6e15139d40c6/requirements.yaml
+uv not found in base environment; attempting to install it...
+uv installed.
+Installing dependencies from requirements.yaml...
+Installing bulk dependencies with dependency resolution (via uv)...
+Using Python 3.12.3 environment at: /databricks/python3
+Resolved 48 packages in 440ms
+Downloading hf-xet (4.2MiB)
+Downloading xgboost (94.1MiB)
+ Downloaded hf-xet
+ Downloaded xgboost
+Prepared 9 packages in 1.12s
+Uninstalled 1 package in 5ms
+Installed 9 packages in 45ms
+ - click==8.1.7
+ + click==8.4.2
+ + einops==0.8.2
+ + hf-xet==1.5.2
+ + huggingface-hub==1.24.0
+ + setuptools==83.0.0
+ + tabicl==2.1.1
+ + tabulate==0.10.0
+ + tqdm==4.69.0
+ + xgboost==3.3.0
+Successfully installed all dependencies
+Dependency installation completed in 10s
+================================
+Environment setup completed at Fri Jul 17 09:46:46 PM UTC 2026
+Environment setup time: 10s
+================================
+/databricks/python3/lib/python3.12/site-packages/torch/cuda/__init__.py:61: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+  import pynvml  # type: ignore[import]
+/databricks/python3/lib/python3.12/site-packages/huggingface_hub/constants.py:298: FutureWarning: The `HF_HUB_ENABLE_HF_TRANSFER` environment variable is deprecated as 'hf_transfer' is not used anymore. Please use `HF_XET_HIGH_PERFORMANCE` instead to enable high performance transfer with Xet. Visit https://huggingface.co/docs/huggingface_hub/package_reference/environment_variables#hfxethighperformance for more details.
+  warnings.warn(
+=== bank-marketing (openml 1461)
+INFO: You are downloading 'tabicl-classifier-v2-20260212.ckpt', the latest best-performing version, used in our TabICLv2 paper.
+
+Checkpoint 'tabicl-classifier-v2-20260212.ckpt' not cached.
+ Downloading from Hugging Face Hub (jingang/TabICL).
+
+=== churn (openml 40701)
+=== credit-g (openml 31)
+=== adult (openml 1590)
+=== click-prediction (openml 1220)
+| dataset          |   n_train |   n_features |   tabicl_s |   tabicl_accuracy |   tabicl_roc_auc |   tabicl_gpu_peak_gb |   xgb_default_s |   xgb_default_accuracy |   xgb_default_roc_auc |   xgb_tuned_s |   xgb_tuned_accuracy |   xgb_tuned_roc_auc |
+|:-----------------|----------:|-------------:|-----------:|------------------:|-----------------:|---------------------:|----------------:|-----------------------:|----------------------:|--------------:|---------------------:|--------------------:|
+| bank-marketing   |     30000 |           16 |    20.3517 |            0.9118 |           0.942  |              10.3959 |          0.1451 |                 0.9078 |                0.9289 |       22.4245 |               0.9068 |              0.9336 |
+| churn            |      4000 |           20 |     1.1379 |            0.974  |           0.927  |               1.7167 |          0.0963 |                 0.955  |                0.9202 |       12.3683 |               0.951  |              0.9188 |
+| credit-g         |       800 |           20 |     1.6006 |            0.795  |           0.8446 |               0.668  |          0.0536 |                 0.785  |                0.8105 |        7.2782 |               0.795  |              0.8538 |
+| adult            |     30000 |           14 |     7.497  |            0.8718 |           0.9254 |               9.5268 |          0.1196 |                 0.8712 |                0.9263 |       20.2474 |               0.8725 |              0.9269 |
+| click-prediction |     30000 |            9 |     6.5364 |            0.8345 |           0.6857 |               6.6273 |          0.1402 |                 0.8315 |                0.6758 |       23.5202 |               0.8342 |              0.6921 |
+🏃 View run tabicl-sprawl-bench at: https://e2-demo-field-eng.cloud.databricks.com/ml/experiments/4392293921068480/runs/8b80195159e24fb7bdbd903299923cb5
+🧪 View experiment at: https://e2-demo-field-eng.cloud.databricks.com/ml/experiments/4392293921068480
+================================
+Execution Summary
+================================
+Total time: 194s
+User code execution time: 184s
+Completed at Fri Jul 17 09:49:50 PM UTC 2026
+================================

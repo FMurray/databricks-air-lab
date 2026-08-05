@@ -8,7 +8,15 @@ environment:
   dependencies:
     # tabicl.train is packaged, so a git install is enough — no repo checkout needed.
     # [pretraining] extra pulls transformers/xgboost/wandb (wandb disabled via env below).
-    - "tabicl[pretraining] @ git+https://github.com/soda-inria/tabicl"
+    # NO SPACES in the spec: the AIR launcher splits requirements on whitespace before uv
+    # sees them ("tabicl[pretraining] @ git+…" became 3 requirements and a bare `@` parse
+    # error — run 939327917565018, 2026-08-05). Space-free PEP 508 works around it.
+    - "tabicl[pretraining]@git+https://github.com/soda-inria/tabicl"
+    # extras were silently dropped from the git ref during env resolution (run 529615913980817:
+    # deps installed "successfully", then ModuleNotFoundError: xgboost) — pin them explicitly:
+    - xgboost
+    - wandb
+    - transformers
   # env_variables rejected by air v0.1.0 schema — knobs passed inline in `command` instead:
   #   NPROC_PER_NODE / MAX_STEPS / N_JOBS (prior-gen CPU workers per rank; tune vs GPU util)
   #   CKPT_DIR=/Volumes/<catalog>/<schema>/<volume>/tabicl-pol for restart tests
