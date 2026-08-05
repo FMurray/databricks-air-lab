@@ -20,6 +20,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from . import capacity as cap
+from . import catalog
 from . import recipes
 
 DB_PATH = Path(__file__).resolve().parents[1] / "broker.db"
@@ -88,6 +89,25 @@ class Broker:
 
     def __post_init__(self):
         self.store = self.store or Store()
+        self._sync_repo_catalog()
+
+    def _sync_repo_catalog(self):
+        """Repo workloads re-sync on every start; git is the source of truth for them."""
+        team = getattr(self.cfg, "catalog_team", "") or (
+            self.cfg.teams[0].name if self.cfg.teams else "")
+        if not team:
+            return
+        existing = {r["name"]: r["id"] for r in self.store.rows(
+            "SELECT id, name FROM workloads WHERE created_by='repo-sync'")}
+        for w in catalog.repo_workloads(team):
+            fields = dict(team=w["team"], use_case=w["use_case"], name=w["name"],
+                          kind=w["kind"], ref=w["ref"], shape=w["shape"],
+                          nodes=w["nodes"], needs_torch=w["needs_torch"])
+            if w["name"] in existing:
+                self.store.update("workloads", existing[w["name"]], **fields)
+            else:
+                self.store.insert("workloads", created_utc=time.time(),
+                                  created_by="repo-sync", **fields)
 
     # ---------- gates ----------
     def _team_for(self, user: str, team_name: str):

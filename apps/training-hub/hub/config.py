@@ -38,6 +38,7 @@ class HubConfig:
     reservation: Reservation
     teams: list[Team]
     platform_quotas: dict = field(default_factory=dict)  # shape -> admitted nodes cap
+    catalog_team: str = ""  # team that owns the repo workload catalog
 
     def team_of(self, principal: str | None) -> str:
         teams = self.teams_of(principal)
@@ -70,4 +71,5 @@ def load(path: str | Path = DEFAULT_CONFIG_PATH) -> HubConfig:
         reservation=Reservation(**raw["reservation"]),
         teams=teams,
         platform_quotas=raw.get("platform_quotas", {}),
+        catalog_team=raw.get("catalog_team", ""),
     )
