@@ -1,0 +1,11 @@
+{
+  "$schema": "https://databricks.github.io/appkit/schemas/plugin-manifest.schema.json",
+  "name": "broker",
+  "displayName": "Broker",
+  "description": "GPU run admission, capacity, and attribution",
+  "resources": {
+    "required": [],
+    "optional": []
+  },
+  "version": "0.1.0"
+}
