@@ -1,5 +1,8 @@
 # TabICL v2 pretraining proof-of-life — stage-1 smoke on a single GPU.
 # Ladder: 1xA10 (this file) → 1xH100 → GPU_8xH100 NPROC=8 → stage-3 memory probe (open-q #17).
+# ⚠ A10 rung fails this recipe: micro-batch OOM on 24GB → upstream skip-on-OOM leaves DDP
+#   reducer half-armed → "Expected to have finished reduction" at the next step (runs
+#   409480203318783 2026-08-05 + PoL attempt 4 — same upstream bug). Use GPU_1xH100 up.
 # Schema source of truth: `air -h config` and `air -h config.<section>`
 experiment_name: air-lab-tabicl-pol
 

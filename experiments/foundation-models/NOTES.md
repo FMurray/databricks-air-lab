@@ -629,3 +629,42 @@ init/log/resume-by-id) — `uv run --with mlflow python test_mlflow_loggers.py` 
   own wandb.init/wandb.log calls routed through the shim (`--wandb_log True`, real wandb
   never imported). Checkpoint-listing tail (`--- checkpoints written:`) still prints.
 - **Fail** = metrics split across runs, missing histories, or a second stray run created.
+
+**V1 RESULT — ✅ PASS (run ca733fbad91242b9abc35a2bd8d84e5d / job 728393411258922, 1×A10, e2, 2026-08-05):**
+
+| claim | evidence |
+|---|---|
+| fit-internal metrics reach MLflow via MLflowFinetuningLogger | `train/loss` 40-pt history (steps 1–40), `train/lr`, per-epoch `val/roc_auc` 10 pts + `train/mean_loss` |
+| post-fit AUCs land in the SAME run (ownership survives fit's finish()) | same run: `auc_zero_shot` 0.9412, `auc_finetuned` 0.9428; stdout corroborates: "zero-shot AUC: 0.9412" / "fine-tuned AUC: 0.9428 (delta +0.0015, 94s, ...)" |
+| params captured | estimator+args params incl. epochs=10, eval_metric=roc_auc; no stray runs (±10 min window = 1 run) |
+
+Archived → local run 3670034ea3964d8fade0a19d9bcb2ab3. Experiment description set (both tabicl-finetune and, pending V2, tabicl-pol).
+
+**V2 attempt log (failures as they happened):**
+- Attempt 1 (run 1056674589011590, A10): FAIL at Trainer init — upstream latent bug only
+  reachable with `--wandb_log True`: `configure_wandb` writes `checkpoint_dir/wand_id.txt`
+  BEFORE anything creates checkpoint_dir (`_run.py:168` FileNotFoundError). Shim's
+  wandb.init had already succeeded. Fix: `mkdir -p "$CKPT_DIR"` in pol_stage1_smoke.sh.
+- Attempt 2 (run 409480203318783, A10): step 0 completed and **shim delivered on-platform**
+  — ambient MLflow run 32446ff95d4a444b976e1d50604fe632 holds ce=2.167, accuracy=0.076,
+  lr=0.0008, prior_time/train_time + 112 TrainConfig params. Then FAIL at step 1: the KNOWN
+  upstream DDP skip-on-OOM bug (micro-batch OOM on 24GB A10 → "Expected to have finished
+  reduction") — same class as PoL attempt 4. A10 was never a passing rung for this recipe;
+  example YAML annotated. Not a shim defect (measured metrics above predate the crash).
+- Attempt 3 (run 348739312638178, **1×H100** — the proven rung): PASS, result below.
+
+**V2 RESULT — ✅ PASS (run b9262046757a49be85a8fd0a2ad4f93c / job 348739312638178, 1×H100, e2, 2026-08-05):**
+
+| claim | evidence |
+|---|---|
+| upstream tabicl.train metrics reach MLflow via wandb shim | `ce`/`accuracy`/`lr` each 100 pts, steps 1–100, in the AIR ambient run (no stray run; ±10 min window = 1) |
+| values are upstream's own trainer output | ce 2.2995→1.3355, accuracy 0.061→0.4757, lr 8e-4→1.0e-7 — final lr equals the recipe's `--cosine_lr_end 1e-7` exactly (measured) |
+| TrainConfig captured | 112 params (lr=0.0008, prior_type=graph_scm, max_steps=100, wandb_log=True) |
+| training artifacts unaffected | stdout tail: step-50.ckpt + step-100.ckpt (220 MB each) + `wand_id.txt` (32 bytes = an MLflow run id → upstream resume file now resumes the MLflow run) |
+
+Archived → local runs 7ffcfd51ead3465b8ff934e777493fa8 (pass) and d41208b00f4e47058a0cfecfbe4f0f21
+(attempt-2 partial, failure receipt). Experiment descriptions set on both tabicl-finetune and
+tabicl-pol (e2). Both MLflow-logger paths (protocol logger + wandb shim) are now verified
+end-to-end on AIR; upstream-PR candidate: MLflowLogger + `--logger mlflow` flag (the finetune
+Protocol refactor signals maintainer openness), bundled with the two upstream bugs found here
+(wand_id.txt-before-mkdir; DDP skip-on-OOM).
