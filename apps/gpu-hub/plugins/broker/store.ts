@@ -45,6 +45,11 @@ CREATE TABLE IF NOT EXISTS broker.workloads (
   nodes INTEGER NOT NULL DEFAULT 1,
   needs_torch INTEGER DEFAULT 0
 );
+CREATE TABLE IF NOT EXISTS broker.config (
+  key TEXT PRIMARY KEY,
+  value JSONB NOT NULL,
+  updated_utc DOUBLE PRECISION NOT NULL
+);
 CREATE TABLE IF NOT EXISTS broker.runs (
   id SERIAL PRIMARY KEY,
   workload_id INTEGER NOT NULL REFERENCES broker.workloads(id),
@@ -67,6 +72,19 @@ export class Store {
 
   async init() {
     await this.pool.query(SCHEMA);
+  }
+
+  async getConfig(): Promise<Record<string, unknown> | undefined> {
+    const res = await this.pool.query("SELECT value FROM broker.config WHERE key = 'broker'");
+    return res.rows[0]?.value as Record<string, unknown> | undefined;
+  }
+
+  async setConfig(value: Record<string, unknown>): Promise<void> {
+    await this.pool.query(
+      `INSERT INTO broker.config (key, value, updated_utc) VALUES ('broker', $1, $2)
+       ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_utc = EXCLUDED.updated_utc`,
+      [JSON.stringify(value), Date.now() / 1000],
+    );
   }
 
   async upsertRepoWorkload(w: {

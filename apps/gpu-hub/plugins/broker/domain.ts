@@ -48,25 +48,28 @@ export function findAppRoot(moduleUrl: string): string {
   return process.cwd();
 }
 
+export function parseConfig(raw: Record<string, unknown>): BrokerConfig {
+  const teams: Team[] = ((raw.teams as Record<string, unknown>[]) ?? []).map((t) => ({
+    name: String(t.name ?? ""),
+    quota_nodes: Number(t.quota_nodes ?? 0),
+    members: (t.members as string[]) ?? [],
+    use_cases: ((t.use_cases as (UseCase | string)[]) ?? []).map((u) =>
+      typeof u === "string" ? { name: u } : u,
+    ),
+  }));
+  return {
+    reservation: raw.reservation as BrokerConfig["reservation"],
+    platform_quotas: (raw.platform_quotas as Record<string, number>) ?? {},
+    catalog_team: (raw.catalog_team as string) ?? teams[0]?.name ?? "",
+    teams,
+  };
+}
+
 export function loadConfig(appRoot: string): BrokerConfig {
   for (const rel of CONFIG_CANDIDATES) {
     const p = path.join(appRoot, rel);
     if (fs.existsSync(p)) {
-      const raw = JSON.parse(fs.readFileSync(p, "utf8")) as Record<string, unknown>;
-      const teams: Team[] = ((raw.teams as Record<string, unknown>[]) ?? []).map((t) => ({
-        name: String(t.name ?? ""),
-        quota_nodes: Number(t.quota_nodes ?? 0),
-        members: (t.members as string[]) ?? [],
-        use_cases: ((t.use_cases as (UseCase | string)[]) ?? []).map((u) =>
-          typeof u === "string" ? { name: u } : u,
-        ),
-      }));
-      return {
-        reservation: raw.reservation as BrokerConfig["reservation"],
-        platform_quotas: (raw.platform_quotas as Record<string, number>) ?? {},
-        catalog_team: (raw.catalog_team as string) ?? teams[0]?.name ?? "",
-        teams,
-      };
+      return parseConfig(JSON.parse(fs.readFileSync(p, "utf8")) as Record<string, unknown>);
     }
   }
   throw new Error("no broker config found (config/broker.json)");

@@ -28,6 +28,7 @@ import manifest from "./manifest.json";
 import {
   findAppRoot,
   loadConfig,
+  parseConfig,
   repoWorkloads,
   shapeCapacity,
   teamsOf,
@@ -45,9 +46,23 @@ export class Broker extends Plugin {
   store!: Store;
 
   async setup() {
-    this.cfg = loadConfig(APP_ROOT);
     this.store = new Store();
     await this.store.init();
+    // Config lives in Lakebase (files can't ship real team emails through a public repo's
+    // deploy sync — receipt: hosted bundle contained only broker.example.json). The file
+    // is the bootstrap: first run with a real config seeds the DB.
+    const fileCfg = loadConfig(APP_ROOT);
+    const dbRaw = await this.store.getConfig();
+    const dbCfg = dbRaw ? parseConfig(dbRaw) : undefined;
+    const fileIsReal = fileCfg.teams.some((t) =>
+      t.members.some((m) => !m.endsWith("@example.com")),
+    );
+    if (fileIsReal) {
+      await this.store.setConfig(JSON.parse(JSON.stringify(fileCfg)) as Record<string, unknown>);
+      this.cfg = fileCfg;
+    } else {
+      this.cfg = dbCfg ?? fileCfg;
+    }
     for (const w of repoWorkloads(APP_ROOT, this.cfg.catalog_team)) {
       await this.store.upsertRepoWorkload(w);
     }
