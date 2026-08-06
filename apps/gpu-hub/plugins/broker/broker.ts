@@ -14,6 +14,7 @@
  * air_yaml goes through a notebook job that shells the vendored CLI (uat/checks pattern).
  */
 import { execFile } from "node:child_process";
+import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
@@ -102,6 +103,7 @@ export class Broker extends Plugin {
       });
       return `run ${r.id}: unsupported kind`;
     }
+    if (!this.hasLocalAir()) return this.submitViaNotebookHop(r);
     try {
       const { stdout, stderr } = await execFileP("air", ["run", "--file", r.ref], {
         cwd: REPO_ROOT,
@@ -131,6 +133,100 @@ export class Broker extends Plugin {
         finished_utc: Date.now() / 1000,
       });
       return `run ${r.id}: air run failed`;
+    }
+  }
+
+  private hasLocalAir(): boolean {
+    const paths = (process.env.PATH ?? "").split(":");
+    return paths.some((p) => {
+      try {
+        return Boolean(p) && fs.existsSync(path.join(p, "air"));
+      } catch {
+        return false;
+      }
+    });
+  }
+
+  /** Hosted mode: no air binary / repo checkout — submit the dispatch notebook (CPU
+   *  serverless), which installs the vendored CLI and runs the workload from the
+   *  workspace mirror, exiting with the AIR run id. Pattern verified by
+   *  uat/checks/air-cli-from-notebook (docs/06). */
+  private async submitViaNotebookHop(r: RunRow): Promise<string> {
+    try {
+      const client = getWorkspaceClient({});
+      const submit = (await client.apiClient.request({
+        path: "/api/2.2/jobs/runs/submit",
+        method: "POST",
+        headers: new Headers(),
+        raw: false,
+        payload: {
+          run_name: `gpu-hub-dispatch-${r.id}`,
+          tasks: [
+            {
+              task_key: "dispatch",
+              notebook_task: {
+                notebook_path: "/Workspace/Shared/databricks-air-lab/uat/dispatch-workload",
+                base_parameters: { workload_ref: r.ref },
+              },
+              timeout_seconds: 1200,
+            },
+          ],
+        },
+      })) as { run_id: number };
+      // poll the hop to terminal (it only installs the CLI + submits — minutes)
+      for (let i = 0; i < 40; i++) {
+        await new Promise((ok) => setTimeout(ok, 15_000));
+        const hop = (await client.apiClient.request({
+          path: "/api/2.2/jobs/runs/get",
+          method: "GET",
+          query: { run_id: String(submit.run_id) },
+          headers: new Headers(),
+          raw: false,
+        })) as {
+          state: { life_cycle_state: string };
+          tasks: { run_id: number }[];
+        };
+        if (["TERMINATED", "INTERNAL_ERROR", "SKIPPED"].includes(hop.state.life_cycle_state)) {
+          const out = (await client.apiClient.request({
+            path: "/api/2.2/jobs/runs/get-output",
+            method: "GET",
+            query: { run_id: String(hop.tasks[0].run_id) },
+            headers: new Headers(),
+            raw: false,
+          })) as { notebook_output?: { result?: string } };
+          const parsed = JSON.parse(out.notebook_output?.result ?? "{}") as {
+            air_run_id?: string;
+            error?: string;
+          };
+          if (parsed.air_run_id) {
+            this.store.updateRun(r.id, {
+              state: "SUBMITTED",
+              run_id: parsed.air_run_id,
+              submitted_utc: Date.now() / 1000,
+            });
+            return `run ${r.id} (${r.name}): submitted as ${parsed.air_run_id} (via notebook hop)`;
+          }
+          this.store.updateRun(r.id, {
+            state: "FAILED",
+            detail: (parsed.error ?? "dispatch hop gave no run id").slice(0, 400),
+            finished_utc: Date.now() / 1000,
+          });
+          return `run ${r.id}: dispatch hop failed`;
+        }
+      }
+      this.store.updateRun(r.id, {
+        state: "FAILED",
+        detail: "dispatch hop did not finish in 10 min",
+        finished_utc: Date.now() / 1000,
+      });
+      return `run ${r.id}: dispatch hop timeout`;
+    } catch (e) {
+      this.store.updateRun(r.id, {
+        state: "FAILED",
+        detail: String(e).slice(0, 400),
+        finished_utc: Date.now() / 1000,
+      });
+      return `run ${r.id}: dispatch hop error`;
     }
   }
 
