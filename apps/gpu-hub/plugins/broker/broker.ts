@@ -63,8 +63,41 @@ export class Broker extends Plugin {
     } else {
       this.cfg = dbCfg ?? fileCfg;
     }
-    for (const w of repoWorkloads(APP_ROOT, this.cfg.catalog_team)) {
-      await this.store.upsertRepoWorkload(w);
+    const catalog = repoWorkloads(APP_ROOT, this.cfg.catalog_team);
+    const byKey = new Map<string, typeof catalog>();
+    for (const c of catalog) {
+      const key = c.workload_key ?? c.name;
+      if (!byKey.has(key)) byKey.set(key, []);
+      byKey.get(key)!.push(c);
+    }
+    for (const [key, configs] of byKey) {
+      // the base configuration (name == key) carries the workload's title/description
+      const base = configs.find((c) => c.name.split("/").pop() === key) ?? configs[0];
+      const wid = await this.store.upsertWorkload({
+        workload_key: key,
+        team: base.team,
+        use_case: base.use_case,
+        title: base.title ?? key,
+        description: base.description ?? "",
+      });
+      for (const c of configs) {
+        await this.store.upsertConfiguration({
+          workload_id: wid,
+          workload_key: key,
+          experiment_name: c.experiment_name ?? "",
+          team: c.team,
+          use_case: c.use_case,
+          name: c.name,
+          title: c.title,
+          description: c.description,
+          author: c.author,
+          kind: c.kind,
+          ref: c.ref,
+          shape: c.shape,
+          nodes: c.nodes,
+          needs_torch: c.needs_torch,
+        });
+      }
     }
   }
 
@@ -125,7 +158,19 @@ export class Broker extends Plugin {
     }
     if (!this.hasLocalAir()) return this.submitViaNotebookHop(r);
     try {
-      const { stdout, stderr } = await execFileP("air", ["run", "--file", r.ref], {
+      let fileToRun = r.ref;
+      const options = r.options ? (JSON.parse(r.options) as string[]) : [];
+      if (options.length) {
+        // compose next to the base file so the relative root_path stays correct
+        const composedRel = path.join(path.dirname(r.ref), `.composed-${r.id}.yaml`);
+        const params = r.params ? (JSON.parse(r.params) as Record<string, string>) : {};
+        const args = ["run", "--with", "pyyaml", "python", "-m", "utils.composition.compose",
+                      r.ref, "--options", options.join(","), "--out", composedRel];
+        for (const [k, v] of Object.entries(params)) args.push("--param", `${k}=${v}`);
+        await execFileP("uv", args, { cwd: REPO_ROOT, timeout: 120_000, env: process.env });
+        fileToRun = composedRel;
+      }
+      const { stdout, stderr } = await execFileP("air", ["run", "--file", fileToRun], {
         cwd: REPO_ROOT,
         timeout: 300_000,
         env: process.env,
@@ -306,8 +351,7 @@ export class Broker extends Plugin {
       method: "get",
       path: "/workloads",
       handler: async (req, res) => {
-        // enrich with run history relative to the caller: run_count / my_run_count /
-        // team_run_count power the "run by me / by my team" filters
+        // workloads with nested configurations, plus run history relative to the caller
         const principal = this.principal(req as never);
         const myTeams = new Set(teamsOf(this.cfg, principal).map((t) => t.name));
         const allRuns = await this.store.runs();
@@ -321,11 +365,23 @@ export class Broker extends Plugin {
           if (myTeams.has(r.team)) s.team_run_count++;
           stats.set(r.workload_id, s);
         }
-        const rows = await this.store.workloads();
-        res.json(rows.map((w) => ({
+        const configs = await this.store.configurations();
+        const workloads = await this.store.workloads();
+        res.json(workloads.map((w) => ({
           ...w,
           ...(stats.get(Number(w.id)) ?? { run_count: 0, my_run_count: 0, team_run_count: 0 }),
+          configurations: configs.filter((c) => Number(c.workload_id) === Number(w.id)),
         })));
+      },
+    });
+
+    this.route(router, {
+      name: "options",
+      method: "get",
+      path: "/options",
+      handler: async (_req, res) => {
+        const p = path.join(APP_ROOT, "plugins", "broker", "options.json");
+        res.json(fs.existsSync(p) ? JSON.parse(fs.readFileSync(p, "utf8")) : []);
       },
     });
 
@@ -365,17 +421,29 @@ export class Broker extends Plugin {
           res.status(403).json({ error: "not a member of any team — access is read-only" });
           return;
         }
-        const workloadId = Number((req.body as { workloadId?: number })?.workloadId);
-        const w = await this.store.workload(workloadId);
-        if (!w) {
-          res.status(404).json({ error: `workload ${workloadId} not found` });
+        const body = req.body as { configurationId?: number; useCase?: string;
+          options?: string[]; params?: Record<string, string> };
+        const configurationId = Number(body?.configurationId);
+        const c = await this.store.configuration(configurationId);
+        if (!c) {
+          res.status(404).json({ error: `configuration ${configurationId} not found` });
           return;
         }
-        if (!myTeams.some((t) => t.name === w.team)) {
-          res.status(403).json({ error: `not a member of team ${w.team}` });
+        if (!myTeams.some((t) => t.name === c.team)) {
+          res.status(403).json({ error: `not a member of team ${c.team}` });
           return;
         }
-        const runId = await this.store.insertRun(workloadId, principal);
+        // the requester pays: the use case must belong to one of the requester's teams
+        const useCase = String(body?.useCase ?? "") || String(c.use_case ?? "");
+        const validUseCases = new Set(
+          myTeams.flatMap((t) => t.use_cases.map((u) => u.name)),
+        );
+        if (useCase && validUseCases.size && !validUseCases.has(useCase)) {
+          res.status(400).json({ error: `use case '${useCase}' is not in your teams` });
+          return;
+        }
+        const runId = await this.store.insertRun(
+          configurationId, principal, useCase, body?.options ?? [], body?.params ?? {});
         const events = await this.tick();
         res.json({ id: runId, events });
       },

@@ -111,6 +111,8 @@ export interface CatalogWorkload {
   title?: string;
   description?: string;
   author?: string;
+  workload_key?: string;
+  experiment_name?: string;
   kind: "air_yaml";
   ref: string;
   team: string;

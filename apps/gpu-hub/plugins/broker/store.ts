@@ -1,27 +1,34 @@
 /**
- * Run/workload state in Lakebase (Postgres with OAuth-refreshed pool). One submission
- * path: every run is created QUEUED and admitted by the dispatcher; FIFO within
- * fair-share. Durable across app restarts/redeploys — this replaced the SQLite
- * prototype store.
+ * State in Lakebase (Postgres, OAuth-refreshed pool).
  *
- * Config: standard PG* env vars (auto-injected when the app has a `postgres` resource;
- * locally set PGHOST to the instance's read_write_dns — OAuth tokens are handled by the
- * pool helper).
+ * Domain (exact language):
+ *   Workload       - abstract user need. Groups configurations. No experiment key.
+ *   Configuration  - concrete recipe (YAML/notebook + shape + nodes). One experiment each.
+ *   Run            - one execution of a configuration. One job run. One MLflow run.
+ *                    The requester pays: use_case is selected at request time.
+ *   Result         - one receipt from a run (verification-skill conventions).
+ *
+ * Migration from the v1 schema (concrete rows in broker.workloads) happens in init():
+ * the old table renames to broker.configurations; runs.workload_id renames to
+ * configuration_id; the new abstract broker.workloads table is created fresh.
  */
 import { createLakebasePool } from "@databricks/appkit";
 import type { Pool } from "pg";
 
 export interface RunRow {
   id: number;
-  workload_id: number;
+  configuration_id: number;
   requested_by: string;
+  use_case: string;
+  options: string;
+  params: string;
   created_utc: number;
   state: string;
   run_id: string;
   detail: string;
-  // joined from workloads:
+  // joined from configurations:
   team: string;
-  use_case: string;
+  config_use_case: string;
   name: string;
   title: string;
   shape: string;
@@ -29,11 +36,21 @@ export interface RunRow {
   kind: string;
   ref: string;
   needs_torch: number;
+  workload_id: number;
 }
 
 const SCHEMA = `
 CREATE SCHEMA IF NOT EXISTS broker;
 CREATE TABLE IF NOT EXISTS broker.workloads (
+  id SERIAL PRIMARY KEY,
+  workload_key TEXT NOT NULL UNIQUE,
+  team TEXT NOT NULL DEFAULT '',
+  use_case TEXT NOT NULL DEFAULT '',
+  title TEXT DEFAULT '',
+  description TEXT DEFAULT '',
+  created_utc DOUBLE PRECISION NOT NULL
+);
+CREATE TABLE IF NOT EXISTS broker.configurations (
   id SERIAL PRIMARY KEY,
   created_utc DOUBLE PRECISION NOT NULL,
   created_by TEXT NOT NULL,
@@ -41,8 +58,8 @@ CREATE TABLE IF NOT EXISTS broker.workloads (
   use_case TEXT NOT NULL,
   name TEXT NOT NULL UNIQUE,
   title TEXT DEFAULT '',
-  author TEXT DEFAULT '',
   description TEXT DEFAULT '',
+  author TEXT DEFAULT '',
   kind TEXT NOT NULL,
   ref TEXT NOT NULL,
   shape TEXT NOT NULL,
@@ -56,7 +73,7 @@ CREATE TABLE IF NOT EXISTS broker.config (
 );
 CREATE TABLE IF NOT EXISTS broker.runs (
   id SERIAL PRIMARY KEY,
-  workload_id INTEGER NOT NULL REFERENCES broker.workloads(id),
+  configuration_id INTEGER NOT NULL,
   requested_by TEXT NOT NULL,
   created_utc DOUBLE PRECISION NOT NULL,
   state TEXT NOT NULL DEFAULT 'QUEUED',
@@ -65,7 +82,43 @@ CREATE TABLE IF NOT EXISTS broker.runs (
   submitted_utc DOUBLE PRECISION,
   finished_utc DOUBLE PRECISION
 );
+CREATE TABLE IF NOT EXISTS broker.results (
+  id SERIAL PRIMARY KEY,
+  run_id INTEGER NOT NULL,
+  name TEXT NOT NULL,
+  status TEXT NOT NULL,
+  value TEXT DEFAULT '',
+  label TEXT DEFAULT '',
+  evidence TEXT DEFAULT ''
+);
 `;
+
+const RENAMES = [
+  // v1 -> v2: the old concrete table becomes configurations
+  `DO $$ BEGIN
+     IF EXISTS (SELECT 1 FROM information_schema.columns
+                WHERE table_schema='broker' AND table_name='workloads' AND column_name='ref')
+        AND NOT EXISTS (SELECT 1 FROM information_schema.tables
+                WHERE table_schema='broker' AND table_name='configurations') THEN
+       ALTER TABLE broker.workloads RENAME TO configurations;
+     END IF;
+   END $$;`,
+  `DO $$ BEGIN
+     IF EXISTS (SELECT 1 FROM information_schema.columns
+                WHERE table_schema='broker' AND table_name='runs' AND column_name='workload_id') THEN
+       ALTER TABLE broker.runs RENAME COLUMN workload_id TO configuration_id;
+     END IF;
+   END $$;`,
+];
+
+const ADDS = [
+  "ALTER TABLE broker.configurations ADD COLUMN IF NOT EXISTS workload_id INTEGER",
+  "ALTER TABLE broker.configurations ADD COLUMN IF NOT EXISTS workload_key TEXT DEFAULT ''",
+  "ALTER TABLE broker.configurations ADD COLUMN IF NOT EXISTS experiment_name TEXT DEFAULT ''",
+  "ALTER TABLE broker.runs ADD COLUMN IF NOT EXISTS use_case TEXT DEFAULT ''",
+  "ALTER TABLE broker.runs ADD COLUMN IF NOT EXISTS options TEXT DEFAULT ''",
+  "ALTER TABLE broker.runs ADD COLUMN IF NOT EXISTS params TEXT DEFAULT ''",
+];
 
 export class Store {
   private pool: Pool;
@@ -75,18 +128,15 @@ export class Store {
   }
 
   async init() {
+    // renames run BEFORE the schema, so the fresh abstract 'workloads' table is only
+    // created after the old concrete one has moved aside
+    await this.pool.query("CREATE SCHEMA IF NOT EXISTS broker");
+    for (const m of RENAMES) await this.pool.query(m);
     await this.pool.query(SCHEMA);
-    await this.pool.query(
-      "ALTER TABLE broker.workloads ADD COLUMN IF NOT EXISTS title TEXT DEFAULT ''",
-    );
-    await this.pool.query(
-      "ALTER TABLE broker.workloads ADD COLUMN IF NOT EXISTS description TEXT DEFAULT ''",
-    );
-    await this.pool.query(
-      "ALTER TABLE broker.workloads ADD COLUMN IF NOT EXISTS author TEXT DEFAULT ''",
-    );
+    for (const m of ADDS) await this.pool.query(m);
   }
 
+  // ---------- config ----------
   async getConfig(): Promise<Record<string, unknown> | undefined> {
     const res = await this.pool.query("SELECT value FROM broker.config WHERE key = 'broker'");
     return res.rows[0]?.value as Record<string, unknown> | undefined;
@@ -100,7 +150,36 @@ export class Store {
     );
   }
 
-  async upsertRepoWorkload(w: {
+  // ---------- workloads (abstract) ----------
+  async upsertWorkload(w: {
+    workload_key: string;
+    team: string;
+    use_case: string;
+    title: string;
+    description: string;
+  }): Promise<number> {
+    const res = await this.pool.query(
+      `INSERT INTO broker.workloads (workload_key, team, use_case, title, description, created_utc)
+       VALUES ($1, $2, $3, $4, $5, $6)
+       ON CONFLICT (workload_key) DO UPDATE SET
+         team = EXCLUDED.team, use_case = EXCLUDED.use_case,
+         title = EXCLUDED.title, description = EXCLUDED.description
+       RETURNING id`,
+      [w.workload_key, w.team, w.use_case, w.title, w.description, Date.now() / 1000],
+    );
+    return Number(res.rows[0].id);
+  }
+
+  async workloads(): Promise<Record<string, unknown>[]> {
+    const res = await this.pool.query("SELECT * FROM broker.workloads ORDER BY use_case, title");
+    return res.rows;
+  }
+
+  // ---------- configurations (concrete) ----------
+  async upsertConfiguration(c: {
+    workload_id: number;
+    workload_key: string;
+    experiment_name: string;
     team: string;
     use_case: string;
     name: string;
@@ -114,41 +193,44 @@ export class Store {
     needs_torch: boolean;
   }): Promise<void> {
     await this.pool.query(
-      `INSERT INTO broker.workloads
-         (created_utc, created_by, team, use_case, name, title, description, author, kind,
-          ref, shape, nodes, needs_torch)
-       VALUES ($1, 'repo-sync', $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+      `INSERT INTO broker.configurations
+         (created_utc, created_by, workload_id, workload_key, experiment_name, team, use_case,
+          name, title, description, author, kind, ref, shape, nodes, needs_torch)
+       VALUES ($1, 'repo-sync', $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
        ON CONFLICT (name) DO UPDATE SET
-         team = EXCLUDED.team, use_case = EXCLUDED.use_case, title = EXCLUDED.title,
+         workload_id = EXCLUDED.workload_id, workload_key = EXCLUDED.workload_key,
+         experiment_name = EXCLUDED.experiment_name, team = EXCLUDED.team,
+         use_case = EXCLUDED.use_case, title = EXCLUDED.title,
          description = EXCLUDED.description, author = EXCLUDED.author,
          kind = EXCLUDED.kind, ref = EXCLUDED.ref, shape = EXCLUDED.shape,
          nodes = EXCLUDED.nodes, needs_torch = EXCLUDED.needs_torch`,
-      [Date.now() / 1000, w.team, w.use_case, w.name, w.title ?? "", w.description ?? "",
-       w.author ?? "", w.kind, w.ref, w.shape, w.nodes, w.needs_torch ? 1 : 0],
+      [Date.now() / 1000, c.workload_id, c.workload_key, c.experiment_name, c.team, c.use_case,
+       c.name, c.title ?? "", c.description ?? "", c.author ?? "", c.kind, c.ref, c.shape,
+       c.nodes, c.needs_torch ? 1 : 0],
     );
   }
 
-  async workloads(teams?: string[]): Promise<Record<string, unknown>[]> {
-    if (teams?.length) {
-      const res = await this.pool.query(
-        "SELECT * FROM broker.workloads WHERE team = ANY($1) ORDER BY use_case, name",
-        [teams],
-      );
-      return res.rows;
-    }
-    const res = await this.pool.query("SELECT * FROM broker.workloads ORDER BY use_case, name");
+  async configurations(): Promise<Record<string, unknown>[]> {
+    const res = await this.pool.query(
+      "SELECT * FROM broker.configurations ORDER BY workload_key, name",
+    );
     return res.rows;
   }
 
-  async workload(id: number): Promise<Record<string, unknown> | undefined> {
-    const res = await this.pool.query("SELECT * FROM broker.workloads WHERE id = $1", [id]);
+  async configuration(id: number): Promise<Record<string, unknown> | undefined> {
+    const res = await this.pool.query("SELECT * FROM broker.configurations WHERE id = $1", [id]);
     return res.rows[0];
   }
 
-  async insertRun(workloadId: number, requestedBy: string): Promise<number> {
+  // ---------- runs ----------
+  async insertRun(configurationId: number, requestedBy: string, useCase: string,
+                  options: string[], params: Record<string, string>): Promise<number> {
     const res = await this.pool.query(
-      "INSERT INTO broker.runs (workload_id, requested_by, created_utc) VALUES ($1, $2, $3) RETURNING id",
-      [workloadId, requestedBy, Date.now() / 1000],
+      `INSERT INTO broker.runs (configuration_id, requested_by, use_case, options, params,
+                                created_utc)
+       VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`,
+      [configurationId, requestedBy, useCase, JSON.stringify(options),
+       JSON.stringify(params), Date.now() / 1000],
     );
     return Number(res.rows[0].id);
   }
@@ -164,20 +246,24 @@ export class Store {
 
   async runs(states?: string[]): Promise<RunRow[]> {
     const res = await this.pool.query(
-      `SELECT r.*, w.team, w.use_case, w.name, w.title, w.shape, w.nodes, w.kind, w.ref,
-              w.needs_torch
-       FROM broker.runs r JOIN broker.workloads w ON w.id = r.workload_id ORDER BY r.id`,
+      `SELECT r.*, c.team, c.use_case AS config_use_case, c.name, c.title, c.shape, c.nodes,
+              c.kind, c.ref, c.needs_torch, c.workload_id
+       FROM broker.runs r JOIN broker.configurations c ON c.id = r.configuration_id
+       ORDER BY r.id`,
     );
     const rows: RunRow[] = res.rows.map((row: Record<string, unknown>) => ({
       id: Number(row.id),
-      workload_id: Number(row.workload_id),
+      configuration_id: Number(row.configuration_id),
       requested_by: String(row.requested_by ?? ""),
+      use_case: String(row.use_case ?? "") || String(row.config_use_case ?? ""),
+      options: String(row.options ?? ""),
+      params: String(row.params ?? ""),
       created_utc: Number(row.created_utc),
       state: String(row.state),
       run_id: String(row.run_id ?? ""),
       detail: String(row.detail ?? ""),
       team: String(row.team),
-      use_case: String(row.use_case),
+      config_use_case: String(row.config_use_case ?? ""),
       name: String(row.name),
       title: String(row.title ?? ""),
       shape: String(row.shape),
@@ -185,6 +271,7 @@ export class Store {
       kind: String(row.kind),
       ref: String(row.ref),
       needs_torch: Number(row.needs_torch ?? 0),
+      workload_id: Number(row.workload_id ?? 0),
     }));
     return states ? rows.filter((r) => states.includes(r.state)) : rows;
   }
