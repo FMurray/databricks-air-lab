@@ -46,49 +46,54 @@ export class Broker extends Plugin {
 
   async setup() {
     this.cfg = loadConfig(APP_ROOT);
-    this.store = new Store(APP_ROOT);
-    for (const w of repoWorkloads(REPO_ROOT, this.cfg.catalog_team)) {
-      this.store.upsertRepoWorkload(w);
+    this.store = new Store();
+    await this.store.init();
+    for (const w of repoWorkloads(APP_ROOT, this.cfg.catalog_team)) {
+      await this.store.upsertRepoWorkload(w);
     }
   }
 
   private principal(req: { headers: Record<string, unknown> }): string {
-    const fwd = req.headers["x-forwarded-user"] ?? req.headers["x-forwarded-email"];
+    // Apps sends the numeric user ID in x-forwarded-user; the EMAIL (what team config
+    // uses) rides x-forwarded-email — prefer it. (Receipt: hosted /me showed
+    // 3066118190281634@<workspace-id> before this swap.)
+    const fwd = req.headers["x-forwarded-email"] ?? req.headers["x-forwarded-user"];
     if (typeof fwd === "string" && fwd) return fwd;
     return process.env.DATABRICKS_USER ?? "";
   }
 
-  private inFlight(shape: string, team?: string): number {
-    return this.store
-      .runs(["SUBMITTED", "RUNNING"])
+  private inFlightOf(active: RunRow[], shape: string, team?: string): number {
+    return active
       .filter((r) => r.shape === shape && (!team || r.team === team))
       .reduce((n, r) => n + r.nodes, 0);
   }
 
-  private shareRatio(teamName: string): number {
+  private shareRatioOf(active: RunRow[], teamName: string): number {
     const team = this.cfg.teams.find((t) => t.name === teamName);
     if (!team || team.quota_nodes <= 0) return Number.POSITIVE_INFINITY;
-    const used = this.store
-      .runs(["SUBMITTED", "RUNNING"])
-      .filter((r) => r.team === teamName)
-      .reduce((n, r) => n + r.nodes, 0);
+    const used = active.filter((r) => r.team === teamName).reduce((n, r) => n + r.nodes, 0);
     return used / team.quota_nodes;
   }
 
   private async tick(): Promise<string[]> {
     const events: string[] = [];
-    for (const r of this.store.runs(["SUBMITTED", "RUNNING"])) {
+    for (const r of await this.store.runs(["SUBMITTED", "RUNNING"])) {
       events.push(...(await this.syncRun(r)));
     }
-    const queued = this.store
-      .runs(["QUEUED"])
-      .sort((a, b) => this.shareRatio(a.team) - this.shareRatio(b.team) || a.id - b.id);
+    const active = await this.store.runs(["SUBMITTED", "RUNNING"]);
+    const queued = (await this.store.runs(["QUEUED"])).sort(
+      (a, b) =>
+        this.shareRatioOf(active, a.team) - this.shareRatioOf(active, b.team) || a.id - b.id,
+    );
     for (const r of queued) {
       const team = this.cfg.teams.find((t) => t.name === r.team);
-      const teamRoom = team ? team.quota_nodes - this.inFlight(r.shape, r.team) : 0;
-      const cap = shapeCapacity(this.cfg, r.shape, this.inFlight(r.shape));
+      const teamRoom = team
+        ? team.quota_nodes - this.inFlightOf(active, r.shape, r.team)
+        : 0;
+      const cap = shapeCapacity(this.cfg, r.shape, this.inFlightOf(active, r.shape));
       if (cap.admittable >= r.nodes && teamRoom >= r.nodes) {
         events.push(await this.submitRun(r));
+        active.push(r); // count it against capacity for the rest of this pass
       }
     }
     return events;
@@ -96,7 +101,7 @@ export class Broker extends Plugin {
 
   private async submitRun(r: RunRow): Promise<string> {
     if (r.kind !== "air_yaml") {
-      this.store.updateRun(r.id, {
+      await this.store.updateRun(r.id, {
         state: "FAILED",
         detail: `unsupported kind ${r.kind}`,
         finished_utc: Date.now() / 1000,
@@ -113,21 +118,21 @@ export class Broker extends Plugin {
       const text = (stdout + stderr).replace(/\x1b\[[0-9;]*m/g, "");
       const m = text.match(/Job Run ID:\s*(\d+)/);
       if (m) {
-        this.store.updateRun(r.id, {
+        await this.store.updateRun(r.id, {
           state: "SUBMITTED",
           run_id: m[1],
           submitted_utc: Date.now() / 1000,
         });
         return `run ${r.id} (${r.name}): submitted as ${m[1]}`;
       }
-      this.store.updateRun(r.id, {
+      await this.store.updateRun(r.id, {
         state: "FAILED",
         detail: text.slice(-400),
         finished_utc: Date.now() / 1000,
       });
       return `run ${r.id}: air run gave no Job Run ID`;
     } catch (e) {
-      this.store.updateRun(r.id, {
+      await this.store.updateRun(r.id, {
         state: "FAILED",
         detail: String(e).slice(0, 400),
         finished_utc: Date.now() / 1000,
@@ -199,14 +204,14 @@ export class Broker extends Plugin {
             error?: string;
           };
           if (parsed.air_run_id) {
-            this.store.updateRun(r.id, {
+            await this.store.updateRun(r.id, {
               state: "SUBMITTED",
               run_id: parsed.air_run_id,
               submitted_utc: Date.now() / 1000,
             });
             return `run ${r.id} (${r.name}): submitted as ${parsed.air_run_id} (via notebook hop)`;
           }
-          this.store.updateRun(r.id, {
+          await this.store.updateRun(r.id, {
             state: "FAILED",
             detail: (parsed.error ?? "dispatch hop gave no run id").slice(0, 400),
             finished_utc: Date.now() / 1000,
@@ -214,14 +219,14 @@ export class Broker extends Plugin {
           return `run ${r.id}: dispatch hop failed`;
         }
       }
-      this.store.updateRun(r.id, {
+      await this.store.updateRun(r.id, {
         state: "FAILED",
         detail: "dispatch hop did not finish in 10 min",
         finished_utc: Date.now() / 1000,
       });
       return `run ${r.id}: dispatch hop timeout`;
     } catch (e) {
-      this.store.updateRun(r.id, {
+      await this.store.updateRun(r.id, {
         state: "FAILED",
         detail: String(e).slice(0, 400),
         finished_utc: Date.now() / 1000,
@@ -244,13 +249,13 @@ export class Broker extends Plugin {
       const life = run.state.life_cycle_state;
       const result = run.state.result_state ?? "";
       if (life === "RUNNING" && r.state !== "RUNNING") {
-        this.store.updateRun(r.id, { state: "RUNNING" });
+        await this.store.updateRun(r.id, { state: "RUNNING" });
         return [`run ${r.id}: running`];
       }
       if (["TERMINATED", "INTERNAL_ERROR", "SKIPPED"].includes(life)) {
         const final =
           result === "SUCCESS" ? "SUCCESS" : result === "CANCELED" ? "CANCELED" : "FAILED";
-        this.store.updateRun(r.id, {
+        await this.store.updateRun(r.id, {
           state: final,
           detail: (run.state.state_message ?? "").slice(0, 400),
           finished_utc: Date.now() / 1000,
@@ -286,7 +291,7 @@ export class Broker extends Plugin {
       method: "get",
       path: "/workloads",
       handler: async (_req, res) => {
-        res.json(this.store.workloads());
+        res.json(await this.store.workloads());
       },
     });
 
@@ -296,8 +301,11 @@ export class Broker extends Plugin {
       path: "/capacity",
       handler: async (_req, res) => {
         const shapes = new Set([this.cfg.reservation.accelerator_type, "GPU_1xA10", "GPU_1xH100"]);
+        const active = await this.store.runs(["SUBMITTED", "RUNNING"]);
         res.json(
-          [...shapes].sort().map((s) => shapeCapacity(this.cfg, s, this.inFlight(s))),
+          [...shapes]
+            .sort()
+            .map((s) => shapeCapacity(this.cfg, s, this.inFlightOf(active, s))),
         );
       },
     });
@@ -308,7 +316,7 @@ export class Broker extends Plugin {
       path: "/runs",
       handler: async (_req, res) => {
         const events = await this.tick();
-        res.json({ runs: this.store.runs(), events });
+        res.json({ runs: await this.store.runs(), events });
       },
     });
 
@@ -324,7 +332,7 @@ export class Broker extends Plugin {
           return;
         }
         const workloadId = Number((req.body as { workloadId?: number })?.workloadId);
-        const w = this.store.workload(workloadId);
+        const w = await this.store.workload(workloadId);
         if (!w) {
           res.status(404).json({ error: `workload ${workloadId} not found` });
           return;
@@ -333,7 +341,7 @@ export class Broker extends Plugin {
           res.status(403).json({ error: `not a member of team ${w.team}` });
           return;
         }
-        const runId = this.store.insertRun(workloadId, principal);
+        const runId = await this.store.insertRun(workloadId, principal);
         const events = await this.tick();
         res.json({ id: runId, events });
       },
