@@ -16,7 +16,6 @@
 import { execFile } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 import {
   Plugin,
@@ -27,6 +26,7 @@ import {
 } from "@databricks/appkit";
 import manifest from "./manifest.json";
 import {
+  findAppRoot,
   loadConfig,
   repoWorkloads,
   shapeCapacity,
@@ -36,7 +36,7 @@ import {
 import { Store, type RunRow } from "./store";
 
 const execFileP = promisify(execFile);
-const APP_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
+const APP_ROOT = findAppRoot(import.meta.url);
 const REPO_ROOT = path.resolve(APP_ROOT, "..", "..");
 
 export class Broker extends Plugin {

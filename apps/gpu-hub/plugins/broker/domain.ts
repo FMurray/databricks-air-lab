@@ -32,6 +32,22 @@ export interface BrokerConfig {
 
 const CONFIG_CANDIDATES = ["config/broker.json", "config/broker.example.json"];
 
+/** App root that works in both layouts: tsx-from-source (module lives under plugins/)
+ *  and compiled dist (module lives under dist/plugins/) — anchor on cwd, then walk up
+ *  from the module until a config/ dir appears. */
+export function findAppRoot(moduleUrl: string): string {
+  const candidates = [process.cwd()];
+  let d = path.dirname(new URL(moduleUrl).pathname);
+  for (let i = 0; i < 5; i++) {
+    candidates.push(d);
+    d = path.dirname(d);
+  }
+  for (const c of candidates) {
+    if (CONFIG_CANDIDATES.some((rel) => fs.existsSync(path.join(c, rel)))) return c;
+  }
+  return process.cwd();
+}
+
 export function loadConfig(appRoot: string): BrokerConfig {
   for (const rel of CONFIG_CANDIDATES) {
     const p = path.join(appRoot, rel);
@@ -100,10 +116,10 @@ export interface CatalogWorkload {
 
 
 
-export function repoWorkloads(_repoRoot: string, team: string): CatalogWorkload[] {
+export function repoWorkloads(appRoot: string, team: string): CatalogWorkload[] {
   // The catalog is generated at build time from the repo's workloads/ directory
   // (scripts/gen_catalog.py) — no YAML parsing at runtime, no repo checkout needed hosted.
-  const p = path.resolve(path.dirname(new URL(import.meta.url).pathname), "catalog.json");
+  const p = path.join(appRoot, "plugins", "broker", "catalog.json");
   if (!fs.existsSync(p)) return [];
   const raw = JSON.parse(fs.readFileSync(p, "utf8")) as CatalogWorkload[];
   return raw.map((w) => ({ ...w, team }));
