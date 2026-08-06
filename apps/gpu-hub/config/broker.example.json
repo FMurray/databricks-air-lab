@@ -1,0 +1,26 @@
+{
+ "reservation": {
+  "total_nodes": 20,
+  "gpus_per_node": 8,
+  "accelerator_type": "GPU_8xH100",
+  "region": "us-east-1"
+ },
+ "platform_quotas": {
+  "GPU_8xH100": 4
+ },
+ "catalog_team": "field-eng-uat",
+ "teams": [
+  {
+   "name": "team-a",
+   "quota_nodes": 4,
+   "members": [
+    "someone@example.com"
+   ],
+   "use_cases": [
+    {
+     "name": "use-case-1"
+    }
+   ]
+  }
+ ]
+}

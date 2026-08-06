@@ -13,3 +13,4 @@ playwright-report/
 shared/appkit-types/serving.d.ts
 config/broker.yaml
 broker.db
+config/broker.json

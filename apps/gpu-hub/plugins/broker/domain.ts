@@ -6,7 +6,7 @@
  */
 import fs from "node:fs";
 import path from "node:path";
-import * as yaml from "js-yaml";
+
 
 export interface UseCase {
   name: string;
@@ -30,18 +30,21 @@ export interface BrokerConfig {
   teams: Team[];
 }
 
-const CONFIG_CANDIDATES = ["config/broker.yaml", "config/broker.example.yaml"];
+const CONFIG_CANDIDATES = ["config/broker.json", "config/broker.example.json"];
 
 export function loadConfig(appRoot: string): BrokerConfig {
   for (const rel of CONFIG_CANDIDATES) {
     const p = path.join(appRoot, rel);
     if (fs.existsSync(p)) {
-      const raw = yaml.load(fs.readFileSync(p, "utf8")) as Record<string, unknown>;
-      const teams = ((raw.teams as Record<string, unknown>[]) ?? []).map((t) => ({
-        use_cases: [],
-        members: [],
-        ...(t as object),
-      })) as unknown as Team[];
+      const raw = JSON.parse(fs.readFileSync(p, "utf8")) as Record<string, unknown>;
+      const teams: Team[] = ((raw.teams as Record<string, unknown>[]) ?? []).map((t) => ({
+        name: String(t.name ?? ""),
+        quota_nodes: Number(t.quota_nodes ?? 0),
+        members: (t.members as string[]) ?? [],
+        use_cases: ((t.use_cases as (UseCase | string)[]) ?? []).map((u) =>
+          typeof u === "string" ? { name: u } : u,
+        ),
+      }));
       return {
         reservation: raw.reservation as BrokerConfig["reservation"],
         platform_quotas: (raw.platform_quotas as Record<string, number>) ?? {},
@@ -50,7 +53,7 @@ export function loadConfig(appRoot: string): BrokerConfig {
       };
     }
   }
-  throw new Error("no broker config found (config/broker.yaml)");
+  throw new Error("no broker config found (config/broker.json)");
 }
 
 export function teamsOf(cfg: BrokerConfig, principal: string | undefined): Team[] {
@@ -95,74 +98,13 @@ export interface CatalogWorkload {
   needs_torch: boolean;
 }
 
-const FAMILY_USE_CASE: Record<string, string> = {
-  "node-acceptance": "node-acceptance",
-  probes: "env-diagnostics",
-  "scheduling-isolation": "scheduling-isolation",
-  "vendored-wheels": "dependencies",
-  "env-flexibility": "dependencies",
-  "docker-otel-zerobus": "telemetry",
-  "foundation-models": "foundation-models",
-  tabicl: "classic-ml",
-  xgboost: "classic-ml",
-  "multi-language": "multi-language",
-  multinode: "node-acceptance",
-  "rdma-stress": "node-acceptance",
-};
 
-function useCaseFor(stem: string, raw: Record<string, unknown>): string {
-  const snap =
-    ((raw.code_source as Record<string, unknown>)?.snapshot as Record<string, unknown>) ?? {};
-  const hints = [stem, ...((snap.include_paths as string[]) ?? [])];
-  for (const hint of hints) {
-    for (const [key, uc] of Object.entries(FAMILY_USE_CASE)) {
-      if (String(hint).includes(key)) return uc;
-    }
-  }
-  return "env-diagnostics";
-}
 
-export function repoWorkloads(repoRoot: string, team: string): CatalogWorkload[] {
-  const dir = path.join(repoRoot, "workloads");
-  if (!fs.existsSync(dir)) return [];
-  const files = new Map<string, string>();
-  const walk = (d: string) => {
-    for (const entry of fs.readdirSync(d, { withFileTypes: true })) {
-      const p = path.join(d, entry.name);
-      if (entry.isDirectory()) walk(p);
-      else if (entry.name.endsWith(".yaml")) {
-        const stem = entry.name.replace(".example.yaml", "").replace(".yaml", "");
-        const key = path.relative(dir, path.join(d, stem));
-        const existing = files.get(key);
-        if (!existing || existing.includes(".example")) files.set(key, p);
-      }
-    }
-  };
-  walk(dir);
-  const out: CatalogWorkload[] = [];
-  for (const [key, p] of [...files.entries()].sort()) {
-    let raw: Record<string, unknown>;
-    try {
-      raw = yaml.load(fs.readFileSync(p, "utf8")) as Record<string, unknown>;
-    } catch {
-      continue;
-    }
-    if (!raw || typeof raw !== "object" || !("command" in raw)) continue;
-    const comp = (raw.compute as Record<string, unknown>) ?? {};
-    const shape = String(comp.accelerator_type ?? "GPU_1xA10");
-    const accels = Number(comp.num_accelerators ?? 1);
-    const perNode = shape.includes("8x") ? 8 : 1;
-    const cmd = String(raw.command ?? "");
-    out.push({
-      name: key,
-      kind: "air_yaml",
-      ref: path.relative(repoRoot, p),
-      team,
-      use_case: useCaseFor(key, raw),
-      shape,
-      nodes: Math.max(1, Math.floor(accels / perNode)),
-      needs_torch: cmd.includes("torch"),
-    });
-  }
-  return out;
+export function repoWorkloads(_repoRoot: string, team: string): CatalogWorkload[] {
+  // The catalog is generated at build time from the repo's workloads/ directory
+  // (scripts/gen_catalog.py) — no YAML parsing at runtime, no repo checkout needed hosted.
+  const p = path.resolve(path.dirname(new URL(import.meta.url).pathname), "catalog.json");
+  if (!fs.existsSync(p)) return [];
+  const raw = JSON.parse(fs.readFileSync(p, "utf8")) as CatalogWorkload[];
+  return raw.map((w) => ({ ...w, team }));
 }

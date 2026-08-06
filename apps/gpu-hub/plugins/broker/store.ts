@@ -4,8 +4,8 @@
  * NB for hosted deploys: the Apps filesystem is ephemeral — swap for Lakebase before
  * anything durable matters. The interface is intentionally small.
  */
-import Database from "better-sqlite3";
 import path from "node:path";
+import { DatabaseSync } from "node:sqlite";
 
 export interface RunRow {
   id: number;
@@ -54,10 +54,10 @@ CREATE TABLE IF NOT EXISTS runs (
 `;
 
 export class Store {
-  db: Database.Database;
+  db: DatabaseSync;
 
   constructor(appRoot: string) {
-    this.db = new Database(path.join(appRoot, "broker.db"));
+    this.db = new DatabaseSync(path.join(appRoot, "broker.db"));
     this.db.exec(SCHEMA);
   }
 
@@ -117,7 +117,7 @@ export class Store {
     );
   }
 
-  updateRun(id: number, fields: Record<string, unknown>) {
+  updateRun(id: number, fields: Record<string, string | number | null>) {
     const keys = Object.keys(fields);
     this.db
       .prepare(`UPDATE runs SET ${keys.map((k) => `${k}=?`).join(",")} WHERE id=?`)
@@ -125,12 +125,29 @@ export class Store {
   }
 
   runs(states?: string[]): RunRow[] {
-    const rows = this.db
+    const raw = this.db
       .prepare(
         `SELECT r.*, w.team, w.use_case, w.name, w.shape, w.nodes, w.kind, w.ref, w.needs_torch
          FROM runs r JOIN workloads w ON w.id = r.workload_id ORDER BY r.id`,
       )
-      .all() as RunRow[];
+      .all();
+    const rows: RunRow[] = raw.map((row) => ({
+      id: Number(row.id),
+      workload_id: Number(row.workload_id),
+      requested_by: String(row.requested_by ?? ""),
+      created_utc: Number(row.created_utc),
+      state: String(row.state),
+      run_id: String(row.run_id ?? ""),
+      detail: String(row.detail ?? ""),
+      team: String(row.team),
+      use_case: String(row.use_case),
+      name: String(row.name),
+      shape: String(row.shape),
+      nodes: Number(row.nodes),
+      kind: String(row.kind),
+      ref: String(row.ref),
+      needs_torch: Number(row.needs_torch ?? 0),
+    }));
     return states ? rows.filter((r) => states.includes(r.state)) : rows;
   }
 }
