@@ -668,3 +668,46 @@ tabicl-pol (e2). Both MLflow-logger paths (protocol logger + wandb shim) are now
 end-to-end on AIR; upstream-PR candidate: MLflowLogger + `--logger mlflow` flag (the finetune
 Protocol refactor signals maintainer openness), bundled with the two upstream bugs found here
 (wand_id.txt-before-mkdir; DDP skip-on-OOM).
+
+### Pack-runner PoL — pre-registered (2026-08-06, before submit)
+
+Question (sizing conversation): can one reserved 8xH100 node act as "8+ A10s" for batches
+of small A10-shaped tasks (the CTAB oneshot-fine-tune profile, ~4GB GPU peak measured)?
+Files: `tabicl/pack_runner.py` + `workloads/tabicl-pack.example.yaml` (GPU_8xH100, e2,
+rounds=3 → 24 real tasks + 1 injected-bad, epochs=10 to match the measured A10 baseline).
+Local stub pre-flight PASS (4 workers, claiming/isolation/sentinel): `PACK_RUNNER_OK
+workers=4 distinct_gpus=4 tasks_ok=8/8 injected_failures_isolated=1`.
+
+**Success = sentinel `PACK_RUNNER_OK` printed, which requires ALL of:**
+- all 8 workers exit 0 on 8 DISTINCT `CUDA_VISIBLE_DEVICES` (one per GPU);
+- 24/24 real tasks complete; the injected bogus-OpenML-id task is RECORDED as a task error
+  (isolation) — not a worker/batch crash;
+- solo-reference phase completes (same-node single-task wall for the slowdown denominator).
+
+**Headline numbers to read out (hypotheses):** packed/solo median slowdown < 1.3x (192
+vCPUs, prior expectation: little contention for GPU-bound fine-tunes); tasks/hour/node vs
+the A10 sequential anchor (94s/task ⇒ ~38 tasks/hr; if slowdown holds, node ≈ 8× solo
+rate ⇒ "one reserved node ≈ N A10s" with N measured, not asserted). MLflow ambient run
+carries per-task walls/GPU peaks + pack_results.jsonl artifact; AIR system metrics should
+show all 8 GPUs active during the pack phase (corroboration).
+**Fail modes that are still results:** slowdown ≫ 1.3x (shared host bottleneck — measure,
+don't guess which); HF/OpenML cache races under 8-way concurrency (would show as spurious
+task errors ≠ the injected one).
+
+**PACK-RUNNER RESULT — ✅ PASS (run 797789043315676 / mlflow 291a190590dd41b1b933571542f3862d, 8×H100, e2, 2026-08-06):**
+
+| claim | evidence |
+|---|---|
+| 8-way single-GPU packing works on one AIR 8xH100 job | sentinel `PACK_RUNNER_OK workers=8 distinct_gpus=8 tasks_ok=24/24 injected_failures_isolated=1`; 24 tasks / 135s wall |
+| per-task isolation holds | injected bogus-OpenML task recorded as `OpenMLError` row; all 24 real tasks completed |
+| no meaningful packing contention | same-dataset packed walls: bank-marketing min/med/max 44.9/49.7/60.4s vs cold solo 58.7s (max packed = 1.03× cold solo; solo includes one-time HF download — cold, labeled) |
+| node ≈ **15 A10s** on the CTAB oneshot profile | warm-vs-warm bank-marketing: packed med 49.7s vs measured A10 94s → 1.9×/GPU × 8 GPUs (derived from measured walls); mixed-workload throughput 638 tasks/hr/node (measured) |
+| headroom for >1 task/GPU | peak task GPU mem 16.4 GB of 80 (measured) → co-location viable, untested (`--per-gpu` follow-up) |
+
+Caveats, labeled: effective parallelism this run 6.5× (887 task-s/135.5s wall — tail effect
+on a 3-round queue; approaches 8 with longer queues, inferred). Pre-registered
+`packed_over_solo=0.61x` is confounded (mixed-dataset median vs largest-dataset cold solo)
+— use the like-for-like rows above, not that headline metric. AIR gpu-util gauges read 0
+throughout (known sampled-gauge trap on short jobs); parallelism evidence is the
+distinct-CVD assertion + task-seconds/wall arithmetic, not the gauge.
+Archived → local run fa3bbdd8bb9c49539152825935a1fa4b (pack_results.jsonl attached).

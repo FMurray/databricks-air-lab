@@ -1,0 +1,25 @@
+{"task_id": 0, "data_id": 1461, "gpu": 0, "cvd": "0", "wall_s": 59.395031029000165, "auc": 0.9422239004371381, "gpu_peak_gb": 16.42471936, "status": "ok"}
+{"task_id": 14, "data_id": 1220, "gpu": 0, "cvd": "0", "wall_s": 36.023547544000394, "auc": 0.690104546393846, "gpu_peak_gb": 12.909697536, "status": "ok"}
+{"task_id": 23, "data_id": 1590, "gpu": 0, "cvd": "0", "wall_s": 38.9880002609998, "auc": 0.9259359474718019, "gpu_peak_gb": 15.420599296, "status": "ok"}
+{"task_id": 1, "data_id": 40701, "gpu": 1, "cvd": "1", "wall_s": 31.03821735800011, "auc": 0.9297798033339113, "gpu_peak_gb": 6.664643584, "status": "ok"}
+{"task_id": 10, "data_id": 1461, "gpu": 1, "cvd": "1", "wall_s": 49.70915923699977, "auc": 0.9430526637255818, "gpu_peak_gb": 16.423791616, "status": "ok"}
+{"task_id": 21, "data_id": 40701, "gpu": 1, "cvd": "1", "wall_s": 21.429683934000423, "auc": 0.9307540518002955, "gpu_peak_gb": 6.658085888, "status": "ok"}
+{"task_id": 2, "data_id": 31, "gpu": 2, "cvd": "2", "wall_s": 26.624726154999735, "auc": 0.8344047619047619, "gpu_peak_gb": 1.824905216, "status": "ok"}
+{"task_id": 8, "data_id": 1590, "gpu": 2, "cvd": "2", "wall_s": 42.48475946000053, "auc": 0.9295540069293329, "gpu_peak_gb": 15.415542272, "status": "ok"}
+{"task_id": 19, "data_id": 1220, "gpu": 2, "cvd": "2", "wall_s": 32.105053351000606, "auc": 0.6909545575312674, "gpu_peak_gb": 12.908137472, "status": "ok"}
+{"task_id": 3, "data_id": 1590, "gpu": 3, "cvd": "3", "wall_s": 59.80458341400026, "auc": 0.9276311555906585, "gpu_peak_gb": 15.421908992, "status": "ok"}
+{"task_id": 15, "data_id": 1461, "gpu": 3, "cvd": "3", "wall_s": 49.30258017699998, "auc": 0.9430727273372923, "gpu_peak_gb": 16.424763392, "status": "ok"}
+{"task_id": 7, "data_id": 31, "gpu": 4, "cvd": "4", "wall_s": 31.224524469000244, "auc": 0.8347619047619048, "gpu_peak_gb": 1.824905216, "status": "ok"}
+{"task_id": 11, "data_id": 40701, "gpu": 4, "cvd": "4", "wall_s": 20.60395787300058, "auc": 0.9295156003599766, "gpu_peak_gb": 6.659535872, "status": "ok"}
+{"task_id": 13, "data_id": 1590, "gpu": 4, "cvd": "4", "wall_s": 47.28306711000005, "auc": 0.9283810831534923, "gpu_peak_gb": 15.41981184, "status": "ok"}
+{"task_id": 24, "data_id": 999999999, "gpu": 4, "cvd": "4", "status": "error", "error": "OpenMLError: Dataset with data_id 999999999 not found."}
+{"task_id": 6, "data_id": 40701, "gpu": 5, "cvd": "5", "wall_s": 30.59515365399966, "auc": 0.9298623667632658, "gpu_peak_gb": 6.664643584, "status": "ok"}
+{"task_id": 9, "data_id": 1220, "gpu": 5, "cvd": "5", "wall_s": 34.59294218600007, "auc": 0.6910598374741581, "gpu_peak_gb": 12.911358976, "status": "ok"}
+{"task_id": 17, "data_id": 31, "gpu": 5, "cvd": "5", "wall_s": 19.51910584699999, "auc": 0.8345238095238097, "gpu_peak_gb": 1.821120512, "status": "ok"}
+{"task_id": 22, "data_id": 31, "gpu": 5, "cvd": "5", "wall_s": 18.82810400299968, "auc": 0.8345238095238097, "gpu_peak_gb": 1.821120512, "status": "ok"}
+{"task_id": 4, "data_id": 1220, "gpu": 6, "cvd": "6", "wall_s": 45.25789587700001, "auc": 0.6909228002250745, "gpu_peak_gb": 12.909697536, "status": "ok"}
+{"task_id": 12, "data_id": 31, "gpu": 6, "cvd": "6", "wall_s": 20.060186560000147, "auc": 0.8346428571428574, "gpu_peak_gb": 1.822480384, "status": "ok"}
+{"task_id": 18, "data_id": 1590, "gpu": 6, "cvd": "6", "wall_s": 46.233617941000375, "auc": 0.92846157848672, "gpu_peak_gb": 15.423223808, "status": "ok"}
+{"task_id": 5, "data_id": 1461, "gpu": 7, "cvd": "7", "wall_s": 60.363192531000095, "auc": 0.9428820934336948, "gpu_peak_gb": 16.42471936, "status": "ok"}
+{"task_id": 16, "data_id": 40701, "gpu": 7, "cvd": "7", "wall_s": 20.263828982000632, "auc": 0.9297839315053791, "gpu_peak_gb": 6.664643584, "status": "ok"}
+{"task_id": 20, "data_id": 1461, "gpu": 7, "cvd": "7", "wall_s": 44.88130022899986, "auc": 0.9429316310236704, "gpu_peak_gb": 16.423791616, "status": "ok"}

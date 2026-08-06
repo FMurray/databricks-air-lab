@@ -1,0 +1,28 @@
+# Pack-runner PoL — can one reserved 8xH100 node act as "8+ A10s" for small fine-tunes?
+# Phases: prefetch (egress out of timings) -> solo reference on GPU 0 -> 8-way pack with
+# one injected-bad task (isolation proof). Sentinel: PACK_RUNNER_OK (assertion-gated).
+# Comparison anchors: solo-on-same-node wall (this run) + A10 bank-marketing fine-tune
+# 94s @ epochs=10 (run 728393411258922, e2, 2026-08-05).
+experiment_name: air-lab-tabicl-pack
+
+environment:
+  version: "5"   # v4 job-plane egress broken on hardened ws — see docs/06
+  dependencies:
+    - "tabicl[finetune]"
+
+compute:
+  num_accelerators: 8   # counts GPUs, not nodes — schema rejects 1 for GPU_8xH100
+  accelerator_type: GPU_8xH100
+
+code_source:
+  type: snapshot
+  snapshot:
+    root_path: ..    # relative to THIS YAML's directory, not CWD (verified 2026-07-17)
+    include_paths:
+      - experiments/foundation-models/tabicl/
+
+command: HF_HOME=/tmp/hf python $CODE_SOURCE_PATH/experiments/foundation-models/tabicl/pack_runner.py --rounds 3 --epochs 10
+
+max_retries: 0
+timeout_minutes: 60
+mlflow_run_name: tabicl-pack-runner
