@@ -11,7 +11,8 @@
   "shape": "GPU_1xA10",
   "nodes": 1,
   "needs_torch": 0,
-  "source": "repo"
+  "source": "repo",
+  "workload_key": "djl-train"
  },
  {
   "name": "docker-otel-zerobus",
@@ -25,7 +26,8 @@
   "shape": "GPU_1xA10",
   "nodes": 1,
   "needs_torch": 0,
-  "source": "repo"
+  "source": "repo",
+  "workload_key": "docker-otel-zerobus"
  },
  {
   "name": "docker-otel-zerobus-fevm",
@@ -39,7 +41,8 @@
   "shape": "GPU_1xA10",
   "nodes": 1,
   "needs_torch": 0,
-  "source": "repo"
+  "source": "repo",
+  "workload_key": "docker-otel-zerobus"
  },
  {
   "name": "docker-otel-zerobus-mkazia",
@@ -53,7 +56,8 @@
   "shape": "GPU_1xA10",
   "nodes": 1,
   "needs_torch": 0,
-  "source": "repo"
+  "source": "repo",
+  "workload_key": "docker-otel-zerobus"
  },
  {
   "name": "exec-probe",
@@ -67,7 +71,8 @@
   "shape": "GPU_1xA10",
   "nodes": 1,
   "needs_torch": 0,
-  "source": "repo"
+  "source": "repo",
+  "workload_key": "exec-probe"
  },
  {
   "name": "fsdp-multinode",
@@ -81,7 +86,8 @@
   "shape": "GPU_8xH100",
   "nodes": 2,
   "needs_torch": 1,
-  "source": "repo"
+  "source": "repo",
+  "workload_key": "fsdp-multinode"
  },
  {
   "name": "gpu-burn",
@@ -95,7 +101,8 @@
   "shape": "GPU_1xA10",
   "nodes": 1,
   "needs_torch": 0,
-  "source": "repo"
+  "source": "repo",
+  "workload_key": "gpu-burn"
  },
  {
   "name": "java-docker",
@@ -109,7 +116,8 @@
   "shape": "GPU_1xA10",
   "nodes": 1,
   "needs_torch": 0,
-  "source": "repo"
+  "source": "repo",
+  "workload_key": "java-docker"
  },
  {
   "name": "lora-finetune",
@@ -123,7 +131,8 @@
   "shape": "GPU_1xA10",
   "nodes": 1,
   "needs_torch": 0,
-  "source": "repo"
+  "source": "repo",
+  "workload_key": "lora-finetune"
  },
  {
   "name": "multinode-correctness",
@@ -137,7 +146,8 @@
   "shape": "GPU_8xH100",
   "nodes": 2,
   "needs_torch": 1,
-  "source": "repo"
+  "source": "repo",
+  "workload_key": "multinode-correctness"
  },
  {
   "name": "multinode-probe",
@@ -151,7 +161,8 @@
   "shape": "GPU_8xH100",
   "nodes": 2,
   "needs_torch": 0,
-  "source": "repo"
+  "source": "repo",
+  "workload_key": "multinode-probe"
  },
  {
   "name": "nccl-allreduce",
@@ -165,7 +176,8 @@
   "shape": "GPU_8xH100",
   "nodes": 1,
   "needs_torch": 1,
-  "source": "repo"
+  "source": "repo",
+  "workload_key": "nccl-allreduce"
  },
  {
   "name": "nccl-allreduce-v5",
@@ -179,7 +191,8 @@
   "shape": "GPU_1xA10",
   "nodes": 2,
   "needs_torch": 0,
-  "source": "repo"
+  "source": "repo",
+  "workload_key": "nccl-allreduce"
  },
  {
   "name": "placement-probe",
@@ -193,7 +206,8 @@
   "shape": "GPU_1xA10",
   "nodes": 1,
   "needs_torch": 0,
-  "source": "repo"
+  "source": "repo",
+  "workload_key": "placement-probe"
  },
  {
   "name": "rdma-m1-soak",
@@ -207,7 +221,8 @@
   "shape": "GPU_8xH100",
   "nodes": 2,
   "needs_torch": 0,
-  "source": "repo"
+  "source": "repo",
+  "workload_key": "rdma-m1-soak"
  },
  {
   "name": "rdma-m2a-fabric-only",
@@ -221,7 +236,8 @@
   "shape": "GPU_8xH100",
   "nodes": 4,
   "needs_torch": 0,
-  "source": "repo"
+  "source": "repo",
+  "workload_key": "rdma-m2a-fabric-only"
  },
  {
   "name": "rdma-m2b-p2p-ring",
@@ -235,7 +251,8 @@
   "shape": "GPU_8xH100",
   "nodes": 4,
   "needs_torch": 0,
-  "source": "repo"
+  "source": "repo",
+  "workload_key": "rdma-m2b-p2p-ring"
  },
  {
   "name": "rdma-m4-nccl-tests",
@@ -249,7 +266,8 @@
   "shape": "GPU_8xH100",
   "nodes": 1,
   "needs_torch": 0,
-  "source": "repo"
+  "source": "repo",
+  "workload_key": "rdma-m4-nccl-tests"
  },
  {
   "name": "rdma-m5-parambench",
@@ -263,7 +281,8 @@
   "shape": "GPU_1xA10",
   "nodes": 1,
   "needs_torch": 0,
-  "source": "repo"
+  "source": "repo",
+  "workload_key": "rdma-m5-parambench"
  },
  {
   "name": "tabicl-bench",
@@ -277,7 +296,8 @@
   "shape": "GPU_1xA10",
   "nodes": 1,
   "needs_torch": 0,
-  "source": "repo"
+  "source": "repo",
+  "workload_key": "tabicl-bench"
  },
  {
   "name": "tabicl-continue",
@@ -291,7 +311,8 @@
   "shape": "GPU_1xH100",
   "nodes": 1,
   "needs_torch": 0,
-  "source": "repo"
+  "source": "repo",
+  "workload_key": "tabicl-continue"
  },
  {
   "name": "tabicl-finetune",
@@ -305,7 +326,8 @@
   "shape": "GPU_1xA10",
   "nodes": 1,
   "needs_torch": 0,
-  "source": "repo"
+  "source": "repo",
+  "workload_key": "tabicl-finetune"
  },
  {
   "name": "tabicl-memprobe",
@@ -319,7 +341,23 @@
   "shape": "GPU_1xH100",
   "nodes": 1,
   "needs_torch": 0,
-  "source": "repo"
+  "source": "repo",
+  "workload_key": "tabicl-memprobe"
+ },
+ {
+  "name": "tabicl-pack",
+  "title": "Pack-runner PoL \u2014 can one reserved 8xH100 node act as \"8+ A10s\" for small fine-tunes? Phases: prefetch (egress out of ti",
+  "description": "Pack-runner PoL \u2014 can one reserved 8xH100 node act as \"8+ A10s\" for small fine-tunes? Phases: prefetch (egress out of timings) -> solo reference on GPU 0 -> 8-way pack with one injected-bad task (isolation proof). Sentinel: PACK_RUNNER_OK (assertion-gated). Comparison anchors: solo-on-same-node wall (this run) + A10 bank-marketing fine-tune 94s @ epochs=10 (run 728393411258922, e2, 2026-08-05).",
+  "author": "forrest.murray@databricks.com",
+  "kind": "air_yaml",
+  "ref": "workloads/tabicl-pack.yaml",
+  "team": "field-eng-uat",
+  "use_case": "classic-ml",
+  "shape": "GPU_8xH100",
+  "nodes": 1,
+  "needs_torch": 0,
+  "source": "repo",
+  "workload_key": "tabicl-pack"
  },
  {
   "name": "tabicl-pol",
@@ -333,7 +371,8 @@
   "shape": "GPU_1xH100",
   "nodes": 1,
   "needs_torch": 0,
-  "source": "repo"
+  "source": "repo",
+  "workload_key": "tabicl-pol"
  },
  {
   "name": "tabicl-regression",
@@ -347,7 +386,8 @@
   "shape": "GPU_1xA10",
   "nodes": 1,
   "needs_torch": 0,
-  "source": "repo"
+  "source": "repo",
+  "workload_key": "tabicl-regression"
  },
  {
   "name": "tabicl-timeseries",
@@ -361,7 +401,8 @@
   "shape": "GPU_1xA10",
   "nodes": 1,
   "needs_torch": 0,
-  "source": "repo"
+  "source": "repo",
+  "workload_key": "tabicl-timeseries"
  },
  {
   "name": "tabicl-ts-treatment",
@@ -375,7 +416,8 @@
   "shape": "GPU_1xH100",
   "nodes": 1,
   "needs_torch": 0,
-  "source": "repo"
+  "source": "repo",
+  "workload_key": "tabicl-ts-treatment"
  },
  {
   "name": "vendored-wheels-snapshot",
@@ -389,7 +431,8 @@
   "shape": "GPU_1xA10",
   "nodes": 1,
   "needs_torch": 0,
-  "source": "repo"
+  "source": "repo",
+  "workload_key": "vendored-wheels-snapshot"
  },
  {
   "name": "vendored-wheels-ucvolume",
@@ -403,7 +446,8 @@
   "shape": "GPU_1xA10",
   "nodes": 1,
   "needs_torch": 0,
-  "source": "repo"
+  "source": "repo",
+  "workload_key": "vendored-wheels-ucvolume"
  },
  {
   "name": "vllm-smoke",
@@ -417,7 +461,8 @@
   "shape": "GPU_1xA10",
   "nodes": 1,
   "needs_torch": 0,
-  "source": "repo"
+  "source": "repo",
+  "workload_key": "vllm-smoke"
  },
  {
   "name": "xgboost-gpu",
@@ -431,7 +476,8 @@
   "shape": "GPU_1xA10",
   "nodes": 1,
   "needs_torch": 0,
-  "source": "repo"
+  "source": "repo",
+  "workload_key": "xgboost-gpu"
  },
  {
   "name": "probes/ai-env-packages-probe",
@@ -445,7 +491,8 @@
   "shape": "GPU_1xA10",
   "nodes": 1,
   "needs_torch": 1,
-  "source": "repo"
+  "source": "repo",
+  "workload_key": "ai-env-packages-probe"
  },
  {
   "name": "probes/artifact-probe",
@@ -459,7 +506,8 @@
   "shape": "GPU_1xA10",
   "nodes": 1,
   "needs_torch": 0,
-  "source": "repo"
+  "source": "repo",
+  "workload_key": "artifact-probe"
  },
  {
   "name": "probes/burn-debug",
@@ -473,7 +521,8 @@
   "shape": "GPU_1xA10",
   "nodes": 1,
   "needs_torch": 0,
-  "source": "repo"
+  "source": "repo",
+  "workload_key": "burn"
  },
  {
   "name": "probes/cli-egress-probe",
@@ -487,7 +536,8 @@
   "shape": "GPU_1xA10",
   "nodes": 1,
   "needs_torch": 1,
-  "source": "repo"
+  "source": "repo",
+  "workload_key": "cli-egress-probe"
  },
  {
   "name": "probes/env5-survey",
@@ -501,7 +551,8 @@
   "shape": "GPU_1xA10",
   "nodes": 1,
   "needs_torch": 0,
-  "source": "repo"
+  "source": "repo",
+  "workload_key": "env5-survey"
  },
  {
   "name": "probes/envvar-probe",
@@ -515,7 +566,8 @@
   "shape": "GPU_1xA10",
   "nodes": 1,
   "needs_torch": 0,
-  "source": "repo"
+  "source": "repo",
+  "workload_key": "envvar-probe"
  },
  {
   "name": "probes/fail-probe",
@@ -529,7 +581,8 @@
   "shape": "GPU_1xA10",
   "nodes": 1,
   "needs_torch": 0,
-  "source": "repo"
+  "source": "repo",
+  "workload_key": "fail-probe"
  },
  {
   "name": "probes/gpu-burn-nodeps",
@@ -543,7 +596,8 @@
   "shape": "GPU_1xA10",
   "nodes": 1,
   "needs_torch": 0,
-  "source": "repo"
+  "source": "repo",
+  "workload_key": "gpu-burn"
  },
  {
   "name": "probes/pip-probe",
@@ -557,7 +611,8 @@
   "shape": "GPU_1xA10",
   "nodes": 1,
   "needs_torch": 0,
-  "source": "repo"
+  "source": "repo",
+  "workload_key": "pip-probe"
  },
  {
   "name": "probes/python-probe",
@@ -571,7 +626,8 @@
   "shape": "GPU_1xA10",
   "nodes": 1,
   "needs_torch": 1,
-  "source": "repo"
+  "source": "repo",
+  "workload_key": "python-probe"
  },
  {
   "name": "probes/snapshot-python-probe",
@@ -585,7 +641,8 @@
   "shape": "GPU_1xA10",
   "nodes": 1,
   "needs_torch": 0,
-  "source": "repo"
+  "source": "repo",
+  "workload_key": "snapshot-python-probe"
  },
  {
   "name": "probes/torch-v5-probe",
@@ -599,6 +656,7 @@
   "shape": "GPU_1xA10",
   "nodes": 1,
   "needs_torch": 1,
-  "source": "repo"
+  "source": "repo",
+  "workload_key": "torch-v5-probe"
  }
 ]

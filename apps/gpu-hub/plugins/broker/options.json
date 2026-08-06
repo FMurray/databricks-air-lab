@@ -1,0 +1,38 @@
+[
+ {
+  "name": "ai-env-torch",
+  "description": "Use torch from the baked-in AI environment (env v5 default python has none).",
+  "params": {}
+ },
+ {
+  "name": "deps-snapshot",
+  "description": "Vendored packages shipped in the code snapshot (small package sets).",
+  "params": {
+   "vendor_dir": "experiments/env-flexibility/vendored-wheels/vendor"
+  }
+ },
+ {
+  "name": "deps-uc-volume",
+  "description": "Vendored packages staged in a UC volume (large package sets).",
+  "params": {
+   "vendor_path": "/Volumes/<catalog>/<schema>/deps/vendor"
+  }
+ },
+ {
+  "name": "airtel-telemetry",
+  "description": "OTEL logs/metrics/GPU telemetry to Delta via Zerobus (needs SP secrets).",
+  "params": {
+   "workspace_id": "",
+   "workspace_url": "",
+   "zerobus_region": "us-east-1",
+   "logs_table": "",
+   "metrics_table": "",
+   "secret_scope": "air_lab"
+  }
+ },
+ {
+  "name": "receipts",
+  "description": "Mark the run for MLflow param receipts (verification-skill conventions).",
+  "params": {}
+ }
+]
