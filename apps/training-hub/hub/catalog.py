@@ -10,6 +10,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import subprocess
+
 import yaml
 
 WORKLOADS_DIR = Path(__file__).resolve().parents[3] / "workloads"
@@ -40,6 +42,17 @@ def _use_case_for(path: Path, raw: dict) -> str:
             if key in str(hint):
                 return uc
     return "env-diagnostics"
+
+
+def _author(path: Path) -> str:
+    """Last committer of the workload YAML — real provenance from git."""
+    try:
+        r = subprocess.run(
+            ["git", "log", "-1", "--format=%ae", "--", str(path)],
+            capture_output=True, text=True, cwd=path.parent, timeout=10)
+        return r.stdout.strip()
+    except Exception:
+        return ""
 
 
 def _header(path: Path) -> tuple[str, str]:
@@ -97,6 +110,7 @@ def repo_workloads(team: str) -> list[dict]:
             "name": key.lstrip("./"),
             "title": title or key.lstrip("./"),
             "description": description,
+            "author": _author(doc_files.get(key, p)),
             "kind": "air_yaml",
             "ref": str(p.relative_to(WORKLOADS_DIR.parent)),
             "team": team,

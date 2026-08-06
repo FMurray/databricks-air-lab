@@ -12,9 +12,13 @@ interface Workload {
   name: string;
   title: string;
   description: string;
+  author: string;
   shape: string;
   nodes: number;
   ref: string;
+  run_count: number;
+  my_run_count: number;
+  team_run_count: number;
 }
 interface Run {
   id: number;
@@ -60,6 +64,8 @@ export function RunPage() {
   const [runs, setRuns] = useState<Run[]>([]);
   const [category, setCategory] = useState<string>('all');
   const [query, setQuery] = useState('');
+  const [author, setAuthor] = useState<string>('all');
+  const [history, setHistory] = useState<'all' | 'mine' | 'team'>('all');
   const [busyId, setBusyId] = useState<number | null>(null);
   const [error, setError] = useState('');
 
@@ -91,10 +97,26 @@ export function RunPage() {
     return CATEGORY_ORDER.filter((c) => present.has(c));
   }, [mine]);
 
+  const authors = useMemo(
+    () => [...new Set(mine.map((w) => w.author).filter(Boolean))].sort(),
+    [mine],
+  );
+  const teams = useMemo(() => [...new Set(mine.map((w) => w.team))].sort(), [mine]);
+
   const shown = useMemo(() => {
     const q = query.trim().toLowerCase();
     return mine
       .filter((w) => category === 'all' || w.use_case === category)
+      .filter((w) =>
+        author === 'all'
+          ? true
+          : author.startsWith('team:')
+            ? w.team === author.slice(5)
+            : w.author === author,
+      )
+      .filter((w) =>
+        history === 'all' ? true : history === 'mine' ? w.my_run_count > 0 : w.team_run_count > 0,
+      )
       .filter(
         (w) =>
           !q ||
@@ -107,7 +129,7 @@ export function RunPage() {
           CATEGORY_ORDER.indexOf(a.use_case) - CATEGORY_ORDER.indexOf(b.use_case) ||
           a.title.localeCompare(b.title),
       );
-  }, [mine, category, query]);
+  }, [mine, category, query, author, history]);
 
   const myRuns = runs
     .filter((r) => r.requested_by === me?.principal || myTeamNames.has(r.team))
@@ -147,6 +169,34 @@ export function RunPage() {
           value={query}
           onChange={(e) => setQuery(e.target.value)}
         />
+        <select
+          className="border rounded-md px-2 py-1.5 text-sm bg-background"
+          value={author}
+          onChange={(e) => setAuthor(e.target.value)}
+        >
+          <option value="all">Any author</option>
+          {teams.map((t) => (
+            <option key={`team:${t}`} value={`team:${t}`}>
+              team: {t}
+            </option>
+          ))}
+          {authors.map((a) => (
+            <option key={a} value={a}>
+              {a}
+            </option>
+          ))}
+        </select>
+        <Chip
+          label="Run by me"
+          active={history === 'mine'}
+          onClick={() => setHistory(history === 'mine' ? 'all' : 'mine')}
+        />
+        <Chip
+          label="Run by my team"
+          active={history === 'team'}
+          onClick={() => setHistory(history === 'team' ? 'all' : 'team')}
+        />
+        <span className="mx-1 h-5 w-px bg-border" />
         <Chip label={`All (${mine.length})`} active={category === 'all'} onClick={() => setCategory('all')} />
         {categories.map((c) => (
           <Chip
@@ -176,7 +226,11 @@ export function RunPage() {
                 {w.nodes > 1 && <Badge>{w.nodes} nodes</Badge>}
               </div>
               <div className="flex items-center justify-between pt-1">
-                <span className="text-xs text-muted-foreground truncate max-w-[60%]">{w.ref}</span>
+                <span className="text-xs text-muted-foreground truncate max-w-[60%]">
+                  {w.author ? `${w.author.split('@')[0]} · ` : ''}
+                  {w.run_count > 0 ? `${w.run_count} run${w.run_count > 1 ? 's' : ''} · ` : ''}
+                  {w.ref}
+                </span>
                 <Button size="sm" onClick={() => runWorkload(w.id)} disabled={busyId !== null}>
                   {busyId === w.id ? 'Submitting…' : 'Run'}
                 </Button>

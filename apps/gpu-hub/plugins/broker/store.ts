@@ -41,6 +41,7 @@ CREATE TABLE IF NOT EXISTS broker.workloads (
   use_case TEXT NOT NULL,
   name TEXT NOT NULL UNIQUE,
   title TEXT DEFAULT '',
+  author TEXT DEFAULT '',
   description TEXT DEFAULT '',
   kind TEXT NOT NULL,
   ref TEXT NOT NULL,
@@ -81,6 +82,9 @@ export class Store {
     await this.pool.query(
       "ALTER TABLE broker.workloads ADD COLUMN IF NOT EXISTS description TEXT DEFAULT ''",
     );
+    await this.pool.query(
+      "ALTER TABLE broker.workloads ADD COLUMN IF NOT EXISTS author TEXT DEFAULT ''",
+    );
   }
 
   async getConfig(): Promise<Record<string, unknown> | undefined> {
@@ -102,6 +106,7 @@ export class Store {
     name: string;
     title?: string;
     description?: string;
+    author?: string;
     kind: string;
     ref: string;
     shape: string;
@@ -110,15 +115,16 @@ export class Store {
   }): Promise<void> {
     await this.pool.query(
       `INSERT INTO broker.workloads
-         (created_utc, created_by, team, use_case, name, title, description, kind, ref,
-          shape, nodes, needs_torch)
-       VALUES ($1, 'repo-sync', $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+         (created_utc, created_by, team, use_case, name, title, description, author, kind,
+          ref, shape, nodes, needs_torch)
+       VALUES ($1, 'repo-sync', $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
        ON CONFLICT (name) DO UPDATE SET
          team = EXCLUDED.team, use_case = EXCLUDED.use_case, title = EXCLUDED.title,
-         description = EXCLUDED.description, kind = EXCLUDED.kind, ref = EXCLUDED.ref,
-         shape = EXCLUDED.shape, nodes = EXCLUDED.nodes, needs_torch = EXCLUDED.needs_torch`,
+         description = EXCLUDED.description, author = EXCLUDED.author,
+         kind = EXCLUDED.kind, ref = EXCLUDED.ref, shape = EXCLUDED.shape,
+         nodes = EXCLUDED.nodes, needs_torch = EXCLUDED.needs_torch`,
       [Date.now() / 1000, w.team, w.use_case, w.name, w.title ?? "", w.description ?? "",
-       w.kind, w.ref, w.shape, w.nodes, w.needs_torch ? 1 : 0],
+       w.author ?? "", w.kind, w.ref, w.shape, w.nodes, w.needs_torch ? 1 : 0],
     );
   }
 

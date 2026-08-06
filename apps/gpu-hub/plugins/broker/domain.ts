@@ -110,6 +110,7 @@ export interface CatalogWorkload {
   name: string;
   title?: string;
   description?: string;
+  author?: string;
   kind: "air_yaml";
   ref: string;
   team: string;

@@ -305,8 +305,27 @@ export class Broker extends Plugin {
       name: "workloads",
       method: "get",
       path: "/workloads",
-      handler: async (_req, res) => {
-        res.json(await this.store.workloads());
+      handler: async (req, res) => {
+        // enrich with run history relative to the caller: run_count / my_run_count /
+        // team_run_count power the "run by me / by my team" filters
+        const principal = this.principal(req as never);
+        const myTeams = new Set(teamsOf(this.cfg, principal).map((t) => t.name));
+        const allRuns = await this.store.runs();
+        const stats = new Map<number, { run_count: number; my_run_count: number;
+          team_run_count: number }>();
+        for (const r of allRuns) {
+          const s = stats.get(r.workload_id) ?? {
+            run_count: 0, my_run_count: 0, team_run_count: 0 };
+          s.run_count++;
+          if (r.requested_by === principal) s.my_run_count++;
+          if (myTeams.has(r.team)) s.team_run_count++;
+          stats.set(r.workload_id, s);
+        }
+        const rows = await this.store.workloads();
+        res.json(rows.map((w) => ({
+          ...w,
+          ...(stats.get(Number(w.id)) ?? { run_count: 0, my_run_count: 0, team_run_count: 0 }),
+        })));
       },
     });
 
