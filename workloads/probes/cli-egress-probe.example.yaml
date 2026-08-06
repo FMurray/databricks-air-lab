@@ -1,3 +1,5 @@
+# Full egress matrix from a CLI-submitted GPU task: TCP-to-storage, artifact upload, PyPI
+# DNS — all reported via MLflow params. The v4-vs-v5 egress caveat's receipt generator.
 experiment_name: air-lab-env-diagnostics
 environment:
   version: "5"   # v4 job-plane egress broken on hardened ws — see docs/06

@@ -1,3 +1,5 @@
+# Deliberate exit 1 — maps what user-code failure looks like in run state (spoiler: identical
+# to platform errors; that ambiguity is the finding).
 experiment_name: air-lab-env-diagnostics
 environment:
   version: "5"   # v4 job-plane egress broken on hardened ws — see docs/06

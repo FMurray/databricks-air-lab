@@ -1,3 +1,5 @@
+# Can this run upload an MLflow artifact? Reports via params with a fail-fast alarm — the
+# storage-egress diagnostic that caught the root-storage blackhole (docs/06).
 experiment_name: air-lab-env-diagnostics
 environment:
   version: "5"   # v4 job-plane egress broken on hardened ws — see docs/06

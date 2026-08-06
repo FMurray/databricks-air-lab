@@ -16,6 +16,8 @@ interface Workload {
   team: string;
   use_case: string;
   name: string;
+  title: string;
+  description: string;
   shape: string;
   nodes: number;
   ref: string;
@@ -97,25 +99,41 @@ export function RunPage() {
         <CardHeader>
           <CardTitle>Run</CardTitle>
         </CardHeader>
-        <CardContent className="flex gap-3 items-center flex-wrap">
-          <select
-            className="border rounded-md px-3 py-2 text-sm bg-background min-w-[28rem]"
-            value={selected ?? ''}
-            onChange={(e) => setSelected(Number(e.target.value))}
-          >
-            <option value="" disabled>
-              choose a workload…
-            </option>
-            {mine.map((w) => (
-              <option key={w.id} value={w.id}>
-                {w.name} — {w.use_case}, {w.shape}×{w.nodes}
+        <CardContent className="space-y-3">
+          <div className="flex gap-3 items-center flex-wrap">
+            <select
+              className="border rounded-md px-3 py-2 text-sm bg-background min-w-[28rem]"
+              value={selected ?? ''}
+              onChange={(e) => setSelected(Number(e.target.value))}
+            >
+              <option value="" disabled>
+                choose a workload…
               </option>
-            ))}
-          </select>
-          <Button onClick={submit} disabled={busy || selected == null}>
-            {busy ? 'Submitting…' : 'Run'}
-          </Button>
-          {error && <span className="text-sm text-destructive">{error}</span>}
+              {mine.map((w) => (
+                <option key={w.id} value={w.id}>
+                  {w.title || w.name}
+                </option>
+              ))}
+            </select>
+            <Button onClick={submit} disabled={busy || selected == null}>
+              {busy ? 'Submitting…' : 'Run'}
+            </Button>
+            {error && <span className="text-sm text-destructive">{error}</span>}
+          </div>
+          {selected != null &&
+            (() => {
+              const w = mine.find((x) => x.id === selected);
+              if (!w) return null;
+              return (
+                <div className="rounded-md border bg-muted/40 p-3 text-sm space-y-1">
+                  <p>{w.description || 'No description in the workload header yet.'}</p>
+                  <p className="text-muted-foreground">
+                    {w.use_case} · {w.shape}
+                    {w.nodes > 1 ? ` × ${w.nodes} nodes` : ''} · {w.ref}
+                  </p>
+                </div>
+              );
+            })()}
         </CardContent>
       </Card>
 

@@ -108,6 +108,8 @@ export function shapeCapacity(cfg: BrokerConfig, shape: string, inFlight: number
 // ---------- catalog: the repo's workloads/ directory ----------
 export interface CatalogWorkload {
   name: string;
+  title?: string;
+  description?: string;
   kind: "air_yaml";
   ref: string;
   team: string;

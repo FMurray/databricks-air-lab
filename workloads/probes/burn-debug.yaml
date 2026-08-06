@@ -1,3 +1,5 @@
+# gpu-burn wrapped in self-logging (stdout shipped as an MLflow artifact) — for debugging
+# burn failures on workspaces where run logs don't deliver.
 experiment_name: air-lab-env-diagnostics
 environment:
   version: "5"   # v4 job-plane egress broken on hardened ws — see docs/06

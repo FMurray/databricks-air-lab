@@ -1,3 +1,4 @@
+# Do env_variables from the workload YAML actually reach the container? Prints the value back.
 experiment_name: air-lab-env-diagnostics
 environment:
   version: "5"   # v4 job-plane egress broken on hardened ws — see docs/06

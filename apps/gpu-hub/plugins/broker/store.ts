@@ -39,6 +39,8 @@ CREATE TABLE IF NOT EXISTS broker.workloads (
   team TEXT NOT NULL,
   use_case TEXT NOT NULL,
   name TEXT NOT NULL UNIQUE,
+  title TEXT DEFAULT '',
+  description TEXT DEFAULT '',
   kind TEXT NOT NULL,
   ref TEXT NOT NULL,
   shape TEXT NOT NULL,
@@ -72,6 +74,12 @@ export class Store {
 
   async init() {
     await this.pool.query(SCHEMA);
+    await this.pool.query(
+      "ALTER TABLE broker.workloads ADD COLUMN IF NOT EXISTS title TEXT DEFAULT ''",
+    );
+    await this.pool.query(
+      "ALTER TABLE broker.workloads ADD COLUMN IF NOT EXISTS description TEXT DEFAULT ''",
+    );
   }
 
   async getConfig(): Promise<Record<string, unknown> | undefined> {
@@ -91,6 +99,8 @@ export class Store {
     team: string;
     use_case: string;
     name: string;
+    title?: string;
+    description?: string;
     kind: string;
     ref: string;
     shape: string;
@@ -99,14 +109,15 @@ export class Store {
   }): Promise<void> {
     await this.pool.query(
       `INSERT INTO broker.workloads
-         (created_utc, created_by, team, use_case, name, kind, ref, shape, nodes, needs_torch)
-       VALUES ($1, 'repo-sync', $2, $3, $4, $5, $6, $7, $8, $9)
+         (created_utc, created_by, team, use_case, name, title, description, kind, ref,
+          shape, nodes, needs_torch)
+       VALUES ($1, 'repo-sync', $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
        ON CONFLICT (name) DO UPDATE SET
-         team = EXCLUDED.team, use_case = EXCLUDED.use_case, kind = EXCLUDED.kind,
-         ref = EXCLUDED.ref, shape = EXCLUDED.shape, nodes = EXCLUDED.nodes,
-         needs_torch = EXCLUDED.needs_torch`,
-      [Date.now() / 1000, w.team, w.use_case, w.name, w.kind, w.ref, w.shape, w.nodes,
-       w.needs_torch ? 1 : 0],
+         team = EXCLUDED.team, use_case = EXCLUDED.use_case, title = EXCLUDED.title,
+         description = EXCLUDED.description, kind = EXCLUDED.kind, ref = EXCLUDED.ref,
+         shape = EXCLUDED.shape, nodes = EXCLUDED.nodes, needs_torch = EXCLUDED.needs_torch`,
+      [Date.now() / 1000, w.team, w.use_case, w.name, w.title ?? "", w.description ?? "",
+       w.kind, w.ref, w.shape, w.nodes, w.needs_torch ? 1 : 0],
     );
   }
 

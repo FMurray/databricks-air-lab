@@ -42,6 +42,24 @@ def _use_case_for(path: Path, raw: dict) -> str:
     return "env-diagnostics"
 
 
+def _header(path: Path) -> tuple[str, str]:
+    """(title, description) from the YAML's leading comment block. Title = first sentence;
+    description = the whole block minus command/override lines."""
+    lines = []
+    for line in path.read_text().splitlines():
+        if not line.startswith("#"):
+            break
+        text = line.lstrip("#").strip()
+        if text.startswith("--override") or text.startswith("air run"):
+            continue
+        lines.append(text)
+    block = " ".join(l for l in lines if l)
+    if not block:
+        return "", ""
+    title = block.split(". ")[0].strip().rstrip(".")
+    return title[:120], block[:500]
+
+
 def _nodes(raw: dict) -> int:
     comp = raw.get("compute") or {}
     n = int(comp.get("num_accelerators", 1))
@@ -54,12 +72,16 @@ def repo_workloads(team: str) -> list[dict]:
     """Parse the repo's workload YAMLs; live copies shadow their .example twins."""
     if not WORKLOADS_DIR.is_dir():
         return []
-    files: dict[str, Path] = {}
+    files: dict[str, Path] = {}          # key -> file to RUN (live shadows example)
+    doc_files: dict[str, Path] = {}      # key -> file to DOCUMENT from (example preferred)
     for p in sorted(WORKLOADS_DIR.glob("**/*.yaml")):
         stem = p.name.replace(".example.yaml", "").replace(".yaml", "")
         key = str(p.parent.relative_to(WORKLOADS_DIR)) + "/" + stem
-        if key not in files or ".example" in files[key].name:
+        is_example = ".example" in p.name
+        if key not in files or (".example" in files[key].name and not is_example):
             files[key] = p
+        if key not in doc_files or is_example:
+            doc_files[key] = p
     out = []
     for key, p in sorted(files.items()):
         try:
@@ -70,8 +92,11 @@ def repo_workloads(team: str) -> list[dict]:
             continue
         comp = raw.get("compute") or {}
         cmd = str(raw.get("command", ""))
+        title, description = _header(doc_files.get(key, p))
         out.append({
             "name": key.lstrip("./"),
+            "title": title or key.lstrip("./"),
+            "description": description,
             "kind": "air_yaml",
             "ref": str(p.relative_to(WORKLOADS_DIR.parent)),
             "team": team,

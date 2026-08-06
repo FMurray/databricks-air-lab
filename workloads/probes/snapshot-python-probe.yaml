@@ -1,3 +1,4 @@
+# Does the code snapshot mount and $CODE_SOURCE_PATH resolve? Lists the snapshot contents.
 experiment_name: air-lab-env-diagnostics
 environment:
   version: "5"   # v4 job-plane egress broken on hardened ws — see docs/06
