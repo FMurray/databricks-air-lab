@@ -23,6 +23,7 @@ export interface RunRow {
   team: string;
   use_case: string;
   name: string;
+  title: string;
   shape: string;
   nodes: number;
   kind: string;
@@ -157,7 +158,8 @@ export class Store {
 
   async runs(states?: string[]): Promise<RunRow[]> {
     const res = await this.pool.query(
-      `SELECT r.*, w.team, w.use_case, w.name, w.shape, w.nodes, w.kind, w.ref, w.needs_torch
+      `SELECT r.*, w.team, w.use_case, w.name, w.title, w.shape, w.nodes, w.kind, w.ref,
+              w.needs_torch
        FROM broker.runs r JOIN broker.workloads w ON w.id = r.workload_id ORDER BY r.id`,
     );
     const rows: RunRow[] = res.rows.map((row: Record<string, unknown>) => ({
@@ -171,6 +173,7 @@ export class Store {
       team: String(row.team),
       use_case: String(row.use_case),
       name: String(row.name),
+      title: String(row.title ?? ""),
       shape: String(row.shape),
       nodes: Number(row.nodes),
       kind: String(row.kind),
