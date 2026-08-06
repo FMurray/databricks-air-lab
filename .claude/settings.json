@@ -1,0 +1,29 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Write|Edit|NotebookEdit|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR/.claude/hooks/sensitive-terms-guard.sh\"",
+            "timeout": 15,
+            "statusMessage": "Scanning for sensitive terms"
+          }
+        ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "if": "Bash(git*)",
+            "command": "\"$CLAUDE_PROJECT_DIR/.claude/hooks/sensitive-terms-guard.sh\"",
+            "timeout": 15,
+            "statusMessage": "Scanning staged changes for sensitive terms"
+          }
+        ]
+      }
+    ]
+  }
+}
