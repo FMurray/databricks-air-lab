@@ -209,7 +209,7 @@ GPU peak ≤ A10's 10.4GB (same tensors, more headroom). Archive to local store 
 
 #### Memory probe at 500 features — pre-registered (2026-08-05, before submit)
 
-The [customer-model]-shape gap: all prior memory data is 100-feature; the customer's tables are
+The customer-shape gap: all prior memory data is 100-feature; the customer's tables are
 500+ wide, 60K rows stated. Run: same `mem_probe.py`, `--features 500`, 1×H100,
 e2-demo-field-eng (pip `tabicl` needs egress). Success = ladder runs until completion or
 OOM (an OOM rung IS a finding, not a failure). Pre-registered expectations:
@@ -478,7 +478,7 @@ receipt + automatic system metrics) — the receipt pattern carried all evidence
 
 #### Timeseries + regression program — pre-registered (2026-08-05, before submit)
 
-Driven by the [customer-model] deep dive (docs/private/2026-08-05-customer-deep-dive.md): consolidation
+Driven by the customer deep dive (notes in docs/private/): consolidation
 targets are 85–90 reg+classification models; their training plan is fusion of internal
 TabICLv2 weights + continued pretraining with custom timeseries priors (likely TimEE-style,
 arXiv 2607.07500). Program: R1 regression bench, T1 continue-mechanics, T2 TS baseline,
@@ -491,7 +491,7 @@ T3 treatment (blocked on T1+T2).
   phase B fresh trainer `--checkpoint_path <A> --only_load_model True` 60 more steps.
   PASS = phase-B first logged ce **well below cold start** (~2.3 = ln(10) for 10-class
   prior) — loaded weights vs silent re-init. Phase C: released HF inference ckpt into the
-  trainer — loads or not, both are findings (the [customer-internal]-weights format question).
+  trainer — loads or not, both are findings (the internal-weights format question (can published/externally produced checkpoints chain into the trainer)).
 - **T2** (`bench_timeseries.py --finetune`, 1×A10): 5 UCR multi-class sets (5–24 classes,
   series len 46–140 = columns, inside the customer's 100–500 range), TabICL zero-shot +
   fine-tuned (100 epochs ≈ their oneshot recipe) vs XGB on identical tabular framing;
@@ -528,7 +528,7 @@ on zero completions (exit code derived from results).
   **ce=1.44 vs cold-start 2.30** — weights genuinely loaded, training continues (1.44→1.39
   over the first 5 steps). The fusion→continue mechanics WORK on the platform.
 - Phase C: **the released HF inference checkpoint loads into the trainer** (verbatim:
-  `T1_PHASE_C_RELEASED_CKPT_LOADS=yes`) — the [customer-internal]-weights-format question answered:
+  `T1_PHASE_C_RELEASED_CKPT_LOADS=yes`) — the internal-weights-format question answered:
   published .ckpt chains into continued pretraining as-is.
 - Driver nit: the in-script B_CE grep printed empty (progress-bar \r); continuity numbers
   extracted from the log directly. Fix with `tr '\r' '\n'` before T3 reuses the driver.
