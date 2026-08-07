@@ -11,7 +11,7 @@ interface Capacity {
 interface Run {
   id: number;
   team: string;
-  use_case: string;
+  project: string;
   name: string;
   shape: string;
   nodes: number;
@@ -74,7 +74,7 @@ export function OverviewPage() {
                   <tr className="text-left text-muted-foreground border-b">
                     <th className="py-1 pr-4">#</th>
                     <th className="py-1 pr-4">team</th>
-                    <th className="py-1 pr-4">use case</th>
+                    <th className="py-1 pr-4">project</th>
                     <th className="py-1 pr-4">workload</th>
                     <th className="py-1 pr-4">shape</th>
                     <th className="py-1 pr-4">requested by</th>
@@ -87,7 +87,7 @@ export function OverviewPage() {
                     <tr key={r.id} className="border-b last:border-0">
                       <td className="py-1 pr-4">{r.id}</td>
                       <td className="py-1 pr-4">{r.team}</td>
-                      <td className="py-1 pr-4">{r.use_case}</td>
+                      <td className="py-1 pr-4">{r.project}</td>
                       <td className="py-1 pr-4">{r.name}</td>
                       <td className="py-1 pr-4">
                         {r.shape}×{r.nodes}

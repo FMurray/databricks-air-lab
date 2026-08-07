@@ -27,6 +27,13 @@ interface Workload {
   team_run_count: number;
   configurations: Configuration[];
 }
+interface Project {
+  id: number;
+  name: string;
+  teams: string[];
+  metadata: Record<string, string>;
+  billable_by_me: boolean;
+}
 interface OptionDef {
   name: string;
   description: string;
@@ -36,7 +43,7 @@ interface Run {
   id: number;
   name: string;
   title?: string;
-  use_case: string;
+  project: string;
   options: string;
   shape: string;
   nodes: number;
@@ -67,23 +74,25 @@ const CATEGORY_LABELS: Record<string, string> = {
 export function RunPage() {
   const [me, setMe] = useState<Me | null>(null);
   const [workloads, setWorkloads] = useState<Workload[]>([]);
+  const [projects, setProjects] = useState<Project[]>([]);
   const [optionDefs, setOptionDefs] = useState<OptionDef[]>([]);
   const [runs, setRuns] = useState<Run[]>([]);
   const [category, setCategory] = useState('all');
   const [query, setQuery] = useState('');
   const [history, setHistory] = useState<'all' | 'mine' | 'team'>('all');
-  const [busyKey, setBusyKey] = useState<number | null>(null);
-  const [error, setError] = useState('');
+  const [openWorkload, setOpenWorkload] = useState<Workload | null>(null);
 
   const refresh = useCallback(async () => {
-    const [meR, wR, oR, rR] = await Promise.all([
+    const [meR, wR, pR, oR, rR] = await Promise.all([
       fetch('/api/broker/me').then((r) => r.json()),
       fetch('/api/broker/workloads').then((r) => r.json()),
+      fetch('/api/broker/projects').then((r) => r.json()),
       fetch('/api/broker/options').then((r) => r.json()),
       fetch('/api/broker/runs').then((r) => r.json()),
     ]);
     setMe(meR);
     setWorkloads(wR);
+    setProjects(pR);
     setOptionDefs(oR);
     setRuns(rR.runs ?? []);
   }, []);
@@ -95,10 +104,7 @@ export function RunPage() {
   }, [refresh]);
 
   const myTeamNames = useMemo(() => new Set((me?.teams ?? []).map((t) => t.name)), [me]);
-  const myUseCases = useMemo(
-    () => (me?.teams ?? []).flatMap((t) => t.use_cases.map((u) => u.name)),
-    [me],
-  );
+  const myProjects = useMemo(() => projects.filter((p) => p.billable_by_me), [projects]);
   const mine = useMemo(
     () => workloads.filter((w) => myTeamNames.has(w.team) && w.configurations.length > 0),
     [workloads, myTeamNames],
@@ -136,20 +142,6 @@ export function RunPage() {
   const active = myRuns.filter((r) => ACTIVE.includes(r.state));
   const past = myRuns.filter((r) => !ACTIVE.includes(r.state));
 
-  const request = async (workloadId: number, configurationId: number, useCase: string,
-                         options: string[], params: Record<string, string>) => {
-    setBusyKey(workloadId);
-    setError('');
-    const res = await fetch('/api/broker/runs', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ configurationId, useCase, options, params }),
-    });
-    if (!res.ok) setError((await res.json()).error ?? res.statusText);
-    await refresh();
-    setBusyKey(null);
-  };
-
   if (me && me.teams.length === 0) {
     return (
       <p className="text-muted-foreground">
@@ -183,17 +175,39 @@ export function RunPage() {
         ))}
       </div>
 
-      {error && <p className="text-sm text-destructive">{error}</p>}
-
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {shown.map((w) => (
-          <WorkloadCard key={w.id} workload={w} optionDefs={optionDefs}
-                        useCases={myUseCases} busy={busyKey === w.id} onRun={request} />
+          <Card key={w.id} className="flex flex-col">
+            <CardContent className="flex flex-col gap-2 p-4 flex-1">
+              <h3 className="font-semibold leading-snug">{w.title || w.workload_key}</h3>
+              <p className="text-sm text-muted-foreground line-clamp-3 flex-1">
+                {w.description || 'No description yet.'}
+              </p>
+              <div className="flex flex-wrap gap-1.5">
+                <Badge>{CATEGORY_LABELS[w.use_case] ?? w.use_case}</Badge>
+                <Badge>{w.configurations.length} configuration{w.configurations.length > 1 ? 's' : ''}</Badge>
+                {w.run_count > 0 && <Badge>{w.run_count} runs</Badge>}
+              </div>
+              <div className="pt-1">
+                <Button size="sm" onClick={() => setOpenWorkload(w)}>Run…</Button>
+              </div>
+            </CardContent>
+          </Card>
         ))}
         {shown.length === 0 && (
           <p className="text-sm text-muted-foreground col-span-full">Nothing matches.</p>
         )}
       </div>
+
+      {openWorkload && (
+        <RunModal
+          workload={openWorkload}
+          optionDefs={optionDefs}
+          projects={myProjects}
+          onClose={() => setOpenWorkload(null)}
+          onDone={refresh}
+        />
+      )}
 
       <section className="space-y-4">
         <h2 className="text-lg font-semibold">Active</h2>
@@ -205,22 +219,22 @@ export function RunPage() {
   );
 }
 
-function WorkloadCard({ workload: w, optionDefs, useCases, busy, onRun }: {
+function RunModal({ workload: w, optionDefs, projects, onClose, onDone }: {
   workload: Workload;
   optionDefs: OptionDef[];
-  useCases: string[];
-  busy: boolean;
-  onRun: (workloadId: number, configurationId: number, useCase: string,
-          options: string[], params: Record<string, string>) => void;
+  projects: Project[];
+  onClose: () => void;
+  onDone: () => Promise<void>;
 }) {
   const [configId, setConfigId] = useState(w.configurations[0]?.id);
-  const [useCase, setUseCase] = useState(
-    useCases.includes(w.use_case) ? w.use_case : (useCases[0] ?? ''));
+  const [project, setProject] = useState(projects[0]?.name ?? '');
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [params, setParams] = useState<Record<string, string>>({});
-  const [showOptions, setShowOptions] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
 
   const cfg = w.configurations.find((c) => c.id === configId) ?? w.configurations[0];
+  const proj = projects.find((p) => p.name === project);
 
   const toggle = (name: string) => {
     const next = new Set(selected);
@@ -229,39 +243,61 @@ function WorkloadCard({ workload: w, optionDefs, useCases, busy, onRun }: {
     setSelected(next);
   };
 
+  const submit = async () => {
+    if (!cfg) return;
+    setBusy(true);
+    setError('');
+    const res = await fetch('/api/broker/runs', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        configurationId: cfg.id,
+        project,
+        options: [...selected],
+        params: Object.fromEntries(Object.entries(params).filter(([, v]) => v)),
+      }),
+    });
+    if (!res.ok) {
+      setError((await res.json()).error ?? res.statusText);
+      setBusy(false);
+      return;
+    }
+    await onDone();
+    onClose();
+  };
+
   return (
-    <Card className="flex flex-col">
-      <CardContent className="flex flex-col gap-2 p-4 flex-1">
-        <h3 className="font-semibold leading-snug">{w.title || w.workload_key}</h3>
-        <p className="text-sm text-muted-foreground line-clamp-3">
-          {w.description || 'No description yet.'}
-        </p>
-        <div className="flex flex-wrap gap-1.5">
-          <Badge>{CATEGORY_LABELS[w.use_case] ?? w.use_case}</Badge>
-          {w.run_count > 0 && <Badge>{w.run_count} runs</Badge>}
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+         onClick={onClose}>
+      <div className="w-full max-w-lg max-h-[85vh] overflow-y-auto rounded-lg border bg-background p-5 shadow-lg space-y-4"
+           onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h3 className="font-semibold">{w.title || w.workload_key}</h3>
+            <p className="text-sm text-muted-foreground mt-1">{w.description}</p>
+          </div>
+          <button className="text-muted-foreground hover:text-foreground text-lg leading-none"
+                  onClick={onClose} aria-label="Close">×</button>
         </div>
 
-        <label className="text-xs text-muted-foreground mt-1">Configuration</label>
-        <select
-          className="border rounded-md px-2 py-1.5 text-sm bg-background"
-          value={configId}
-          onChange={(e) => setConfigId(Number(e.target.value))}
-        >
-          {w.configurations.map((c) => (
-            <option key={c.id} value={c.id}>
-              {c.name.split('/').pop()} — {c.shape.replace('GPU_', '')}
-              {c.nodes > 1 ? ` × ${c.nodes} nodes` : ''}
-            </option>
-          ))}
-        </select>
+        <div className="space-y-1">
+          <label className="text-xs font-medium text-muted-foreground">Configuration</label>
+          <select
+            className="w-full border rounded-md px-2 py-1.5 text-sm bg-background"
+            value={configId}
+            onChange={(e) => setConfigId(Number(e.target.value))}
+          >
+            {w.configurations.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.name.split('/').pop()} — {c.shape.replace('GPU_', '')}
+                {c.nodes > 1 ? ` × ${c.nodes} nodes` : ''}
+              </option>
+            ))}
+          </select>
+        </div>
 
-        <button
-          className="text-xs text-left text-muted-foreground underline underline-offset-2"
-          onClick={() => setShowOptions(!showOptions)}
-        >
-          {showOptions ? 'Hide options' : `Options (${selected.size} selected)`}
-        </button>
-        {showOptions && (
+        <div className="space-y-2">
+          <label className="text-xs font-medium text-muted-foreground">Options</label>
           <div className="space-y-2 rounded-md border p-2">
             {optionDefs.map((o) => (
               <div key={o.name}>
@@ -276,7 +312,7 @@ function WorkloadCard({ workload: w, optionDefs, useCases, busy, onRun }: {
                 {selected.has(o.name) &&
                   Object.entries(o.params ?? {}).map(([k, v]) => (
                     <input key={k}
-                           className="ml-6 mt-1 border rounded px-2 py-0.5 text-xs bg-background w-72"
+                           className="ml-6 mt-1 border rounded px-2 py-0.5 text-xs bg-background w-full max-w-sm"
                            placeholder={`${k} (default: ${v || 'required'})`}
                            value={params[`${o.name}.${k}`] ?? ''}
                            onChange={(e) =>
@@ -285,29 +321,38 @@ function WorkloadCard({ workload: w, optionDefs, useCases, busy, onRun }: {
               </div>
             ))}
           </div>
-        )}
+        </div>
 
-        <div className="flex items-center justify-between gap-2 pt-1">
+        <div className="space-y-1">
+          <label className="text-xs font-medium text-muted-foreground">Project</label>
           <select
-            className="border rounded-md px-2 py-1 text-xs bg-background"
-            value={useCase}
-            onChange={(e) => setUseCase(e.target.value)}
-            title="The use case that pays for this run"
+            className="w-full border rounded-md px-2 py-1.5 text-sm bg-background"
+            value={project}
+            onChange={(e) => setProject(e.target.value)}
+            title="The project that pays for this run"
           >
-            {useCases.map((u) => (
-              <option key={u} value={u}>
-                bill to: {u}
-              </option>
+            {projects.map((p) => (
+              <option key={p.id} value={p.name}>{p.name}</option>
             ))}
           </select>
-          <Button size="sm" disabled={busy || !cfg}
-                  onClick={() => cfg && onRun(w.id, cfg.id, useCase, [...selected],
-                    Object.fromEntries(Object.entries(params).filter(([, v]) => v)))}>
+          {proj && (
+            <p className="text-xs text-muted-foreground">
+              teams: {proj.teams.join(', ')}
+              {proj.metadata.business_app ? ` · business app: ${proj.metadata.business_app}` : ''}
+            </p>
+          )}
+        </div>
+
+        {error && <p className="text-sm text-destructive">{error}</p>}
+
+        <div className="flex justify-end gap-2 pt-1">
+          <Button size="sm" variant="outline" onClick={onClose}>Cancel</Button>
+          <Button size="sm" disabled={busy || !cfg || !project} onClick={submit}>
             {busy ? 'Submitting…' : 'Run'}
           </Button>
         </div>
-      </CardContent>
-    </Card>
+      </div>
+    </div>
   );
 }
 
@@ -343,7 +388,7 @@ function RunTable({ runs, empty, showDetail }: { runs: Run[]; empty: string; sho
           <tr className="text-left text-muted-foreground border-b">
             <th className="py-1 pr-4">#</th>
             <th className="py-1 pr-4">configuration</th>
-            <th className="py-1 pr-4">billed to</th>
+            <th className="py-1 pr-4">project</th>
             <th className="py-1 pr-4">options</th>
             <th className="py-1 pr-4">shape</th>
             <th className="py-1 pr-4">state</th>
@@ -356,7 +401,7 @@ function RunTable({ runs, empty, showDetail }: { runs: Run[]; empty: string; sho
             <tr key={r.id} className="border-b last:border-0">
               <td className="py-1 pr-4">{r.id}</td>
               <td className="py-1 pr-4">{r.title || r.name}</td>
-              <td className="py-1 pr-4">{r.use_case}</td>
+              <td className="py-1 pr-4">{r.project}</td>
               <td className="py-1 pr-4">
                 {r.options && r.options !== '[]' ? JSON.parse(r.options).join(', ') : '—'}
               </td>

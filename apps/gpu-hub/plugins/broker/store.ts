@@ -20,6 +20,7 @@ export interface RunRow {
   configuration_id: number;
   requested_by: string;
   use_case: string;
+  project: string;
   options: string;
   params: string;
   created_utc: number;
@@ -82,6 +83,13 @@ CREATE TABLE IF NOT EXISTS broker.runs (
   submitted_utc DOUBLE PRECISION,
   finished_utc DOUBLE PRECISION
 );
+CREATE TABLE IF NOT EXISTS broker.projects (
+  id SERIAL PRIMARY KEY,
+  name TEXT NOT NULL UNIQUE,
+  teams JSONB NOT NULL DEFAULT '[]',
+  metadata JSONB NOT NULL DEFAULT '{}',
+  created_utc DOUBLE PRECISION NOT NULL
+);
 CREATE TABLE IF NOT EXISTS broker.results (
   id SERIAL PRIMARY KEY,
   run_id INTEGER NOT NULL,
@@ -118,6 +126,8 @@ const ADDS = [
   "ALTER TABLE broker.runs ADD COLUMN IF NOT EXISTS use_case TEXT DEFAULT ''",
   "ALTER TABLE broker.runs ADD COLUMN IF NOT EXISTS options TEXT DEFAULT ''",
   "ALTER TABLE broker.runs ADD COLUMN IF NOT EXISTS params TEXT DEFAULT ''",
+  "ALTER TABLE broker.runs ADD COLUMN IF NOT EXISTS project TEXT DEFAULT ''",
+  "ALTER TABLE broker.workloads ADD COLUMN IF NOT EXISTS project_id INTEGER",
 ];
 
 export class Store {
@@ -148,6 +158,27 @@ export class Store {
        ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_utc = EXCLUDED.updated_utc`,
       [JSON.stringify(value), Date.now() / 1000],
     );
+  }
+
+  // ---------- projects ----------
+  async upsertProject(p: {
+    name: string;
+    teams: string[];
+    metadata: Record<string, string>;
+  }): Promise<number> {
+    const res = await this.pool.query(
+      `INSERT INTO broker.projects (name, teams, metadata, created_utc)
+       VALUES ($1, $2, $3, $4)
+       ON CONFLICT (name) DO UPDATE SET teams = EXCLUDED.teams
+       RETURNING id`,
+      [p.name, JSON.stringify(p.teams), JSON.stringify(p.metadata), Date.now() / 1000],
+    );
+    return Number(res.rows[0].id);
+  }
+
+  async projects(): Promise<Record<string, unknown>[]> {
+    const res = await this.pool.query("SELECT * FROM broker.projects ORDER BY name");
+    return res.rows;
   }
 
   // ---------- workloads (abstract) ----------
@@ -223,13 +254,13 @@ export class Store {
   }
 
   // ---------- runs ----------
-  async insertRun(configurationId: number, requestedBy: string, useCase: string,
+  async insertRun(configurationId: number, requestedBy: string, project: string,
                   options: string[], params: Record<string, string>): Promise<number> {
     const res = await this.pool.query(
-      `INSERT INTO broker.runs (configuration_id, requested_by, use_case, options, params,
+      `INSERT INTO broker.runs (configuration_id, requested_by, project, options, params,
                                 created_utc)
        VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`,
-      [configurationId, requestedBy, useCase, JSON.stringify(options),
+      [configurationId, requestedBy, project, JSON.stringify(options),
        JSON.stringify(params), Date.now() / 1000],
     );
     return Number(res.rows[0].id);
@@ -256,6 +287,7 @@ export class Store {
       configuration_id: Number(row.configuration_id),
       requested_by: String(row.requested_by ?? ""),
       use_case: String(row.use_case ?? "") || String(row.config_use_case ?? ""),
+      project: String(row.project ?? "") || String(row.use_case ?? ""),
       options: String(row.options ?? ""),
       params: String(row.params ?? ""),
       created_utc: Number(row.created_utc),

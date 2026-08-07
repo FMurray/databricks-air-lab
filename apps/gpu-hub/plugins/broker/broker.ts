@@ -63,6 +63,15 @@ export class Broker extends Plugin {
     } else {
       this.cfg = dbCfg ?? fileCfg;
     }
+    for (const t of this.cfg.teams) {
+      for (const u of t.use_cases) {
+        await this.store.upsertProject({
+          name: u.name,
+          teams: [t.name],
+          metadata: { business_app: "", description: u.description ?? "" },
+        });
+      }
+    }
     const catalog = repoWorkloads(APP_ROOT, this.cfg.catalog_team);
     const byKey = new Map<string, typeof catalog>();
     for (const c of catalog) {
@@ -376,6 +385,21 @@ export class Broker extends Plugin {
     });
 
     this.route(router, {
+      name: "projects",
+      method: "get",
+      path: "/projects",
+      handler: async (req, res) => {
+        const principal = this.principal(req as never);
+        const myTeams = new Set(teamsOf(this.cfg, principal).map((t) => t.name));
+        const rows = await this.store.projects();
+        res.json(rows.map((p) => ({
+          ...p,
+          billable_by_me: (p.teams as string[]).some((t) => myTeams.has(t)),
+        })));
+      },
+    });
+
+    this.route(router, {
       name: "options",
       method: "get",
       path: "/options",
@@ -421,7 +445,7 @@ export class Broker extends Plugin {
           res.status(403).json({ error: "not a member of any team — access is read-only" });
           return;
         }
-        const body = req.body as { configurationId?: number; useCase?: string;
+        const body = req.body as { configurationId?: number; project?: string;
           options?: string[]; params?: Record<string, string> };
         const configurationId = Number(body?.configurationId);
         const c = await this.store.configuration(configurationId);
@@ -433,17 +457,20 @@ export class Broker extends Plugin {
           res.status(403).json({ error: `not a member of team ${c.team}` });
           return;
         }
-        // the requester pays: the use case must belong to one of the requester's teams
-        const useCase = String(body?.useCase ?? "") || String(c.use_case ?? "");
-        const validUseCases = new Set(
-          myTeams.flatMap((t) => t.use_cases.map((u) => u.name)),
-        );
-        if (useCase && validUseCases.size && !validUseCases.has(useCase)) {
-          res.status(400).json({ error: `use case '${useCase}' is not in your teams` });
+        // the requester pays: the project must be billable by one of the requester's teams
+        const projectName = String(body?.project ?? "");
+        if (!projectName) {
+          res.status(400).json({ error: "a project is required — the run bills to it" });
+          return;
+        }
+        const project = (await this.store.projects()).find((p) => p.name === projectName);
+        const myTeamNames = new Set(myTeams.map((t) => t.name));
+        if (!project || !(project.teams as string[]).some((t) => myTeamNames.has(t))) {
+          res.status(400).json({ error: `project '${projectName}' is not billable by your teams` });
           return;
         }
         const runId = await this.store.insertRun(
-          configurationId, principal, useCase, body?.options ?? [], body?.params ?? {});
+          configurationId, principal, projectName, body?.options ?? [], body?.params ?? {});
         const events = await this.tick();
         res.json({ id: runId, events });
       },
