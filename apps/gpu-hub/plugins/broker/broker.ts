@@ -337,8 +337,32 @@ export class Broker extends Plugin {
     return [];
   }
 
-  injectRoutes(router: IAppRouter): void {
+  /**
+   * AppKit's route() registers the raw async handler on the Express router with no error
+   * boundary; Express 4 does not catch a rejected async handler, so any throw (e.g. a
+   * dropped Lakebase connection mid-query) becomes an unhandledRejection and, under Node's
+   * default, exits the process. Receipt: the hub crashed on GET /runs when the pooled
+   * Postgres connection was terminated after an idle gap (Store.runs -> tick -> handler,
+   * "Connection terminated due to connection timeout"). Wrap every handler so a failure
+   * returns 500 and the server stays up.
+   */
+  private safeRoute(router: IAppRouter, config: Parameters<Broker["route"]>[1]): void {
+    const handler = config.handler;
     this.route(router, {
+      ...config,
+      handler: async (req, res) => {
+        try {
+          await handler(req, res);
+        } catch (err) {
+          console.error(`[broker] ${config.method.toUpperCase()} ${config.path} failed:`, err);
+          if (!res.headersSent) res.status(500).json({ error: "internal error" });
+        }
+      },
+    });
+  }
+
+  injectRoutes(router: IAppRouter): void {
+    this.safeRoute(router, {
       name: "me",
       method: "get",
       path: "/me",
@@ -355,7 +379,42 @@ export class Broker extends Plugin {
       },
     });
 
-    this.route(router, {
+    this.safeRoute(router, {
+      name: "teams",
+      method: "get",
+      path: "/teams",
+      handler: async (req, res) => {
+        // The team directory. People belong to teams (possibly several); a team's use cases
+        // are its billable projects. Attribution (every run carries team + project) and
+        // observability (in-flight nodes vs the team's fair-share quota) both key off this,
+        // so the page reports each team's live utilization and run history.
+        const principal = this.principal(req as never).toLowerCase();
+        const allRuns = await this.store.runs();
+        res.json(
+          this.cfg.teams.map((t) => {
+            const teamRuns = allRuns.filter((r) => r.team === t.name);
+            const activeNodes = teamRuns
+              .filter((r) => r.state === "SUBMITTED" || r.state === "RUNNING")
+              .reduce((n, r) => n + r.nodes, 0);
+            return {
+              name: t.name,
+              quota_nodes: t.quota_nodes,
+              members: t.members,
+              projects: t.use_cases.map((u) => ({
+                name: u.name,
+                description: u.description ?? "",
+                run_count: teamRuns.filter((r) => r.project === u.name).length,
+              })),
+              run_count: teamRuns.length,
+              active_nodes: activeNodes,
+              is_mine: t.members.some((m) => m.toLowerCase() === principal),
+            };
+          }),
+        );
+      },
+    });
+
+    this.safeRoute(router, {
       name: "workloads",
       method: "get",
       path: "/workloads",
@@ -384,7 +443,7 @@ export class Broker extends Plugin {
       },
     });
 
-    this.route(router, {
+    this.safeRoute(router, {
       name: "projects",
       method: "get",
       path: "/projects",
@@ -399,7 +458,7 @@ export class Broker extends Plugin {
       },
     });
 
-    this.route(router, {
+    this.safeRoute(router, {
       name: "options",
       method: "get",
       path: "/options",
@@ -409,7 +468,7 @@ export class Broker extends Plugin {
       },
     });
 
-    this.route(router, {
+    this.safeRoute(router, {
       name: "capacity",
       method: "get",
       path: "/capacity",
@@ -424,7 +483,7 @@ export class Broker extends Plugin {
       },
     });
 
-    this.route(router, {
+    this.safeRoute(router, {
       name: "runs",
       method: "get",
       path: "/runs",
@@ -434,7 +493,7 @@ export class Broker extends Plugin {
       },
     });
 
-    this.route(router, {
+    this.safeRoute(router, {
       name: "createRun",
       method: "post",
       path: "/runs",
