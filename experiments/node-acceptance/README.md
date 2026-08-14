@@ -7,7 +7,7 @@ collectives hit expected bandwidth. GA surface only — standard env + pip, no D
 | Script | Workload | What it proves |
 |---|---|---|
 | `burn.py` | `workloads/gpu-burn.example.yaml` | all GPUs enumerate (NVML), sustained matmul TFLOPS, zero uncorrected ECC, no HW-slowdown throttle |
-| `allreduce_bench.py` | `workloads/nccl-allreduce.example.yaml` | all-reduce correctness + bus bandwidth vs size (NVLink intra-node; fabric inter-node) |
+| `allreduce_bench.py` | `workloads/nccl-allreduce.example.yaml` | size-sweep busbw (UAT allreduce-single, default 1×8×H100 NVLink). Multi-node allreduce in the `uat` suite is `allreduce_probe.py` via `multinode-probe.example.yaml`, not this file |
 
 Both print `RESULT ...` receipt lines (measured values, not characterizations) and exit
 non-zero on assertion failure — a green job run IS the acceptance record.

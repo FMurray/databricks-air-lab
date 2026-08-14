@@ -1,7 +1,9 @@
-"""Multi-node NCCL probe: init, per-rank identity, all-reduce correctness + bandwidth.
+"""The UAT allreduce: init, per-rank identity, all-reduce correctness + 256MB bandwidth.
 
-Answers open-q #2 (does multi-node schedule; latency) and #3 (env plumbing on the
-snapshot path) — launched via torchrun from probe_multinode.sh.
+This *is* the multi-node probe — `uat` plumbing (2×A10) and headline allreduce-fabric
+(2×8×H100) both launch this file via probe_multinode.sh. Answers open-q #2 (does
+multi-node schedule; latency) and #3 (env plumbing on the snapshot path). Size-sweep
+NVLink numbers are allreduce_bench.py; ctypes/RDMA isolation is nccl_allreduce_ctypes.py.
 """
 
 import os

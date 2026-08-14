@@ -1,8 +1,11 @@
-"""All-reduce bandwidth bench (UAT A2) — pip-only stand-in for nccl-tests.
+"""All-reduce size-sweep (UAT allreduce-single) — pip-only stand-in for nccl-tests.
 
-Launch under torchrun (see workloads/nccl-allreduce.example.yaml). Sweeps message sizes,
-reports algorithm + bus bandwidth per size (busbw = algbw * 2(n-1)/n, matching nccl-tests
-so numbers are comparable to published NVLink/fabric line rates).
+Launch under torchrun (see workloads/nccl-allreduce.example.yaml). Default shape is
+single-node 8×H100 (NVLink). This file is NOT what `uat run multinode` launches —
+that allreduce is experiments/foundation-models/multinode/allreduce_probe.py (one
+256MB size, A10 plumbing then 2×8×H100). Sweeps message sizes, reports algorithm +
+bus bandwidth per size (busbw = algbw * 2(n-1)/n, matching nccl-tests so numbers
+are comparable to published NVLink/fabric line rates).
 
 Env knobs: MIN_MB (8), MAX_MB (1024), ITERS (20), MIN_BUSBW_GBPS (optional pass bar —
 unset means record-only, no bar; set it once expected fabric numbers are known).
