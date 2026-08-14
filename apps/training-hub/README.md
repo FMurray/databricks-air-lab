@@ -99,8 +99,8 @@ warehouse, and Jobs API visibility on the workloads it should list.
 - `hub/jobs.py` — active runs via the Jobs API
 - `hub/templates.py` — AIR workload YAML generation + `air` CLI submit helper
 - `app.yaml` — Databricks Apps runtime config
-- `OTEL-INTEGRATION.md` — the hub's telemetry contract for workloads (see the
-  `air-otel-telemetry` skill)
+- `OTEL-INTEGRATION.md` — the hub's telemetry contract for workloads — **required data source
+  for the Fleet tab's utilization/health views** (see the `air-otel-telemetry` skill)
 
 ### Environment variables
 
@@ -132,6 +132,15 @@ platform product does not yet provide per-team access control or per-workload ch
 a reserved pool, so the hub fills the gap operationally (config-declared quotas + visibility)
 rather than by enforcement.
 
+### Data-source requirement (2026-08-06)
+
+Fleet utilization, availability, and run-health views **must be built on the hub's OTEL
+telemetry tables** (`OTEL-INTEGRATION.md`). `system.billing.usage` is joined for spend $ only;
+the Jobs API supplies run inventory only. Rationale: reserved pools bill as aggregate records
+and per-workload attribution inside a pool is not yet a product capability — the OTEL pipeline
+is the per-run, per-team utilization source the hub controls end-to-end, and the Submit tab
+injects the emission contract into every generated workload so the fleet view populates itself.
+
 ### Why quotas are declared, not enforced
 
 The product has no per-team entitlement today; the hub makes over/under-quota visible so the
@@ -149,7 +158,8 @@ platform lead stops being the middleman. Enforcement waits on the product.
 
 ### Roadmap sketch
 
-1. Utilization vs. reservation over time (needs DBU→node-hour rate per SKU)
+1. Utilization vs. reservation over time — from OTEL `gpu.utilization.percent` per team
+   (required source, see above); DBU→node-hour rate per SKU only for the $ overlay
 2. Capacity request/approval flow (replace ad-hoc pings to the platform lead)
 3. Release-calendar overlay (teams' cadence is release-driven)
 4. Per-run cost once per-workload tagging lands

@@ -1,8 +1,10 @@
 """Capacity model: declared config vs live in-flight — so capacity is never tribal knowledge.
 
 Three nested budgets, all declarative (the platform enforces only its own quota, by
-fail-fast — receipt: 20 submits, 4 admitted, docs/06):
-  1. platform quota per shape  (admission cap measured/It'd-be-configured, e.g. GPU_8xH100: 4)
+fail-fast — no queue; receipts in experiments/node-acceptance/NOTES.md):
+  1. platform quota per shape  (per-workspace ADJUSTABLE setting, raised via ES ticket —
+                                e.g. this workspace's GPU_8xH100 went 4 → 20 mid-UAT;
+                                config to keep current, never a measured constant)
   2. reservation               (what the customer pays for, e.g. 20 nodes)
   3. team quota                (hub-declared share of the reservation)
 """
@@ -15,7 +17,7 @@ from dataclasses import dataclass
 @dataclass
 class ShapeCapacity:
     shape: str
-    platform_quota_nodes: int   # measured/known admission cap for this shape (0 = unknown)
+    platform_quota_nodes: int   # current workspace quota for this shape (0 = unknown); ES-adjustable — keep config in sync
     reserved_nodes: int         # from the reservation (0 = on-demand only)
     in_flight: int              # brokered + observed runs currently holding nodes
 

@@ -7,11 +7,16 @@ from hub import config, identity, queue as hubq
 st.set_page_config(page_title="Training Hub", page_icon="🛠", layout="wide")
 
 cfg = config.load()
+# The app talks to exactly one workspace: everything (air CLI, SDK clients, billing
+# queries) resolves through this profile.
+import os
+os.environ["DATABRICKS_CONFIG_PROFILE"] = cfg.workspace.profile
 user, user_source = identity.current_user()
 my_teams = cfg.teams_of(user)
 broker = hubq.Broker(cfg=cfg, ws=None)  # ws=None: dry-run; pass WorkspaceClient() for live
 
 st.sidebar.write(f"**{user}**")
+st.sidebar.caption(f"workspace: {cfg.workspace.host or cfg.workspace.profile}")
 st.sidebar.caption(f"identity source: {user_source}")
 st.sidebar.write("Teams: " + (", ".join(t.name for t in my_teams) or "none — read-only"))
 page = st.sidebar.radio("View", ["Run", "Overview"], index=0 if my_teams else 1)

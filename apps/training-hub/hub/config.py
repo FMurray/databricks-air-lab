@@ -12,6 +12,12 @@ DEFAULT_CONFIG_PATH = os.environ.get("HUB_TEAMS_CONFIG", "config/teams.yaml")
 
 
 @dataclass
+class Workspace:
+    profile: str            # ~/.databrickscfg profile — THE app's one workspace
+    host: str = ""          # display only
+
+
+@dataclass
 class Reservation:
     total_nodes: int
     gpus_per_node: int = 8
@@ -39,6 +45,7 @@ class HubConfig:
     teams: list[Team]
     platform_quotas: dict = field(default_factory=dict)  # shape -> admitted nodes cap
     catalog_team: str = ""  # team that owns the repo workload catalog
+    workspace: Workspace = field(default_factory=lambda: Workspace(profile="DEFAULT"))
 
     def team_of(self, principal: str | None) -> str:
         teams = self.teams_of(principal)
@@ -72,4 +79,5 @@ def load(path: str | Path = DEFAULT_CONFIG_PATH) -> HubConfig:
         teams=teams,
         platform_quotas=raw.get("platform_quotas", {}),
         catalog_team=raw.get("catalog_team", ""),
+        workspace=Workspace(**raw.get("workspace", {"profile": "DEFAULT"})),
     )

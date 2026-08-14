@@ -1,15 +1,21 @@
 # Copy to teams.yaml (gitignored) and fill in real teams, member emails, and node quotas.
 # Quotas are declarative — the platform doesn't enforce them; the hub surfaces usage against them.
 
+workspace:
+  profile: <databrickscfg-profile>   # the ONE workspace this app talks to
+  host: https://<workspace-host>
+
 reservation:
   total_nodes: 20
   gpus_per_node: 8
   accelerator_type: GPU_8xH100
   region: us-east-1
 
-# Admission caps the platform enforces per shape (measured by fail-fast; ask AIR team for actuals)
+# Per-shape workspace quotas the platform enforces by fail-fast. These are ADJUSTABLE
+# per-workspace settings (raised via ES ticket) — get current values from the AIR team
+# and update after any change; never treat an observed admission cap as a fixed limit.
 platform_quotas:
-  GPU_8xH100: 4
+  GPU_8xH100: 20
 
 teams:
   - name: offers

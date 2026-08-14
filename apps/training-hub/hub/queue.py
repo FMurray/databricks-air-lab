@@ -222,7 +222,7 @@ class Broker:
             self.store.update("runs", r["id"], state="FAILED", finished_utc=time.time(),
                               detail=f"{r['ref']} not found in repo")
             return f"run {r['id']}: {r['ref']} not found"
-        profile = os.environ.get("HUB_PROFILE", "mkazia-lw2")
+        profile = self.cfg.workspace.profile
         try:
             out = subprocess.run(
                 ["air", "run", "--file", str(yaml_path), "-p", profile],

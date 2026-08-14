@@ -111,6 +111,7 @@ def repo_workloads(team: str) -> list[dict]:
             "title": title or key.lstrip("./"),
             "description": description,
             "author": _author(doc_files.get(key, p)),
+            "experiment_name": str(raw.get("experiment_name", "")),
             "kind": "air_yaml",
             "ref": str(p.relative_to(WORKLOADS_DIR.parent)),
             "team": team,
