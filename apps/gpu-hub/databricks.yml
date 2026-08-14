@@ -1,9 +1,22 @@
 bundle:
   name: gpu-hub
 
+# App runtime config (command + env) lives inline here, per target, instead of app.yaml.
+# The two workspaces use different Lakebase generations, so their env differs:
+#   - fevm (default): the older Lakebase *project* (projects/branches/endpoints) that was
+#     provisioned by hand; its endpoint/host are set explicitly.
+#   - dogfood: fully bundle-provisioned. A `database_instances` resource creates the Lakebase
+#     instance, a `sql_warehouses` resource creates the warehouse, and the app's `database`
+#     resource attaches the instance — Databricks then auto-grants the app SP its Postgres
+#     privileges and injects PGHOST/PGDATABASE/PGSSLMODE/LAKEBASE_ENDPOINT (value_from).
+#
+# Each target fully defines the app's `config` and `resources` (no shared base list) so there
+# is no cross-target merge ambiguity.
+
 variables:
   sql_warehouse_id:
-    description: SQL Warehouse ID
+    description: Existing SQL Warehouse ID (fevm target only)
+    default: ""
 
 resources:
   apps:
@@ -11,22 +24,71 @@ resources:
       name: "gpu-hub"
       description: "A Databricks App powered by AppKit"
       source_code_path: ./
-      # Uncomment to enable on behalf of user API scopes. Available scopes: sql, dashboards.genie, files.files, serving.serving-endpoints
-      # user_api_scopes:
-      #   - sql
-
-      # The resources which this app has access to.
-      resources:
-        - name: sql-warehouse
-          sql_warehouse:
-            id: ${var.sql_warehouse_id}
-            permission: CAN_USE
+      # config (command + env) and resources are defined per target below — DAB appends
+      # sequences on merge, so a base command here would duplicate into each target.
 
 targets:
+  # fevm — preserved exactly as the working deployment (hand-provisioned Lakebase project).
   default:
     default: true
     workspace:
       host: https://fevm-forrest-aws-stable.cloud.databricks.com
-
     variables:
       sql_warehouse_id: b90cbb9821e2d1e2
+    resources:
+      apps:
+        app:
+          config:
+            command: ["npm", "run", "start"]
+            env:
+              - name: DATABRICKS_WAREHOUSE_ID
+                value_from: sql-warehouse
+              - name: LAKEBASE_ENDPOINT
+                value: projects/gpu-hub/branches/production/endpoints/primary
+              - name: PGHOST
+                value: ep-old-water-d26susqc.database.us-east-1.cloud.databricks.com
+              - name: PGDATABASE
+                value: databricks_postgres
+              - name: PGSSLMODE
+                value: require
+          resources:
+            - name: sql-warehouse
+              sql_warehouse:
+                id: ${var.sql_warehouse_id}
+                permission: CAN_USE
+
+  # e2-dogfood (staging, us-west-2) — Lakebase provisioned declaratively by the bundle.
+  # The instance is Lakebase Autoscaling, so it's attached via the `postgres` app resource
+  # (project/branch/database paths), NOT the provisioned-style `database` resource. Databricks
+  # then auto-creates the app SP's Postgres role and grants CONNECT+CREATE, and injects
+  # PGHOST/PGDATABASE/PGSSLMODE/LAKEBASE_ENDPOINT (value_from).
+  #
+  # The SQL warehouse is an existing shared warehouse referenced by id via the sql_warehouse_id
+  # variable — supplied at deploy time (--var), never committed.
+  dogfood:
+    workspace:
+      host: https://e2-dogfood.staging.cloud.databricks.com
+    resources:
+      database_instances:
+        gpu-hub-db:
+          name: gpu-hub
+          capacity: CU_1
+      apps:
+        app:
+          config:
+            command: ["npm", "run", "start"]
+            env:
+              - name: DATABRICKS_WAREHOUSE_ID
+                value_from: sql-warehouse
+              - name: LAKEBASE_ENDPOINT
+                value_from: postgres
+          resources:
+            - name: sql-warehouse
+              sql_warehouse:
+                id: ${var.sql_warehouse_id}
+                permission: CAN_USE
+            - name: postgres
+              postgres:
+                branch: projects/gpu-hub/branches/production
+                database: projects/gpu-hub/branches/production/databases/databricks-postgres
+                permission: CAN_CONNECT_AND_CREATE

@@ -3,6 +3,7 @@ workloads/*.yaml
 docs/private/
 apps/training-hub/config/teams.yaml
 .DS_Store
+.venv/
 .obsidian/
 __pycache__/
 experiments/docker-otel-zerobus/vendor/
