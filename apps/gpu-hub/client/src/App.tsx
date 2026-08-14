@@ -11,6 +11,7 @@ import {
 import { Menu } from 'lucide-react';
 import { RunPage } from './pages/RunPage';
 import { OverviewPage } from './pages/OverviewPage';
+import { TeamsPage } from './pages/TeamsPage';
 
 const navLinkClass = ({ isActive }: { isActive: boolean }) =>
   `px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
@@ -33,6 +34,9 @@ function NavLinks({ className, linkClass, onClick }: { className?: string; linkC
     <nav className={className}>
       <NavLink to="/" end className={linkClass} onClick={onClick}>
         Run
+      </NavLink>
+      <NavLink to="/teams" className={linkClass} onClick={onClick}>
+        Teams
       </NavLink>
       <NavLink to="/overview" className={linkClass} onClick={onClick}>
         Overview
@@ -85,6 +89,7 @@ const router = createBrowserRouter([
     element: <Layout />,
     children: [
       { path: '/', element: <RunPage /> },
+      { path: '/teams', element: <TeamsPage /> },
       { path: '/overview', element: <OverviewPage /> },
     ],
   },

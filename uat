@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+# uat — launch the AIR UAT suites. Thin wrapper so testers type `./uat …` from the repo root.
+#
+# ./uat list                                   # matrix; Enter submits the highlighted cell
+# ./uat check                                  # integrity check (YAMLs + registry links)
+# ./uat run multinode                          # TTY: pick cells, submit, then air list runs
+# ./uat run multinode --hw a10 --profile <p>   # scripted: every A10-capable row
+# ./uat run notebook --shapes GPU_1xA10 --profile <p>
+# ./uat status <run-id>... --profile <p>       # TTY: air list runs
+#
+# Picks the pretty Typer+Rich front-end when those deps import; otherwise falls back to the
+# stdlib-only front-end (uat_min) — so it works in a no-PyPI customer env with just python3.
+# The run/status verbs additionally need the `air` + `databricks` CLIs on PATH.
+set -euo pipefail
+cd "$(dirname "$0")"
+PY="$(command -v python3 || command -v python)"
+if "$PY" -c "import typer, rich" >/dev/null 2>&1; then
+  exec "$PY" -m utils.verification.uat_cli "$@"
+else
+  exec "$PY" -m utils.verification.uat_min "$@"
+fi
