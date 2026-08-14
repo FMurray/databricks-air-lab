@@ -14,7 +14,9 @@
 # MAGIC - or a comma list, e.g. `GPU_1xA10,GPU_1xH100`.
 # MAGIC
 # MAGIC Multi-node is NOT run from here: distributed multi-node goes through the **air CLI only**
-# MAGIC (engagement rule) — `workloads/multinode-*.yaml`, `workloads/nccl-allreduce.example.yaml`.
+# MAGIC (engagement rule) — `./uat run multinode` / `workloads/multinode-*.yaml`. The allreduce
+# MAGIC *is* the multinode probe (`allreduce_probe.py`); size-sweep NVLink is a separate
+# MAGIC single-node YAML (`nccl-allreduce.example.yaml`).
 
 # COMMAND ----------
 

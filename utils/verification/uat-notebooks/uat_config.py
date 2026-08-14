@@ -16,7 +16,8 @@
 #
 # Multi-node shapes (e.g. 2 nodes x 8xH100) are deliberately ABSENT: distributed multi-node
 # goes through the air CLI only (engagement rule — see RUNNING-UAT.md ground rules);
-# use workloads/multinode-*.yaml and workloads/nccl-allreduce.example.yaml.
+# `./uat run multinode` / workloads/multinode-*.yaml. The allreduce *is* the multinode
+# probe (allreduce_probe.py); nccl-allreduce.example.yaml is the single-node NVLink sweep.
 
 # ── Per-target values — REQUIRED, committed blank on purpose ──────────────────────────
 # No workspace identifiers live in git: fill these in on the DEPLOYED copy of this file

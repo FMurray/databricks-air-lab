@@ -51,9 +51,80 @@ The AIR *submission-path* workloads below still require the `air` CLI — and pe
 rules, **all distributed multi-node runs are CLI-only** (no shapes beyond one node in the
 notebook suite by design; `pool-readiness` fronts the CLI rather than using notebook shapes).
 
+## Multi-node suite: the `uat` CLI
+
+The distributed items (correctness, FSDP, the allreduce probe, RDMA stress) are a **matrix of
+items × hardware** (`GPU_1xA10` / `GPU_1xH100` / `GPU_8xH100`). The `uat` CLI lets you see the
+grid, pick cells, and follow every run's logs in one screen — arrow keys switch which run is in
+front; the others keep following in the background. Launch recipes: `utils/verification/uat_suite.py`;
+what each item proves + its verdict stays in `utils/verification/results/registry.py`.
+
+**How to run it** (three options — pick what your environment allows):
+- `./uat …` — repo-root wrapper, no install. Picks the pretty (Typer+Rich) front-end if those
+  deps are importable, else the stdlib fallback. Works with just `python3`.
+- `uv run uat …` / `uv tool install .` then `uat …` — installs the pretty front-end.
+- **No PyPI (the customer's hardened workspace)?** Use the stdlib-only fallback directly — zero
+  installs, only `python3` + this checkout: `python3 -m utils.verification.uat_min <same args>`
+  (identical commands/behavior; `./uat` selects it automatically when typer/rich are absent).
+
+```bash
+./uat list                                   # item × hardware matrix (◆ = default SKU)
+./uat check                                  # integrity: YAMLs + registry links exist (CI-able)
+
+# TTY: arrow-key picker; Enter submits the highlighted cell, then `air list runs`
+./uat run multinode --profile mkazia-lw2
+./uat list --profile mkazia-lw2              # same matrix; Enter runs the cell, `l` only lists
+
+# scripted — skip the picker; `--hw` is the column, `--tier`/`--only` are the rows
+./uat run multinode --hw a10 --no-pick --profile mkazia-lw2
+./uat run multinode --tier headline --hw 8xh100 --confirm-spend --no-pick --profile mkazia-lw2
+./uat run multinode --only allreduce --hw a10,8xh100 --confirm-spend --no-pick --profile mkazia-lw2
+#   allreduce = the multinode probe (allreduce_probe.py); A10 plumbing + 8×H100 fabric in one go
+
+./uat run multinode --tier fabric --confirm-spend --profile mkazia-lw2   # interconnect stress
+./uat status <run-id>... --profile mkazia-lw2   # re-attach; TTY opens `air list runs`
+```
+
+On a TTY, `uat list` / `uat run multinode` opens the matrix: **enter** submits the
+highlighted cell (H100 asks **Y**), then hands the terminal to **`air list runs`**.
+**space** toggles extra cells into the same submit; **l** opens `air list runs` without
+submitting. `--no-watch` falls back to a status table; `--no-pick` skips the picker
+(needed in CI). H100 cells still refuse without `--confirm-spend` (or **Y** in the picker).
+
+H100 cells **refuse to submit without `--confirm-spend`** (or **Y** in the picker). `--print-only`
+shows the exact `air run` commands and submits nothing. The individual `air run --file … --override …`
+commands below still work — the CLI just packages the matrix so nobody re-derives override strings.
+
+`./uat run notebook --shapes GPU_1xA10 --profile <p>` submits the single-node check DRIVER above
+as a one-time job (same widgets), for driving the notebook suite from a laptop.
+
 ## Dependencies without PyPI — two recipes
 
 **Run a workload that needs extra Python packages (vendored wheels):**
+
+### Variant C (UAT CLI) — `.whl` paths in `environment.dependencies`
+
+AIR accepts absolute `/Workspace/...` or `/Volumes/...` wheel paths in
+`environment.dependencies` ([YAML reference](https://docs.databricks.com/aws/en/machine-learning/ai-runtime/cli/yaml-config)).
+The UAT CLI can inject those at submit time from a saved prefs file — nothing is
+applied until you configure a root:
+
+```bash
+uat config set wheels-root /Volumes/<catalog>/<schema>/deps/wheels
+uat config wheels allreduce --set xgboost-2.0.0-py3-none-any.whl
+uat config show
+# or interactively: uat list → highlight a row → c → set root / toggle .whl files
+```
+
+On submit, if both `wheels_root` and a wheel list for that suite item are set, UAT
+writes a gitignored `.composed-uat-*.yaml` with those absolute paths merged into
+`environment.dependencies` and runs that file. Unset prefs → base YAML unchanged.
+
+First live verification of deps-as-wheel-paths on a target workspace should be
+recorded in the family's `NOTES.md` (variant C was previously untested in-repo).
+
+### Variants A/B — unpacked vendor tree + `PYTHONPATH`
+
 1. On your laptop, from repo root: `./experiments/env-flexibility/vendored-wheels/vendor_deps.sh`
    (edit `PACKAGES=(...)` in the script first; uv cross-targets linux/amd64 py3.12 from any host).
 2. Make sure the `vendor/` dir is **committed / not gitignored** — the CLI's snapshot tar
@@ -84,8 +155,9 @@ air run --file workloads/<workload>.yaml -p mkazia-lw2
 | Runtime probe | `air run --file workloads/exec-probe.yaml -p mkazia-lw2` | 1×A10, ~10 min |
 | A1 GPU burn (dry) | `... --file workloads/gpu-burn.example.yaml ...` | 1×A10 |
 | A1 GPU burn (acceptance, per node) | add `--override compute.accelerator_type=GPU_8xH100 compute.num_accelerators=8 env_variables.EXPECT_GPUS=8 env_variables.BURN_SECONDS=900` | 8×H100 — coordinate first |
-| A2 all-reduce (dry) | `... --file workloads/nccl-allreduce.example.yaml --override compute.accelerator_type=GPU_1xA10 compute.num_accelerators=2` | 2×A10 |
-| A2 all-reduce (NVLink / fabric) | default YAML (8×H100) / `--override compute.num_accelerators=16` | H100 — coordinate first |
+| A2 all-reduce (dry / plumbing) | `... --file workloads/multinode-probe.example.yaml --override compute.accelerator_type=GPU_1xA10 compute.num_accelerators=2` | 2×A10 — this *is* the allreduce probe |
+| A2 all-reduce (NVLink size sweep) | `... --file workloads/nccl-allreduce.example.yaml` | 8×H100 single-node; not in `uat run multinode` |
+| A2 all-reduce (fabric / headline) | `... --file workloads/multinode-probe.example.yaml` (default 16 accel) | 2×8×H100 — same probe as plumbing |
 | W3 LoRA (dry) | `... --file workloads/lora-finetune.example.yaml ...` | 1×A10; needs HF egress |
 | W5 XGBoost A10 control | `... --file workloads/xgboost-gpu.example.yaml ...` | 1×A10 |
 | W5 XGBoost H100 repro | add `--override compute.accelerator_type=GPU_1xH100` | if it times out at `PHASE data_ready` → repro confirmed, escalate |

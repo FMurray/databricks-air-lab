@@ -27,13 +27,13 @@ network posture better than our open sandboxes). Profile: `mkazia-lw2`. Catalog:
 | 2 | OTEL→Zerobus telemetry (Docker) | `docker-otel-zerobus-mkazia.yaml` | 1×A10 | ⛔ blocked: catalog bucket 403 + no SP (image ✅ registered, scope ✅, schema ✅, Zerobus edge ✅ live) |
 | 3 | Multi-language / JVM (DJL) | `djl-train.yaml` | 1×A10 | ⏸ gated on #1 (egress + exec findings) |
 | 4 | Classic ML (TabICL) | `tabicl-bench.yaml` → `tabicl-memprobe` | 1×A10 → 1×H100 | ⏸ gated on #1 |
-| 5 | Multinode probe (cheap) | `multinode-probe.yaml` + A10 override | 2×(1×A10) | ✅ run 128835177125736 — 2-node coordination verified |
-| 6 | Multinode at scale | `multinode-probe` ✅, `multinode-correctness`, `fsdp-multinode` | 2×(8×H100) | ✅ probe on reserved pool: run 968264353316767 (2026-07-24) — 16 ranks/2 nodes, busbw ~332 GB/s, submit→SUCCESS 2 min; correctness/FSDP next |
+| 5 | Multinode / allreduce probe (cheap) | `multinode-probe.yaml` + A10 override | 2×(1×A10) | ✅ run 128835177125736 — 2-node coordination verified. This *is* the allreduce (`allreduce_probe.py`); there is no separate plumbing allreduce item. |
+| 6 | Multinode at scale | `multinode-probe` ✅ (= headline `allreduce-fabric`), `multinode-correctness`, `fsdp-multinode` | 2×(8×H100) | ✅ probe on reserved pool: run 968264353316767 (2026-07-24) — 16 ranks/2 nodes, busbw ~332 GB/s, submit→SUCCESS 2 min; correctness/FSDP next |
 | 7 | Training Hub app | `apps/training-hub/` | Apps | ⛔ blocked: Apps disabled for the org |
 | 8 | Billing/visibility SQL | `utils/billing/`, `utils/visibility/` | warehouse | ✅ runnable (system tables readable); telemetry joins wait on #2 |
 | 9 | Node acceptance: burn + health | `gpu-burn.example.yaml` | 1×A10 dry → 8×H100/node | ✅ **A1 COMPLETE 2026-07-25: 20/20 pool nodes PASS** — 160 distinct GPU UUIDs, 0 ECC / 0 throttle, 641–774 TFLOPS/GPU; peak 19 concurrent nodes; receipts + allocation map in `experiments/node-acceptance/NOTES.md` |
 | 9b | RDMA / fabric stress (5 methods) | `rdma-m1-soak`…`rdma-m5-parambench` + `experiments/rdma-stress/` | 2–16×(8×H100) | 🧪 staged 2026-07-25; M3 counter exposure on H100 + 16-node soak pending (coordinate before firing) |
-| 10 | Node acceptance: all-reduce bench | `nccl-allreduce.example.yaml` | 2×A10 dry → 8/16×H100 | 🆕 built 2026-07-24; dry-run gated on #1 |
+| 10 | Node acceptance: all-reduce size sweep | `nccl-allreduce.example.yaml` | 8×H100 (single-node NVLink) | 🆕 built 2026-07-24; registry `allreduce-single`. Multi-node allreduce is #5/#6, not this YAML. |
 | 11 | Env flexibility: vLLM in std env | `vllm-smoke.example.yaml` | 1×A10 dry → 1×H100 | 🆕 built 2026-07-24; needs HF egress (probe reports) |
 | 12 | Classic ML: XGBoost GPU (hang repro) | `xgboost-gpu.example.yaml` | 1×A10 control → 1×H100 | 🆕 built 2026-07-24 |
 | 13 | FM: LoRA fine-tune | `lora-finetune.example.yaml` | 1×A10 dry → 8×H100 | 🆕 built 2026-07-24; needs HF egress |
