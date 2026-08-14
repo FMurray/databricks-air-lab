@@ -5,7 +5,8 @@ experiment_name: air-lab-multinode-correctness
 
 environment:
   version: "5"   # v4 job-plane egress broken on hardened ws — see docs/06
-  dependencies: []   # torch preinstalled
+  dependencies: []   # v5 job tasks boot the BARE interpreter (no torch on PATH) — command
+                     # calls the baked-in AI-env torchrun by absolute path. See docs/06.
 
 compute:
   num_accelerators: 16
@@ -19,7 +20,7 @@ code_source:
       - experiments/foundation-models/multinode/
 
 command: >-
-  torchrun --nnodes=$NUM_NODES --node_rank=$NODE_RANK
+  /opt/databricks-environments/databricks-ai/bin/torchrun --nnodes=$NUM_NODES --node_rank=$NODE_RANK
   --master_addr=$MASTER_ADDR --master_port=$MASTER_PORT
   --nproc_per_node=$LOCAL_WORLD_SIZE
   $CODE_SOURCE_PATH/experiments/foundation-models/multinode/distributed_correctness_probe.py

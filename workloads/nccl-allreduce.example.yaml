@@ -1,6 +1,7 @@
-# UAT A2: all-reduce bandwidth bench. Default = single node 8xH100 (NVLink numbers);
-# inter-node fabric numbers: --override compute.num_accelerators=16
-# Cheap plumbing dry-run first: --override compute.accelerator_type=GPU_1xA10 compute.num_accelerators=2
+# UAT A2 size-sweep (registry allreduce-single): intra-node NVLink busbw vs message size.
+# Default = 1 node × 8xH100. NOT in the `uat run multinode` suite — that allreduce is
+# workloads/multinode-probe.example.yaml (allreduce_probe.py, one 256MB size, two scales).
+# Inter-node fabric: the same probe at 2×8×H100, or the ctypes/RDMA fabric tier.
 experiment_name: air-lab-nccl-allreduce
 
 environment:
@@ -18,9 +19,11 @@ code_source:
     include_paths:
       - experiments/node-acceptance/
 
-# torchrun wiring from AIR-injected env (NUM_NODES/NODE_RANK/MASTER_ADDR|PORT single-node-safe defaults)
+# torchrun wiring from AIR-injected env (NUM_NODES/NODE_RANK/MASTER_ADDR|PORT single-node-safe defaults).
+# v5 job tasks boot the BARE interpreter (no torch on PATH) — use the baked-in AI-env torchrun
+# by absolute path. See docs/06. (The torch-free ctypes alternative is nccl-allreduce-v5.example.yaml.)
 command: |
-  torchrun --nnodes=${NUM_NODES:-1} --node-rank=${NODE_RANK:-0} \
+  /opt/databricks-environments/databricks-ai/bin/torchrun --nnodes=${NUM_NODES:-1} --node-rank=${NODE_RANK:-0} \
     --nproc-per-node=${LOCAL_WORLD_SIZE:-8} \
     --master-addr=${MASTER_ADDR:-127.0.0.1} --master-port=${MASTER_PORT:-29500} \
     $CODE_SOURCE_PATH/experiments/node-acceptance/allreduce_bench.py
