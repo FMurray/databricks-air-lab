@@ -1,0 +1,35 @@
+[project]
+name = "databricks-air-lab"
+version = "0.1.0"
+description = "AIR UAT lab utilities — the `uat` CLI launches the multi-node/notebook UAT suites."
+requires-python = ">=3.10"
+dependencies = [
+  "typer>=0.12",   # CLI framework (brings rich as a dep, but pin it explicitly below too)
+  "rich>=13",      # pretty tables / live poll / colored verdicts
+]                    # the run/status verbs still shell out to the `air` + `databricks` CLIs
+
+[project.scripts]
+uat = "utils.verification.uat_cli:main"       # pretty (Typer + Rich)
+uat-min = "utils.verification.uat_min:main"   # stdlib-only fallback (no-PyPI environments)
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+# The `uat` command only needs the CLI, its manifest, and the results registry it cross-links.
+# Scope the built wheel to those so `uv tool install` doesn't drag in the vendored wheels,
+# notebooks, and experiment data under utils/. An editable `uv run` uses the repo in place,
+# and the CLI locates workloads/*.yaml at runtime via repo-root detection (see _find_repo).
+[tool.hatch.build.targets.wheel]
+only-include = [
+  "utils/__init__.py",
+  "utils/verification/__init__.py",
+  "utils/verification/uat_cli.py",
+  "utils/verification/uat_min.py",
+  "utils/verification/uat_core.py",
+  "utils/verification/uat_prefs.py",
+  "utils/verification/uat_suite.py",
+  "utils/verification/uat_tui.py",
+  "utils/verification/results/__init__.py",
+  "utils/verification/results/registry.py",
+]
