@@ -83,6 +83,9 @@ what each item proves + its verdict stays in `utils/verification/results/registr
 
 ./uat run multinode --tier fabric --confirm-spend --profile mkazia-lw2   # interconnect stress
 ./uat status <run-id>... --profile mkazia-lw2   # re-attach; TTY opens `air list runs`
+
+# assign a serverless usage policy to every submitted run (by name, or --policy-id <uuid>):
+./uat run multinode --tier headline --confirm-spend --profile mkazia-lw2 --policy "air lab pool policy"
 ```
 
 On a TTY, `uat list` / `uat run multinode` opens the matrix: **enter** submits the

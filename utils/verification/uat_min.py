@@ -16,6 +16,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import shlex
 import subprocess
 import sys
 import time
@@ -91,6 +92,11 @@ def cmd_run_multinode(args) -> int:
         print(err)
         return 2
 
+    pol_overrides, perr = core.policy_override(args.policy, args.policy_id)
+    if perr:
+        print(perr)
+        return 2
+
     spendy = [it for it in items if uat_suite.is_spendy(it)]
     if spendy and not (args.confirm_spend or args.dry_run):
         print("Refusing: these cells burn real H100 money — coordinate in the team channel, then")
@@ -104,7 +110,7 @@ def cmd_run_multinode(args) -> int:
     if args.print_only:
         for it in items:
             print(f"# {it['key']}  ({it['shape']}){'  [dry]' if args.dry_run else ''}")
-            print("  " + " ".join(core.air_cmd(it, profile, args.dry_run, repo)))
+            print("  " + shlex.join(core.air_cmd(it, profile, args.dry_run, repo, pol_overrides)))
         return 0
 
     flags = ("" if not args.dry_run else " [DRY-RUN]") + ("" if not args.sequential else " [sequential]")
@@ -115,7 +121,7 @@ def cmd_run_multinode(args) -> int:
     final: dict = {}
     for it in items:
         name = it["key"]
-        rid, status, detail = core.submit(it, profile, args.dry_run, repo)
+        rid, status, detail = core.submit(it, profile, args.dry_run, repo, pol_overrides)
         runs[name] = {"item": it, "run_id": rid}
         if args.dry_run:
             ok = status == "DRY_RUN_OK"
@@ -302,6 +308,8 @@ def build_parser() -> argparse.ArgumentParser:
     mn.add_argument("--only", help="comma list of item names within the tier")
     mn.add_argument("--hw", help="SKU column(s): 8xh100 / h100 / GPU_8xH100")
     mn.add_argument("--profile", "-p", help="databricks profile (or set UAT_PROFILE)")
+    mn.add_argument("--policy", help="usage_policy_name to assign to every submitted run")
+    mn.add_argument("--policy-id", help="usage_policy_id (UUID); mutually exclusive with --policy")
     mn.add_argument("--confirm-spend", action="store_true", help="required for any H100 item")
     mn.add_argument("--dry-run", action="store_true", help="air run --dry-run: validate, no GPU spend")
     mn.add_argument("--print-only", action="store_true", help="print the air commands, submit nothing")

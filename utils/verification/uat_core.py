@@ -206,14 +206,30 @@ def composed_workload_file(item: dict, repo: str) -> str:
     return str(dest.relative_to(repo))
 
 
+def policy_override(name: str | None, policy_id: str | None) -> tuple[list[str], str | None]:
+    """Turn --policy / --policy-id into air `--override` tokens. Returns (tokens, error).
+
+    usage_policy_name and usage_policy_id are mutually exclusive (air rejects both); the run-as
+    user must have access to the policy. Empty tokens when neither is given."""
+    if name and policy_id:
+        return [], ("pass only one of --policy / --policy-id — usage_policy_name and "
+                    "usage_policy_id are mutually exclusive")
+    if name:
+        return [f"usage_policy_name={name}"], None
+    if policy_id:
+        return [f"usage_policy_id={policy_id}"], None
+    return [], None
+
+
 def air_cmd(item: dict, profile: str | None, dry_run: bool,
-            repo: str | None = None) -> list[str]:
+            repo: str | None = None, extra_overrides: list[str] | None = None) -> list[str]:
     file_arg = composed_workload_file(item, repo) if repo else item["file"]
     cmd = ["air", "run", "--file", file_arg, *profile_args(profile)]
     if dry_run:
         cmd.append("--dry-run")
-    if item["overrides"]:
-        cmd += ["--override", *item["overrides"]]
+    overrides = list(item["overrides"]) + list(extra_overrides or [])
+    if overrides:
+        cmd += ["--override", *overrides]
     return cmd
 
 
@@ -241,7 +257,8 @@ def _air_json(args: list[str], profile: str | None, cwd: str | None = None,
     return r.returncode, data, ANSI.sub("", r.stdout + r.stderr).strip()
 
 
-def submit(item: dict, profile: str | None, dry_run: bool, repo: str) -> tuple[str | None, str, str]:
+def submit(item: dict, profile: str | None, dry_run: bool, repo: str,
+           extra_overrides: list[str] | None = None) -> tuple[str | None, str, str]:
     """Submit one item; return (run_id, status, detail).
 
     Uses `air --json run …` so the returned envelope carries run_id/status directly. `air run`
@@ -256,8 +273,9 @@ def submit(item: dict, profile: str | None, dry_run: bool, repo: str) -> tuple[s
     args = ["run", "--file", file_arg]
     if dry_run:
         args.append("--dry-run")
-    if item["overrides"]:
-        args += ["--override", *item["overrides"]]
+    overrides = list(item["overrides"]) + list(extra_overrides or [])
+    if overrides:
+        args += ["--override", *overrides]
     _rc, data, raw = _air_json(args, profile, cwd=repo, timeout=600)
     data = data or {}
     return data.get("run_id"), data.get("status", ""), raw[-300:] or "no output"
