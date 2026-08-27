@@ -206,19 +206,16 @@ def composed_workload_file(item: dict, repo: str) -> str:
     return str(dest.relative_to(repo))
 
 
-def policy_override(name: str | None, policy_id: str | None) -> tuple[list[str], str | None]:
-    """Turn --policy / --policy-id into air `--override` tokens. Returns (tokens, error).
+def check_overrides(tokens: list[str]) -> str | None:
+    """Validate raw --override passthrough tokens. Returns an error string, or None if OK.
 
-    usage_policy_name and usage_policy_id are mutually exclusive (air rejects both); the run-as
-    user must have access to the policy. Empty tokens when neither is given."""
-    if name and policy_id:
-        return [], ("pass only one of --policy / --policy-id — usage_policy_name and "
-                    "usage_policy_id are mutually exclusive")
-    if name:
-        return [f"usage_policy_name={name}"], None
-    if policy_id:
-        return [f"usage_policy_id={policy_id}"], None
-    return [], None
+    These are handed straight to `air run --override` (KEY=VALUE), so the only thing worth
+    catching client-side is a token with no '=' (e.g. usage_policy_name="my policy" is fine;
+    a bare word is not). air validates the keys/values themselves."""
+    bad = [t for t in tokens if "=" not in t or t.startswith("=")]
+    if bad:
+        return "each --override must be KEY=VALUE (got: " + ", ".join(bad) + ")"
+    return None
 
 
 def air_cmd(item: dict, profile: str | None, dry_run: bool,
