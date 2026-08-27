@@ -1,0 +1,35 @@
+# Model I/O probe — base-model load from a UC Volume (offline) + UC model-registry round-trip.
+# Probe: experiments/model-io/model_io_probe.py (single process; no torchrun, no serverless_gpu).
+# Pre-registered criteria + local pre-flight + receipts: experiments/model-io/NOTES.md.
+# Report format: the acceptance-report skill.
+experiment_name: air-lab-model-io
+
+environment:
+  version: "5"          # MANDATORY. torch + transformers + mlflow are preinstalled in the
+  dependencies: []      # databricks-ai env; if transformers is ABSENT, Check 1/2 report BLOCKED
+                        # (a finding) — add `transformers` here then.
+
+compute:
+  num_accelerators: 1
+  accelerator_type: GPU_1xA10    # model I/O is not distributed; A10 is the right-size default.
+
+code_source:
+  type: snapshot
+  snapshot:
+    root_path: ..
+    include_paths:
+      - experiments/model-io/
+
+# Single process on the databricks-ai python (torch/transformers/mlflow live there — NOT the base
+# `python3`). No PYTHONPATH bridge needed (this probe does not use serverless_gpu).
+# ⚠ FILL IN --volume-dir (a writable UC volume) and --uc-model (catalog.schema.model, needs
+#   CREATE MODEL on that schema).
+command: >-
+  /opt/databricks-environments/databricks-ai/bin/python
+  $CODE_SOURCE_PATH/experiments/model-io/model_io_probe.py
+  --volume-dir /Volumes/<catalog>/<schema>/<volume>/modelio
+  --uc-model <catalog>.<schema>.airlab_modelio_probe
+
+max_retries: 0
+timeout_minutes: 15
+mlflow_run_name: model-io

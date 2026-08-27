@@ -522,9 +522,13 @@ def train_loop(model, opt, sched, args, mesh, device, world, start_step, mlf, ck
         if save_every and ckpt_dir and step > start_step and step % save_every == 0:
             collective_dcp_save(model, opt, sched, step, ckpt_dir, world, device)
 
-        if fail_at >= 0 and step == fail_at:
+        if fail_at >= 0 and step == fail_at and start_step == 0:
             # Whole-rank hard exit to let the PLATFORM's max_retries decide (torchrun
             # --max-restarts=0 in the YAML isolates this from torchrun's elastic restart).
+            # Guarded on start_step == 0 so the fault fires ONCE, on the cold run: the
+            # resumed attempt (start_step > 0 via --auto-resume) skips it and completes, so
+            # the open-q #10 test TERMINATES in success (attempt 2 emits RESUMED_FROM_STEP +
+            # FSDP_TRAIN_OK) instead of re-failing at the same step every retry.
             print(f"[rank{rank}] FSDP_FORCED_EXIT at step {step} (open-q #10 max_retries test)",
                   flush=True)
             sys.exit(137)
