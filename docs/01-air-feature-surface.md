@@ -84,7 +84,12 @@ Note `command` is **arbitrary bash** — this is the only documented escape hatc
 ## Data access
 
 - Tabular: Spark Connect → Delta tables → pandas/NumPy.
-- Files/unstructured: UC Volumes; `serverless_gpu.data.UCVolumeDataset` for cached/streaming file loading.
+- Files/unstructured: UC Volumes; `serverless_gpu.data.UCVolumeDataset` + `serverless_gpu.data.DataLoader`
+  auto-shard across ranks×workers (no DistributedSampler) and cache to local `/tmp` — ✅ verified
+  (worker axis) 2026-08-27, run 227734973662034, A10. **Sharp edge:** on the CLI/torchrun path
+  `serverless_gpu` is NOT in the databricks-ai torch venv; it's on-image in the base python (no torch).
+  Bridge with `PYTHONPATH=/databricks/python3/lib/python3.12/site-packages` (no egress). Full recipe:
+  `docs/cookbook/load-training-data.md`; receipts: `experiments/dataloading/NOTES.md`.
 - RDMA + high-performance data loading for distributed jobs.
 
 ## Observability / governance
