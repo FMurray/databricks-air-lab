@@ -48,7 +48,6 @@ Full serve/configure/deploy detail: `apps/training-hub/README.md`.
 | Path | Purpose |
 |---|---|
 | `docs/` | The cookbook (recipes + reference docs; open questions cited as "open-q #N") |
-| `docs/private/` | Customer-specific material — gitignored, local-only |
 | `apps/training-hub/` | The web app: fleet visibility + workload submission |
 | `workloads/` | AIR CLI workload YAMLs; `*.example.yaml` committed, live copies gitignored |
 | `experiments/` | Hands-on tests by family; findings + receipts in each `NOTES.md` |

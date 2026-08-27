@@ -1,6 +1,8 @@
 workloads/*.yaml
 !workloads/*.example.yaml
 docs/private/
+# numbered cookbook docs (01-06) — local-only, not for showing
+docs/0[1-6]-*.md
 apps/training-hub/config/teams.yaml
 .DS_Store
 .venv/
