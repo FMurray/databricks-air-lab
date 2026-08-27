@@ -1,0 +1,31 @@
+# UCVolumeDataset API-contract introspection (single process, no torchrun). Probe:
+# experiments/dataloading/ucvolume_introspect.py. Reuses the dataset the ucvolume-dataloader probe
+# already wrote to the volume. FILL IN the volume dataset dir (the same --volume-dir + /dataset).
+experiment_name: air-lab-dataloading
+
+environment:
+  version: "5"
+  dependencies: []
+
+compute:
+  num_accelerators: 1
+  accelerator_type: GPU_1xA10
+
+code_source:
+  type: snapshot
+  snapshot:
+    root_path: ..
+    include_paths:
+      - experiments/dataloading/
+
+# PYTHONPATH bridge (see ucvolume-dataloader.example.yaml) + the torch-having databricks-ai python
+# directly (no torchrun — single process, the script inits a world=1 PG itself).
+command: >-
+  PYTHONPATH=/databricks/python3/lib/python3.12/site-packages:$PYTHONPATH
+  /opt/databricks-environments/databricks-ai/bin/python
+  $CODE_SOURCE_PATH/experiments/dataloading/ucvolume_introspect.py
+  /Volumes/<catalog>/<schema>/<volume>/ucvolume-probe/dataset
+
+max_retries: 0
+timeout_minutes: 8
+mlflow_run_name: ucvolume-introspect

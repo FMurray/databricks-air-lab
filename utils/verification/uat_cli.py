@@ -31,6 +31,7 @@ from __future__ import annotations
 
 import json
 import os
+import shlex
 import subprocess
 import sys
 import time
@@ -277,7 +278,7 @@ def check(repo: Optional[str] = _REPO_OPT) -> None:
 def _submit_launches(
     launches: list[dict], *, tier: str, profile: str | None, repo_root: str,
     dry_run: bool = False, sequential: bool = False, no_poll: bool = False,
-    no_watch: bool = False, tty: bool = False,
+    no_watch: bool = False, tty: bool = False, extra_overrides: list[str] | None = None,
 ) -> int:
     """Submit pinned cells, then hand the TTY to `air list runs`. Returns process exit code."""
     flags = ("" if not dry_run else " [DRY-RUN]") + ("" if not sequential else " [sequential]")
@@ -288,7 +289,7 @@ def _submit_launches(
     final: dict = {}
     for it in launches:
         name = it["key"]
-        rid, status, detail = core.submit(it, profile, dry_run, repo_root)
+        rid, status, detail = core.submit(it, profile, dry_run, repo_root, extra_overrides)
         runs[name] = {"item": it, "run_id": rid}
         if dry_run:
             ok = status == "DRY_RUN_OK"
@@ -370,6 +371,9 @@ def multinode(
     pick: bool = typer.Option(False, "--pick", help="force the interactive matrix even if --hw is set"),
     no_pick: bool = typer.Option(False, "--no-pick", help="never open the picker (scripted / CI)"),
     profile: Optional[str] = _PROFILE_OPT,
+    override: Optional[List[str]] = typer.Option(None, "--override", "-o", metavar="KEY=VALUE",
+                                                 help="raw KEY=VALUE passed straight to air --override on every run "
+                                                      "(repeatable), e.g. -o usage_policy_name='my policy'"),
     confirm_spend: bool = typer.Option(False, "--confirm-spend", help="required for any H100 cell"),
     dry_run: bool = typer.Option(False, "--dry-run", help="air run --dry-run: validate, no GPU spend"),
     print_only: bool = typer.Option(False, "--print-only", help="print the air commands, submit nothing"),
@@ -380,6 +384,11 @@ def multinode(
 ) -> None:
     """Launch distributed items. TTY: pick cells, submit, then `air list runs`."""
     repo_root = core.find_repo(repo)
+    extra_overrides = list(override or [])
+    oerr = core.check_overrides(extra_overrides)
+    if oerr:
+        console.print(f"[red]{oerr}[/]")
+        raise typer.Exit(2)
     tty = bool(console.is_terminal and sys.stdin.isatty())
     use_pick = (pick or (tty and hw is None)) and not no_pick
     # --hw names a column: unless the caller also named a tier, use every row that
@@ -431,13 +440,13 @@ def multinode(
         for it in launches:
             tag = "  [dim][dry][/]" if dry_run else ""
             console.print(f"[dim]#[/] [bold cyan]{it['key']}[/]  ({it['shape']}){tag}")
-            print("  " + " ".join(core.air_cmd(it, profile, dry_run, repo_root)))
+            print("  " + shlex.join(core.air_cmd(it, profile, dry_run, repo_root, extra_overrides)))
         raise typer.Exit(0)
 
     raise typer.Exit(_submit_launches(
         launches, tier=tier, profile=profile, repo_root=repo_root,
         dry_run=dry_run, sequential=sequential, no_poll=no_poll,
-        no_watch=no_watch, tty=tty,
+        no_watch=no_watch, tty=tty, extra_overrides=extra_overrides,
     ))
 
 

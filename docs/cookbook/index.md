@@ -9,6 +9,7 @@ anything unverified is labeled as such.
 - [Run multi-node training](run-multi-node-training.md) — torchrun across 8×H100 nodes, verified end-to-end
 - [Use a custom Docker image](use-a-custom-docker-image.md) — native deps, non-Python stacks, cross-build traps
 - [Install packages from a UC Volume](install-packages-from-a-volume.md) — Python deps on no-PyPI workspaces: vendor once, one YAML line per workload
+- [Load training data](load-training-data.md) — UCVolumeDataset auto-sharding + caching, and the PYTHONPATH bridge that makes serverless_gpu importable on the CLI path
 - [Run non-Python workloads](run-non-python-workloads.md) — the JVM ladder through the GA surface
 
 ## Observe things

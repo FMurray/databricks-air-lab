@@ -206,14 +206,27 @@ def composed_workload_file(item: dict, repo: str) -> str:
     return str(dest.relative_to(repo))
 
 
+def check_overrides(tokens: list[str]) -> str | None:
+    """Validate raw --override passthrough tokens. Returns an error string, or None if OK.
+
+    These are handed straight to `air run --override` (KEY=VALUE), so the only thing worth
+    catching client-side is a token with no '=' (e.g. usage_policy_name="my policy" is fine;
+    a bare word is not). air validates the keys/values themselves."""
+    bad = [t for t in tokens if "=" not in t or t.startswith("=")]
+    if bad:
+        return "each --override must be KEY=VALUE (got: " + ", ".join(bad) + ")"
+    return None
+
+
 def air_cmd(item: dict, profile: str | None, dry_run: bool,
-            repo: str | None = None) -> list[str]:
+            repo: str | None = None, extra_overrides: list[str] | None = None) -> list[str]:
     file_arg = composed_workload_file(item, repo) if repo else item["file"]
     cmd = ["air", "run", "--file", file_arg, *profile_args(profile)]
     if dry_run:
         cmd.append("--dry-run")
-    if item["overrides"]:
-        cmd += ["--override", *item["overrides"]]
+    overrides = list(item["overrides"]) + list(extra_overrides or [])
+    if overrides:
+        cmd += ["--override", *overrides]
     return cmd
 
 
@@ -241,7 +254,8 @@ def _air_json(args: list[str], profile: str | None, cwd: str | None = None,
     return r.returncode, data, ANSI.sub("", r.stdout + r.stderr).strip()
 
 
-def submit(item: dict, profile: str | None, dry_run: bool, repo: str) -> tuple[str | None, str, str]:
+def submit(item: dict, profile: str | None, dry_run: bool, repo: str,
+           extra_overrides: list[str] | None = None) -> tuple[str | None, str, str]:
     """Submit one item; return (run_id, status, detail).
 
     Uses `air --json run …` so the returned envelope carries run_id/status directly. `air run`
@@ -256,8 +270,9 @@ def submit(item: dict, profile: str | None, dry_run: bool, repo: str) -> tuple[s
     args = ["run", "--file", file_arg]
     if dry_run:
         args.append("--dry-run")
-    if item["overrides"]:
-        args += ["--override", *item["overrides"]]
+    overrides = list(item["overrides"]) + list(extra_overrides or [])
+    if overrides:
+        args += ["--override", *overrides]
     _rc, data, raw = _air_json(args, profile, cwd=repo, timeout=600)
     data = data or {}
     return data.get("run_id"), data.get("status", ""), raw[-300:] or "no output"

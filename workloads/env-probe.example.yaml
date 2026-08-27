@@ -1,0 +1,29 @@
+# Env topology diagnostic — maps torch + serverless_gpu availability across every interpreter on
+# the AIR container. Probe: experiments/dataloading/env_probe.py (pure stdlib; no torchrun).
+# Answers "is serverless_gpu available on env v5, and where (with torch)?". No UC volume needed.
+# Has no workspace-specific fields, so this template is runnable as-is: air run -f <this> -p <profile>.
+experiment_name: air-lab-dataloading
+
+environment:
+  version: "5"
+  dependencies: []
+
+compute:
+  num_accelerators: 1
+  accelerator_type: GPU_1xA10
+
+code_source:
+  type: snapshot
+  snapshot:
+    root_path: ..
+    include_paths:
+      - experiments/dataloading/
+
+# Bare `python3` = the ROOT env the launcher activates ("Root python environment activated
+# successfully" in run logs) — the one env5_survey found databricks.serverless_gpu in. The probe
+# then subprocess-checks the databricks-ai venv (and every other interpreter) from there.
+command: python3 $CODE_SOURCE_PATH/experiments/dataloading/env_probe.py
+
+max_retries: 0
+timeout_minutes: 8
+mlflow_run_name: env-probe
