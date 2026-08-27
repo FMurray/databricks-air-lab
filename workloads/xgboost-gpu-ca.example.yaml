@@ -1,0 +1,36 @@
+# XGBoost single-GPU training on the California Housing dataset (docs sgc-xgboost, hardened).
+# Script twin of the `xgboost_gpu_train` notebook — CLI path for automated E2E GPU verification.
+# Reads the dataset from a UC Volume (egress-free) and checkpoints back to one.
+# Copy to xgboost-gpu-ca.yaml (gitignored) and fill in <catalog>/<schema>/<volume>.
+#
+# Pass = the `air logs <run_id>` stream contains `XGB_GPU_TRAIN_OK` and
+#   `RESULT ... USE_CUDA=True cuda_available=True device=<A10>`. See experiments/classic-ml/NOTES.md.
+# Shape: GPU_1xA10 ONLY — the docs XGBoost notebook hangs on H100 (see xgboost-gpu.example.yaml).
+experiment_name: air-lab-xgboost-gpu-ca
+
+environment:
+  version: "5"        # v4 job-plane egress broken on hardened ws — see docs/06
+  dependencies:
+    - xgboost
+    - scikit-learn
+
+compute:
+  num_accelerators: 1
+  accelerator_type: GPU_1xA10
+
+code_source:
+  type: snapshot
+  snapshot:
+    root_path: ..
+    include_paths:
+      - experiments/classic-ml/
+
+command: >-
+  python $CODE_SOURCE_PATH/experiments/classic-ml/xgboost_gpu_ca.py
+  --data /Volumes/<catalog>/<schema>/<volume>/_staging/california_housing/california_housing.parquet
+  --ckpt-dir /Volumes/<catalog>/<schema>/<volume>/xgb_checkpoints/california_housing
+  --num-round 200
+
+max_retries: 0
+timeout_minutes: 20
+mlflow_run_name: xgboost-gpu-ca
