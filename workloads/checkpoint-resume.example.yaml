@@ -1,0 +1,48 @@
+# Checkpoint/resume across a platform max_retries resubmit — closes open-q #10 ("does max_retries
+# resume or restart?") and the UAT "checkpoint-resume proof pending" gap. Trainer:
+# experiments/foundation-models/fsdp/train_fsdp.py (DCP save/load + --auto-resume + FSDP_FAIL_AT_STEP).
+# Report format: the acceptance-report skill. Local two-attempt simulation + receipts:
+# experiments/foundation-models/NOTES.md.
+#
+# THE TEST (A10, world=1 — checkpoint/resume is not a distributed property, so A10 suffices):
+#   Attempt 0 (cold): trains, saves DCP checkpoints every --save-every steps to the UC VOLUME
+#     (NOT /tmp — /tmp does not survive a whole-job resubmit), then FSDP_FAIL_AT_STEP hard-exits
+#     137 at a step PAST the last checkpoint.
+#   Platform max_retries: 1 → resubmits the whole job in a NEW container.
+#   Attempt 1: --auto-resume finds the newest checkpoint on the volume → RESUMED_FROM_STEP=N, and
+#     (guarded on start_step==0) skips the fault → trains to the end → FSDP_TRAIN_OK, ACCEPTED.
+#   Evidence = attempt 0 COLD_START + FSDP_FORCED_EXIT; attempt 1 RESUMED_FROM_STEP=40 + completion.
+experiment_name: air-lab-checkpoint-resume
+
+environment:
+  version: "5"          # MANDATORY (v4 breaks GPU-job storage egress). torch/DCP/numpy preinstalled.
+  dependencies: []
+
+compute:
+  num_accelerators: 1
+  accelerator_type: GPU_1xA10
+
+code_source:
+  type: snapshot
+  snapshot:
+    root_path: ..
+    include_paths:
+      - experiments/foundation-models/fsdp/
+
+# FSDP_FAIL_AT_STEP set inline (env_variables is rejected by air v0.1.0). --max-restarts=0 isolates
+# torchrun's elastic restart from the PLATFORM max_retries (the thing under test). --proof4 adds the
+# within-run bit-exact DCP save/resume proof (FSDP_CKPT_RESUME_OK) on the completing attempt.
+# ⚠ FILL IN --ckpt-dir: a writable UC volume subdir (must survive a whole-job resubmit).
+command: >-
+  FSDP_FAIL_AT_STEP=50
+  /opt/databricks-environments/databricks-ai/bin/torchrun
+  --nnodes=$NUM_NODES --node_rank=$NODE_RANK
+  --master_addr=$MASTER_ADDR --master_port=$MASTER_PORT
+  --nproc_per_node=$LOCAL_WORLD_SIZE --max-restarts=0
+  $CODE_SOURCE_PATH/experiments/foundation-models/fsdp/train_fsdp.py
+  --steps 100 --batch 8 --lr 3e-4 --save-every 20 --auto-resume --proof4
+  --ckpt-dir /Volumes/<catalog>/<schema>/<volume>/fsdp-ckpt
+
+max_retries: 1                  # THE knob under test: 1 retry after the cold-run forced fault.
+timeout_minutes: 20             # A10, tiny model, 100 steps — short. Two attempts fit easily.
+mlflow_run_name: checkpoint-resume
