@@ -1,0 +1,36 @@
+
+experiment_name: air-lab-fsdp-scaling
+
+environment:
+  version: "5"          # MANDATORY: v5 ships FSDP2
+  dependencies: []      # v5 job tasks boot the BARE interpreter — call the AI-env torchrun by
+                        # absolute path in `command` (see multinode-correctness.example.yaml).
+
+compute:
+  num_accelerators: 16           # world=16 across 2 nodes (8/node) — the multi-node point.
+                                 # Override to 8 for the 1-node baseline. Whole 8xH100 nodes only.
+  accelerator_type: GPU_8xH100
+
+code_source:
+  type: snapshot
+  snapshot:
+    root_path: ..                # relative to THIS YAML's dir, not CWD
+    include_paths:
+      - experiments/foundation-models/fsdp/
+
+# Multinode torchrun via injected env (--nproc_per_node alone does NOT span
+# nodes). --max-restarts=0 isolates the platform's max_retries from torchrun's elastic restart.
+# --batch is PER-GPU, so global batch grows with the world automatically.
+# For the multi-node efficiency number, append: --baseline-per-gpu-tps.
+command: >-
+  /opt/databricks-environments/databricks-ai/bin/torchrun
+  --nnodes=$NUM_NODES --node_rank=$NODE_RANK
+  --master_addr=$MASTER_ADDR --master_port=$MASTER_PORT
+  --nproc_per_node=$LOCAL_WORLD_SIZE --max-restarts=0
+  $CODE_SOURCE_PATH/experiments/foundation-models/fsdp/bench_fsdp_scaling.py
+  --layers 16 --dim 2048 --heads 16 --seq 1024 --batch 8 --mp
+  --warmup 10 --iters 40
+
+max_retries: 0
+timeout_minutes: 20           
+mlflow_run_name: fsdp-scaling-2node
