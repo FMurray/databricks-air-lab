@@ -5,13 +5,13 @@
 # experiments/foundation-models/NOTES.md.
 #
 # THE TEST (A10, world=1 — checkpoint/resume is not a distributed property, so A10 suffices):
-#   Attempt 1 (cold): trains, saves DCP checkpoints every --save-every steps to the UC VOLUME
+#   Attempt 0 (cold): trains, saves DCP checkpoints every --save-every steps to the UC VOLUME
 #     (NOT /tmp — /tmp does not survive a whole-job resubmit), then FSDP_FAIL_AT_STEP hard-exits
 #     137 at a step PAST the last checkpoint.
 #   Platform max_retries: 1 → resubmits the whole job in a NEW container.
-#   Attempt 2: --auto-resume finds the newest checkpoint on the volume → RESUMED_FROM_STEP=N, and
+#   Attempt 1: --auto-resume finds the newest checkpoint on the volume → RESUMED_FROM_STEP=N, and
 #     (guarded on start_step==0) skips the fault → trains to the end → FSDP_TRAIN_OK, ACCEPTED.
-#   Evidence = attempt 1 COLD_START + FSDP_FORCED_EXIT; attempt 2 RESUMED_FROM_STEP=40 + completion.
+#   Evidence = attempt 0 COLD_START + FSDP_FORCED_EXIT; attempt 1 RESUMED_FROM_STEP=40 + completion.
 experiment_name: air-lab-checkpoint-resume
 
 environment:

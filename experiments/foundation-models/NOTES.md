@@ -49,7 +49,9 @@ Context: customer technical summary doc (link in docs/private/customer-refs.md).
 - [ ] Rung 3 — `GPU_8xH100`, NPROC=8: torchrun single-node parity; GPU util vs n_jobs sweep.
 - [ ] Rung 4 — stage-3 config short run on 8xH100: max_seq_len ramp 10K→60K, find the OOM point
       with/without FA3 and `--recompute True` → data for open-q #17 (B300).
-- [ ] Restart test: CKPT_DIR on UC volume, kill mid-run, `max_retries: 1` — does it resume?
+- [x] Restart test: CKPT_DIR on UC volume, kill mid-run, `max_retries: 1` — does it resume?
+      ✅ open-q #10 CLOSED (run 1106852546010560): whole-job restart in a fresh container; resumes
+      from the UC-volume checkpoint via `--auto-resume`. See the FSDP §open-q #10 block below.
 
 Launch (from repo root, live copy of the YAML minus `.example`):
 `air workload submit workloads/tabicl-pol.yaml -p <profile>` — verify exact subcommand via `air -h`.
@@ -382,6 +384,24 @@ sharding assertion + DCP API are version-scoped; local pre-registration used **t
 - `FSDP_BR4_COMPLETE` — Proofs 1+2+3. **THE BR-4 acceptance receipt.**
 - `FSDP_SUITE8_COMPLETE` — all four. `FSDP_SUITE8_BLOCKED` if Proof 4 is `blocked-on-BR-2` (BR-4
   receipt still stands).
+
+**open-q #10 CLOSED — ✅ `max_retries` resume verified (A10, 2026-08-27).** Whole-job resubmit test
+via `workloads/checkpoint-resume.example.yaml` (world=1 A10, `max_retries: 1`, `FSDP_FAIL_AT_STEP=50`,
+`--save-every 20 --auto-resume --proof4 --ckpt-dir <UC volume>/fsdp-ckpt`). Job **1106852546010560**
+→ TERMINATED/**SUCCESS** on fevm-forrest-serverless-stable-2:
+- attempt 0 (`air logs … --retry 0`, cold): `COLD_START` → `DCP save OK step=20/40` →
+  `FSDP_FORCED_EXIT at step 50` (exit 137).
+- attempt 1 (retry): `RESUMED_FROM_STEP=40` → `DCP save 60/80` → `FSDP_TRAIN_OK … steps=100` →
+  `FSDP_CKPT_RESUME_OK fingerprint_match=True`.
+- MLflow run `31bed5be55314bb8afba166f107f14de`; archived to the local store as run
+  `94c5406c865c49d5b062c4dcd7d29da7` (`experiments/mlflow.db`, both attempts' logs under `client_logs/`).
+
+**Answer:** `max_retries` RESTARTS the whole job in a fresh container (not an in-place resume) — so
+the checkpoint must live on a durable path (**UC volume, NOT /tmp**) and the entrypoint must be
+resume-aware (`--auto-resume`). Given both, it resumes cleanly from the last checkpoint. The forced
+fault is guarded on `start_step == 0` so the resumed attempt completes (terminating test). A local
+two-attempt simulation (persisting the `/tmp` ckpt dir across two separate invocations) reproduced
+COLD_START→resume before the AIR run.
 
 **Synthetic task (pinned — no RNG in data, pure function of global step).** Next token =
 `(x[t-1] + x[t-2]) mod 64` (Fibonacci-mod, `TASK_VOCAB=64 TASK_WINDOW=2 TASK_COEFFS=(1,1)
