@@ -21,8 +21,9 @@
 # COMMAND ----------
 dbutils.widgets.text("stage_dir", "/Volumes/<catalog>/<schema>/<vol>/vendor-stage",
                      "UC Volume stage dir (shared with the classic workspace)")
-dbutils.widgets.text("requirements", "xgboost==2.1.1\nscikit-learn",
-                     "requirements (one per line; == pins recommended)")
+dbutils.widgets.text("requirements", "",
+                     "packages to ADD that AREN'T already in the base env, one per line "
+                     "(pinning a package the base env already ships to a different version WILL conflict)")
 dbutils.widgets.text("target_python", "",
                      "Interpreter wheels install into (blank = this notebook's)")
 
@@ -33,7 +34,8 @@ STAGE      = dbutils.widgets.get("stage_dir").rstrip("/")
 WHEELHOUSE = f"{STAGE}/wheelhouse"
 REQ_TEXT   = dbutils.widgets.get("requirements").strip()
 TARGET_PY  = dbutils.widgets.get("target_python").strip() or sys.executable
-assert REQ_TEXT, "requirements is empty"
+assert REQ_TEXT, ("requirements is empty — list the packages to vendor (those NOT already in the "
+                  "base env), one per line, e.g. via the widget or a staged requirements.txt")
 os.makedirs(STAGE, exist_ok=True); os.makedirs(WHEELHOUSE, exist_ok=True)
 print(f"stage {STAGE}\ntarget py {TARGET_PY}")
 

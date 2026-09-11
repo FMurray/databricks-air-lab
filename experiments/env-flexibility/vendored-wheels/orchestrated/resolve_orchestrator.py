@@ -25,8 +25,9 @@
 # COMMAND ----------
 dbutils.widgets.text("stage_dir", "/Volumes/<catalog>/<schema>/<vol>/vendor-stage",
                      "UC Volume stage dir (shared with classic)")
-dbutils.widgets.text("requirements", "xgboost==2.1.1\nscikit-learn",
-                     "requirements (one per line; == pins recommended)")
+dbutils.widgets.text("requirements", "",
+                     "packages to ADD that AREN'T already in the base env, one per line "
+                     "(pinning a package the base env already ships to a different version WILL conflict)")
 dbutils.widgets.text("classic_cluster_id", "", "Classic cluster id (Artifactory egress)")
 dbutils.widgets.text("worker_notebook_path", "", "Workspace path to resolve_worker")
 dbutils.widgets.text("target_python", "", "Interpreter wheels install into (blank = this notebook's)")
@@ -46,7 +47,8 @@ TARGET_PY      = dbutils.widgets.get("target_python").strip() or sys.executable
 INDEX_URL      = dbutils.widgets.get("index_url").strip()
 WAIT_MIN       = int(dbutils.widgets.get("wait_minutes") or "45")
 
-assert REQ_TEXT,   "requirements is empty"
+assert REQ_TEXT,   ("requirements is empty — list the packages to vendor (those NOT already in the "
+                    "base env), one per line")
 assert CLASSIC_ID, "classic_cluster_id is required (a running classic cluster with Artifactory egress)"
 assert WORKER_NB,  "worker_notebook_path is required (workspace path to resolve_worker)"
 
