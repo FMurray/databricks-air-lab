@@ -130,8 +130,8 @@ INDEX_URL = _cfg("index_url")
 assert STAGE, "stage_dir is required (set it in the driver before %run, or as a widget)"
 
 manifest = resolve_and_download(STAGE, INDEX_URL)
-print(json.dumps({k: v for k, v in manifest.items() if k != "wheel_files"}, indent=2))
+print(json.dumps({k: v for k, v in manifest.items() if k != "wheel_files"}, indent=2, ensure_ascii=False))
 
 if _JOB_MODE:
-    dbutils.notebook.exit(json.dumps(manifest))
+    dbutils.notebook.exit(json.dumps(manifest, ensure_ascii=False))
 # else (%run): the driver reads `manifest` from the namespace

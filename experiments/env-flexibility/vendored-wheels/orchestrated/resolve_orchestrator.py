@@ -140,7 +140,12 @@ out = w.jobs.get_run_output(run_id=task_run_id)
 worker_summary = {}
 if out.notebook_output and out.notebook_output.result:
     worker_summary = json.loads(out.notebook_output.result)
-    print(json.dumps(worker_summary, indent=2))
+    print(json.dumps(worker_summary, indent=2, ensure_ascii=False))
+    if not worker_summary.get("ok", True):
+        # echo the resolver's message verbatim — json.dumps escapes its box-drawing chars/newlines
+        print("\n--- resolver error (verbatim) ---")
+        print(worker_summary.get("error", ""))
+        print(worker_summary.get("stderr_tail", ""))
 else:
     print("no notebook_output; check the run URL above for logs")
 assert str(run.state.result_state) == "RunResultState.SUCCESS", \
@@ -173,4 +178,4 @@ dbutils.notebook.exit(json.dumps({
     "seamless": seamless,
     "wheelhouse": WHEELHOUSE,
     "worker_summary": worker_summary,
-}))
+}, ensure_ascii=False))

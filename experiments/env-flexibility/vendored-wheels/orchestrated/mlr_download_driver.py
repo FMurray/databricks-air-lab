@@ -37,9 +37,14 @@ print(f"stage_dir = {stage_dir}\nindex_url = {index_url or '(cluster pip.conf)'}
 
 # COMMAND ----------
 import json
-print(json.dumps({k: v for k, v in manifest.items() if k != "wheel_files"}, indent=2))
+print(json.dumps({k: v for k, v in manifest.items() if k != "wheel_files"}, indent=2, ensure_ascii=False))
 if manifest.get("ok"):
     print(f"\n✓ {len(manifest.get('downloaded', []))} wheels staged to {manifest['wheelhouse']}")
     print("➡  Go back to air_freeze and run Phase 2 to verify offline resolution.")
 else:
-    print("\n✗ see 'error'/'failures' above — resolve before verifying on AIR.")
+    # echo the resolver's message verbatim — json.dumps escapes its box-drawing chars/newlines
+    print("\n✗ resolve failed — resolver output below, then fix requirements before verifying on AIR:")
+    print(manifest.get("error", ""))
+    print(manifest.get("stderr_tail", ""))
+    for f in manifest.get("failures", []):
+        print(f)
