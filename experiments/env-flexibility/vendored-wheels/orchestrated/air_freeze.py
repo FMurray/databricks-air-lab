@@ -80,10 +80,16 @@ print(f"\n➡  Now run mlr_download_driver on your classic 17.3 cluster with sta
 # MAGIC requirements for this env.
 
 # COMMAND ----------
+# If the worker had to override baseline packages it wrote constraints.effective.txt (baseline minus
+# the overridden pins). Use that here and at runtime — verifying against the ORIGINAL constraints.txt
+# would re-force the pins we deliberately dropped and fail identically.
+CON = f"{STAGE}/constraints.effective.txt"
+if not os.path.exists(CON):
+    CON = f"{STAGE}/constraints.txt"
+print(f"verifying against {os.path.basename(CON)}")
 verify = subprocess.run(
     [TARGET_PY, "-m", "pip", "install", "--dry-run", "--no-index",
-     "--find-links", WHEELHOUSE, "-r", f"{STAGE}/requirements.txt",
-     "-c", f"{STAGE}/constraints.txt"],
+     "--find-links", WHEELHOUSE, "-r", f"{STAGE}/requirements.txt", "-c", CON],
     capture_output=True, text=True,
 )
 print(verify.stdout); print(verify.stderr)
@@ -94,4 +100,4 @@ print("VERDICT:", "PASS — vendored set resolves offline against the target env
 print("=" * 60)
 print("Install line for your workload YAML command:")
 print(f"  pip install --no-index --find-links {WHEELHOUSE} \\\n"
-      f"    -r {STAGE}/requirements.txt -c {STAGE}/constraints.txt")
+      f"    -r {STAGE}/requirements.txt -c {CON}")

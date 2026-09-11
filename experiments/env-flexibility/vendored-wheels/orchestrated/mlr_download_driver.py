@@ -15,11 +15,15 @@
 dbutils.widgets.text("stage_dir", "/Volumes/<catalog>/<schema>/<vol>/vendor-stage",
                      "UC Volume stage dir (same one air_freeze wrote to)")
 dbutils.widgets.text("index_url", "", "Artifactory index URL (blank = this cluster's pip.conf)")
+dbutils.widgets.dropdown("allow_compiled_override", "false", ["false", "true"],
+                     "Force-override ABI-foundational baseline pkgs (numpy/torch/…)? Usually false")
 
 # these variables are read by the worker via %run (namespace is shared)
 stage_dir = dbutils.widgets.get("stage_dir").rstrip("/")
 index_url = dbutils.widgets.get("index_url").strip()
-print(f"stage_dir = {stage_dir}\nindex_url = {index_url or '(cluster pip.conf)'}")
+allow_compiled_override = dbutils.widgets.get("allow_compiled_override").strip()
+print(f"stage_dir = {stage_dir}\nindex_url = {index_url or '(cluster pip.conf)'}\n"
+      f"allow_compiled_override = {allow_compiled_override}")
 
 # COMMAND ----------
 # MAGIC %md
