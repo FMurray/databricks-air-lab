@@ -1,0 +1,9 @@
+# Test requirements for the delta-vendor pipeline.
+# All three are deliberately ABSENT from AIR v5's 433-package baseline, and each exercises a
+# different branch of the resolve+delta logic (verified against vendor-stage/constraints.txt):
+#   numpy-financial  -> pulls numpy (baked into AIR @ 2.1.3) => numpy is SKIPPED from the delta
+#   python-slugify   -> pulls text-unidecode (also absent)   => closure is larger than the direct reqs
+#   jellyfish        -> compiled Rust extension              => exercises AIR-tag wheel targeting
+numpy-financial
+python-slugify
+jellyfish
