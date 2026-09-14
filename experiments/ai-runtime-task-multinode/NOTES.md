@@ -36,7 +36,21 @@ $ python3 -c '... ast.parse(...) ...'
 PYTHON_PARSE_OK
 ```
 
-Target-workspace `air run --dry-run` is pending.
+Target-workspace pre-flight passed on 2026-09-14 with AIR CLI v1.1.0,
+`fevm-forrest-2`:
+
+```text
+[INFO] dry-run: prepared Jobs API payload:
+"ai_runtime_task": {
+  "deployments": [{
+    "compute": {
+      "accelerator_type": "GPU_1xA10",
+      "accelerator_count": 2
+    }
+  }]
+}
+{"data": {"status": "DRY_RUN_OK", "dry_run": true}}
+```
 
 ## Observed
 
