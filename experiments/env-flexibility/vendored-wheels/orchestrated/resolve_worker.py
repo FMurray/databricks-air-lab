@@ -21,10 +21,18 @@ import sys
 from collections import defaultdict, deque
 from pathlib import Path
 
-from packaging.markers import default_environment
-from packaging.requirements import InvalidRequirement, Requirement
-from packaging.utils import canonicalize_name, parse_wheel_filename
-from packaging.version import InvalidVersion, Version
+try:
+    from packaging.markers import default_environment
+    from packaging.requirements import InvalidRequirement, Requirement
+    from packaging.utils import canonicalize_name, parse_wheel_filename
+    from packaging.version import InvalidVersion, Version
+except ModuleNotFoundError:
+    # pip vendors packaging, so the worker can still run in a clean Python environment where
+    # packaging is not installed as a top-level package. MLR normally takes the first branch.
+    from pip._vendor.packaging.markers import default_environment
+    from pip._vendor.packaging.requirements import InvalidRequirement, Requirement
+    from pip._vendor.packaging.utils import canonicalize_name, parse_wheel_filename
+    from pip._vendor.packaging.version import InvalidVersion, Version
 
 
 def _cfg(name, default=""):
@@ -260,6 +268,38 @@ def _version_delta(closure, baseline):
     return delta
 
 
+def restore_compatible_pins(relaxed_overrides, fixed_overrides, can_resolve):
+    """Restore AIR pins in groups while keeping every intermediate constraint set resolvable.
+
+    ``relaxed_overrides`` is a known-good ceiling derived from the unconstrained target graph.
+    Explicit and directly proven overrides stay fixed. The remaining pins are restored in groups;
+    failed groups are bisected until the individual pins that break resolution are isolated.
+    """
+    overrides = set(relaxed_overrides)
+    fixed = set(fixed_overrides)
+    restored = set()
+    probes = 0
+
+    def restore_group(names):
+        nonlocal overrides, probes
+        if not names:
+            return
+        trial = overrides - set(names)
+        probes += 1
+        if can_resolve(trial):
+            overrides = trial
+            restored.update(names)
+            return
+        if len(names) == 1:
+            return
+        middle = len(names) // 2
+        restore_group(names[:middle])
+        restore_group(names[middle:])
+
+    restore_group(sorted(overrides - fixed))
+    return overrides, restored, probes
+
+
 def _compatible_wheel_tags(filename, supported_tags):
     _distribution, _version, _build, wheel_tags = parse_wheel_filename(Path(filename).name)
     return sorted(str(tag) for tag in wheel_tags if str(tag) in supported_tags)
@@ -285,7 +325,7 @@ def _write_manifest(stage, manifest):
     os.replace(temporary, stage / "manifest.json")
 
 
-def resolve_and_download(stage, index_url=""):
+def resolve_and_download(stage, index_url="", work_root=""):
     stage = Path(stage)
     requirements = stage / "requirements.txt"
     constraints = stage / "constraints.txt"
@@ -342,7 +382,8 @@ def resolve_and_download(stage, index_url=""):
 
     _write_manifest(stage, {"ok": False, "stage": "running", "request_id": request_id,
                             "error": "classic worker has not finished"})
-    local_root = Path(f"/local_disk0/vendor_wheelhouse_{request_id}")
+    scratch_root = Path(work_root) if work_root else Path("/local_disk0")
+    local_root = scratch_root / f"vendor_wheelhouse_{request_id}"
     shutil.rmtree(local_root, ignore_errors=True)
     local_root.mkdir(parents=True)
     local_wheelhouse = local_root / "wheelhouse"
@@ -369,6 +410,9 @@ def resolve_and_download(stage, index_url=""):
     detected = {"overrides": set(), "reasons": {}, "skipped_requirement_lines": [],
                 "missing_candidates": []}
     all_overrides = set(explicit)
+    reconciled = set()
+    reconciliation_probes = 0
+    override_reasons = {}
 
     if first.returncode != 0:
         wants = _pip_resolve(requirements, None, wants_report, target_args, index_args)
@@ -388,20 +432,81 @@ def resolve_and_download(stage, index_url=""):
             target_env.get("marker_environment") or {}, explicit,
         )
         all_overrides |= detected["overrides"]
+        override_reasons.update(detected["reasons"])
         _write_effective_constraints(constraints, effective, all_overrides)
         print(f"detected overrides: {sorted(all_overrides) or 'none'}")
         final = _pip_resolve(requirements, effective, report, target_args, index_args)
+
+        if final.returncode != 0:
+            wants_closure = {
+                canonicalize_name(item["metadata"]["name"]): item["metadata"]["version"]
+                for item in wants_install
+            }
+            relaxation_candidates = {
+                name for name in _version_delta(wants_closure, baseline)
+                if name in baseline
+            }
+            fixed_overrides = set(explicit) | detected["overrides"]
+            relaxed_overrides = fixed_overrides | relaxation_candidates
+            relaxed_effective = local_root / "constraints.relaxed.txt"
+            relaxed_report = local_root / "relaxed.json"
+            _write_effective_constraints(constraints, relaxed_effective, relaxed_overrides)
+            relaxed = _pip_resolve(
+                requirements, relaxed_effective, relaxed_report, target_args, index_args,
+            )
+            if relaxed.returncode != 0:
+                manifest = {
+                    "ok": False, "stage": "resolve-relaxed", "request_id": request_id,
+                    "error": "the unconstrained target resolved, but automatically relaxing every "
+                             "different AIR pin did not reproduce that resolution",
+                    "explicit_overrides": sorted(explicit),
+                    "detected_overrides": sorted(detected["overrides"] - explicit),
+                    "override_reasons": override_reasons,
+                    "skipped_requirement_lines": detected["skipped_requirement_lines"],
+                    "missing_candidates": detected["missing_candidates"],
+                    "stderr_tail": relaxed.stderr[-4000:],
+                }
+                _write_manifest(stage, manifest)
+                return manifest
+
+            probe_number = 0
+
+            def can_resolve(trial_overrides):
+                nonlocal probe_number
+                probe_number += 1
+                trial_constraints = local_root / f"constraints.probe-{probe_number}.txt"
+                trial_report = local_root / f"probe-{probe_number}.json"
+                _write_effective_constraints(constraints, trial_constraints, trial_overrides)
+                trial = _pip_resolve(
+                    requirements, trial_constraints, trial_report, target_args, index_args,
+                )
+                return trial.returncode == 0
+
+            print("direct conflict walk was insufficient; restoring compatible AIR pins by probe")
+            all_overrides, _restored, reconciliation_probes = restore_compatible_pins(
+                relaxed_overrides, fixed_overrides, can_resolve,
+            )
+            reconciled = all_overrides - fixed_overrides
+            for name in sorted(reconciled):
+                override_reasons[name] = [
+                    f"restoring the AIR pin {name}=={baseline[name]} makes resolution fail"
+                ]
+            print(f"automatically reconciled overrides: {sorted(reconciled) or 'none'} "
+                  f"({reconciliation_probes} probes)")
+            _write_effective_constraints(constraints, effective, all_overrides)
+            final = _pip_resolve(requirements, effective, report, target_args, index_args)
     else:
         final = first
 
     if final.returncode != 0:
         manifest = {
             "ok": False, "stage": "resolve-effective", "request_id": request_id,
-            "error": "resolution still fails after removing only detected/explicit AIR conflicts; "
-                     "add the remaining proven package names to overrides.txt and rerun",
+            "error": "automatic AIR-pin reconciliation produced a constraint set that no longer "
+                     "resolves",
             "explicit_overrides": sorted(explicit),
-            "detected_overrides": sorted(detected["overrides"] - explicit),
-            "override_reasons": detected["reasons"],
+            "detected_overrides": sorted(all_overrides - explicit),
+            "reconciled_overrides": sorted(reconciled),
+            "override_reasons": override_reasons,
             "skipped_requirement_lines": detected["skipped_requirement_lines"],
             "missing_candidates": detected["missing_candidates"],
             "stderr_tail": final.stderr[-4000:],
@@ -489,7 +594,9 @@ def resolve_and_download(stage, index_url=""):
         "reused_from_air": len(closure) - len(delta),
         "explicit_overrides": sorted(explicit),
         "detected_overrides": sorted(all_overrides - explicit),
-        "override_reasons": detected["reasons"],
+        "reconciled_overrides": sorted(reconciled),
+        "reconciliation_probes": reconciliation_probes,
+        "override_reasons": override_reasons,
         "constraints_for_install": str(build / "constraints.effective.txt"),
         "resolved_lock": str(build / "resolved.lock"),
         "delta_lock": str(build / "delta.lock"),

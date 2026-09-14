@@ -83,6 +83,22 @@ class ResolverLogicTest(unittest.TestCase):
         self.assertEqual(args.count("--abi"), 3)
         self.assertEqual(args.count("--platform"), 2)
 
+    def test_restores_compatible_pins_and_keeps_hidden_parent_relaxed(self):
+        def can_resolve(overrides):
+            # The target graph works only when parent is allowed to move. Array is compatible and
+            # should be restored; shared was a directly proven conflict and remains fixed.
+            return "parent" in overrides
+
+        overrides, restored, probes = resolver.restore_compatible_pins(
+            {"array", "parent", "shared"},
+            {"shared"},
+            can_resolve,
+        )
+
+        self.assertEqual(overrides, {"parent", "shared"})
+        self.assertEqual(restored, {"array"})
+        self.assertGreater(probes, 0)
+
 
 if __name__ == "__main__":
     unittest.main()

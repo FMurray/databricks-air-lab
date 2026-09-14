@@ -20,9 +20,10 @@ from a build-specific effective constraints file and includes the exact replacem
    the AIR constraints to obtain candidate metadata, then walks only packages that must be added or
    replaced. An AIR pin is removed only when its version fails an actual incoming requirement
    specifier. A newer unconstrained preference alone is not a conflict.
-4. **Classic resolves the effective environment.** It retries with the AIR freeze minus detected and
-   explicitly named overrides. If that still fails, it stops and asks for remaining proven package
-   names in `overrides.txt`; it does not guess from pip's text error.
+4. **Classic resolves the effective environment.** It retries with the AIR freeze minus directly
+   detected and explicitly named overrides. If an older retained AIR parent still makes that graph
+   fail, the worker temporarily relaxes every AIR pin that differs from the valid unconstrained graph,
+   then restores compatible pins in groups. Pins that fail restoration become automatic overrides.
 5. **Classic computes a version-aware delta.** A resolved package is reused only when AIR contains the
    same normalized name **and version**. Every missing or different version is downloaded with
    `pip download --no-deps --only-binary` using AIR's target flags.
@@ -47,9 +48,27 @@ version remains pinned even when unconstrained pip happens to prefer a newer Num
 | `resolve_orchestrator.py` | AIR env-v5 | Performs the full AIR → classic → AIR flow through a Jobs submit |
 | `resolve_worker_uv.py` | Classic MLR 17.3 | Compatibility alias to `resolve_worker`; retained for old notebooks |
 | `test_resolve_worker.py` | Local | Unit coverage for conflict traversal and name+version delta logic |
+| `test_resolve_worker_integration.py` | Local | Offline freeze → resolve → wheelhouse → install integration test |
 
 There is one resolver implementation. The earlier uv variant duplicated the algorithm and retained
 name-only delta behavior, so its path now delegates to `resolve_worker`.
+
+## Local offline verification
+
+Run the resolver logic and the full worker flow without public PyPI access:
+
+```bash
+python3 -B -m unittest \
+  experiments/env-flexibility/vendored-wheels/orchestrated/test_resolve_worker.py \
+  experiments/env-flexibility/vendored-wheels/orchestrated/test_resolve_worker_integration.py
+```
+
+The integration test creates a temporary `file://` package index and a temporary baseline virtual
+environment. It installs and freezes `airlab-openai==1.0.0`, `airlab-jiter==0.8.0`, and
+`airlab-array==2.1.3`, then requests `airlab-openai==2.0.0`. The new parent requires
+`airlab-jiter>=0.10,<1`; the worker must remove the OpenAI and jiter pins, download their exact
+replacement wheels, keep the compatible array pin, install the hashed delta offline, and pass
+`pip check`. The test deletes all generated environments, indexes, and wheelhouses when it exits.
 
 ## Two-step workflow
 
