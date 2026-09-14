@@ -2,124 +2,120 @@
 # MAGIC %md
 # MAGIC # Vendored-wheel resolver — ORCHESTRATOR
 # MAGIC
-# MAGIC **Run this on the SERVERLESS / AIR env-v5 notebook** (the environment your workload
-# MAGIC actually runs in — the one that CANNOT reach Artifactory).
-# MAGIC
-# MAGIC The problem this solves: a plain `pip download -r requirements.txt` on the classic side
-# MAGIC resolves the **entire** dependency closure — including packages already baked into the
-# MAGIC AI v5 image (torch, CUDA libs, numpy, …). If any of those has no wheel on Artifactory,
-# MAGIC `--only-binary=:all:` fails with "no matching distribution" even though the target already
-# MAGIC has it. The classic resolver has no idea what serverless already provides.
-# MAGIC
-# MAGIC This orchestrator makes resolution **seamless across the two environments**:
-# MAGIC   1. Snapshot THIS env's installed set with `pip freeze` → a constraints file.
-# MAGIC   2. Hand `requirements.txt` + constraints to a classic notebook (via Jobs `submit`),
-# MAGIC      which resolves the full closure bounded by the constraints and downloads **only the
-# MAGIC      delta** (what serverless does NOT already have) into a shared UC Volume.
-# MAGIC   3. Prove it: offline `--dry-run` install here. Green = the wheelhouse + this env resolve
-# MAGIC      with zero index access.
-# MAGIC
-# MAGIC `dbutils.notebook.run` runs on the caller's own context, so it cannot target a classic
-# MAGIC cluster — the cross-environment hop is a one-time Jobs run submitted with the SDK.
+# MAGIC Run this notebook on AIR. It captures the AIR baseline and supported wheel tags, submits the
+# MAGIC canonical resolver on a classic cluster with Artifactory access, then verifies the resulting
+# MAGIC request-specific wheelhouse offline on the same AIR interpreter.
 
 # COMMAND ----------
 dbutils.widgets.text("stage_dir", "/Volumes/<catalog>/<schema>/<vol>/vendor-stage",
-                     "UC Volume stage dir (shared with classic)")
-dbutils.widgets.text("requirements", "",
-                     "packages to ADD that AREN'T already in the base env, one per line "
-                     "(pinning a package the base env already ships to a different version WILL conflict)")
-dbutils.widgets.text("classic_cluster_id", "", "Classic cluster id (Artifactory egress)")
+                     "UC Volume stage dir shared with classic")
+dbutils.widgets.text("requirements", "", "Target requirements, one per line")
+dbutils.widgets.text("overrides", "", "Optional explicit AIR package overrides, names only")
+dbutils.widgets.text("classic_cluster_id", "", "Classic cluster id with Artifactory access")
 dbutils.widgets.text("worker_notebook_path", "", "Workspace path to resolve_worker")
-dbutils.widgets.text("target_python", "", "Interpreter wheels install into (blank = this notebook's)")
-dbutils.widgets.text("index_url", "", "Artifactory index URL for the worker (blank = classic pip.conf)")
-dbutils.widgets.text("wait_minutes", "45", "Max minutes to wait on the classic run")
+dbutils.widgets.text("target_python", "", "Interpreter the workload uses (blank = this notebook's)")
+dbutils.widgets.text("index_url", "", "Artifactory index URL (blank = classic pip.conf)")
+dbutils.widgets.text("wait_minutes", "45", "Maximum minutes to wait for the classic run")
 
 # COMMAND ----------
-import json, os, re, subprocess, sys
+import hashlib
+import json
+import os
+import re
+import subprocess
+import sys
 from datetime import timedelta
 
-STAGE          = dbutils.widgets.get("stage_dir").rstrip("/")
-WHEELHOUSE     = f"{STAGE}/wheelhouse"
-REQ_TEXT       = dbutils.widgets.get("requirements").strip()
-CLASSIC_ID     = dbutils.widgets.get("classic_cluster_id").strip()
-WORKER_NB      = dbutils.widgets.get("worker_notebook_path").strip()
-TARGET_PY      = dbutils.widgets.get("target_python").strip() or sys.executable
-INDEX_URL      = dbutils.widgets.get("index_url").strip()
-WAIT_MIN       = int(dbutils.widgets.get("wait_minutes") or "45")
+STAGE = dbutils.widgets.get("stage_dir").rstrip("/")
+REQ_TEXT = dbutils.widgets.get("requirements").strip()
+OVERRIDE_TEXT = dbutils.widgets.get("overrides").strip()
+CLASSIC_ID = dbutils.widgets.get("classic_cluster_id").strip()
+WORKER_NB = dbutils.widgets.get("worker_notebook_path").strip()
+TARGET_PY = dbutils.widgets.get("target_python").strip() or sys.executable
+INDEX_URL = dbutils.widgets.get("index_url").strip()
+WAIT_MIN = int(dbutils.widgets.get("wait_minutes") or "45")
 
-assert REQ_TEXT,   ("requirements is empty — list the packages to vendor (those NOT already in the "
-                    "base env), one per line")
-assert CLASSIC_ID, "classic_cluster_id is required (a running classic cluster with Artifactory egress)"
-assert WORKER_NB,  "worker_notebook_path is required (workspace path to resolve_worker)"
-
+assert REQ_TEXT, "requirements is empty — list the packages the workload needs"
+assert CLASSIC_ID, "classic_cluster_id is required"
+assert WORKER_NB, "worker_notebook_path is required"
 os.makedirs(STAGE, exist_ok=True)
-os.makedirs(WHEELHOUSE, exist_ok=True)
-print(f"stage      : {STAGE}")
-print(f"wheelhouse : {WHEELHOUSE}")
-print(f"target py  : {TARGET_PY}")
+
+
+def request_fingerprint(stage):
+    digest = hashlib.sha256()
+    for name in ("constraints.txt", "requirements.txt", "overrides.txt", "target_env.json"):
+        path = f"{stage}/{name}"
+        digest.update(name.encode())
+        digest.update(b"\0")
+        digest.update(open(path, "rb").read() if os.path.exists(path) else b"")
+        digest.update(b"\0")
+    return digest.hexdigest()[:16]
+
+
+print(f"stage {STAGE}\ntarget interpreter {TARGET_PY}\n"
+      f"index {'explicit Artifactory URL' if INDEX_URL else 'classic cluster pip.conf'}")
 
 # COMMAND ----------
 # MAGIC %md
-# MAGIC ## 1 — Snapshot the target env → constraints.txt
-# MAGIC `pip freeze` on the interpreter the wheels will install into. We keep only clean
-# MAGIC `name==version` lines: editable installs, VCS/`@ file://` direct references, and comments
-# MAGIC cannot serve as constraints and would break the resolve.
+# MAGIC ## 1 — capture the AIR baseline and supported tags
 
 # COMMAND ----------
-raw_freeze = subprocess.run([TARGET_PY, "-m", "pip", "freeze", "--all"],
-                            capture_output=True, text=True, check=True).stdout
-_pin = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*==[^ @]+$")
-constraints = [ln.strip() for ln in raw_freeze.splitlines() if _pin.match(ln.strip())]
-dropped     = [ln.strip() for ln in raw_freeze.splitlines()
-               if ln.strip() and not _pin.match(ln.strip())]
+raw = subprocess.run(
+    [TARGET_PY, "-m", "pip", "freeze", "--all"],
+    capture_output=True, text=True, check=True,
+).stdout
+pin_pattern = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*==[^ @]+$")
+constraints = [line.strip() for line in raw.splitlines() if pin_pattern.match(line.strip())]
+dropped = [line.strip() for line in raw.splitlines()
+           if line.strip() and not pin_pattern.match(line.strip())]
 
-with open(f"{STAGE}/constraints.txt", "w") as f:
-    f.write("\n".join(constraints) + "\n")
-with open(f"{STAGE}/requirements.txt", "w") as f:
-    f.write(REQ_TEXT + "\n")
+with open(f"{STAGE}/constraints.txt", "w") as handle:
+    handle.write("\n".join(constraints) + "\n")
+with open(f"{STAGE}/requirements.txt", "w") as handle:
+    handle.write(REQ_TEXT + "\n")
+with open(f"{STAGE}/overrides.txt", "w") as handle:
+    handle.write(OVERRIDE_TEXT + ("\n" if OVERRIDE_TEXT else ""))
 
-print(f"constraints kept   : {len(constraints)} pinned packages")
-print(f"non-pin lines dropped: {len(dropped)}"
-      + (f" (e.g. {dropped[:3]})" if dropped else ""))
+tag_probe = r'''
+import json
+import sys
+from packaging.markers import default_environment
+from packaging.tags import sys_tags
+
+tags = list(sys_tags())
+print(json.dumps({
+    "python_full": sys.version.split()[0],
+    "python_version": f"{sys.version_info.major}{sys.version_info.minor}",
+    "implementation": tags[0].interpreter[:2],
+    "abi": tags[0].abi,
+    "abis": list(dict.fromkeys(tag.abi for tag in tags)),
+    "top_tag": str(tags[0]),
+    "platforms": list(dict.fromkeys(tag.platform for tag in tags if "x86_64" in tag.platform)),
+    "supported_tags": [str(tag) for tag in tags],
+    "marker_environment": default_environment(),
+}))
+'''
+target_env = json.loads(subprocess.run(
+    [TARGET_PY, "-c", tag_probe], capture_output=True, text=True, check=True,
+).stdout)
+with open(f"{STAGE}/target_env.json", "w") as handle:
+    json.dump(target_env, handle, indent=2)
+
+REQUEST_ID = request_fingerprint(STAGE)
+print(f"constraints kept {len(constraints)} | non-pin lines dropped {len(dropped)}")
+print(f"request id {REQUEST_ID} | AIR top tag {target_env['top_tag']}")
 
 # COMMAND ----------
 # MAGIC %md
-# MAGIC ## 2 — Record the target's wheel tags (for the worker to assert against)
-
-# COMMAND ----------
-tag_probe = (
-    "import json,sys;"
-    "from packaging.tags import sys_tags;"
-    "ts=list(sys_tags());"
-    "print(json.dumps({"
-    "'python_full':sys.version.split()[0],"
-    "'python_version':f'{sys.version_info.major}{sys.version_info.minor}',"
-    "'abi':ts[0].abi,"
-    "'top_tag':str(ts[0]),"
-    "'platforms':list(dict.fromkeys(t.platform for t in ts if 'x86_64' in t.platform))"
-    "}))"
-)
-target_env = json.loads(
-    subprocess.run([TARGET_PY, "-c", tag_probe], capture_output=True, text=True, check=True).stdout
-)
-with open(f"{STAGE}/target_env.json", "w") as f:
-    json.dump(target_env, f, indent=2)
-print(json.dumps(target_env, indent=2))
-
-# COMMAND ----------
-# MAGIC %md
-# MAGIC ## 3 — Submit the classic worker (Jobs run) and wait
-# MAGIC The worker reads `constraints.txt` / `requirements.txt` / `target_env.json` from the stage
-# MAGIC dir, resolves the delta with Artifactory access, and populates `wheelhouse/`.
+# MAGIC ## 2 — submit the canonical resolver on classic
 
 # COMMAND ----------
 from databricks.sdk import WorkspaceClient
 from databricks.sdk.service import jobs
 
-w = WorkspaceClient()
-run_name = f"vendor-resolve {os.path.basename(STAGE)}"
-waiter = w.jobs.submit(
-    run_name=run_name,
+workspace = WorkspaceClient()
+waiter = workspace.jobs.submit(
+    run_name=f"vendor-resolve {REQUEST_ID}",
     tasks=[jobs.SubmitTask(
         task_key="resolve_delta",
         existing_cluster_id=CLASSIC_ID,
@@ -130,52 +126,58 @@ waiter = w.jobs.submit(
     )],
 )
 run_id = waiter.run_id
-print(f"submitted classic run {run_id}: {w.config.host}/jobs/runs/{run_id}")
+print(f"submitted classic run {run_id}: {workspace.config.host}/jobs/runs/{run_id}")
 run = waiter.result(timeout=timedelta(minutes=WAIT_MIN))
-print(f"classic run state: {run.state.result_state}")
+assert str(run.state.result_state) == "RunResultState.SUCCESS", (
+    f"classic worker did not complete: {run.state.result_state} / {run.state.state_message}"
+)
 
-# surface the worker's dbutils.notebook.exit(...) payload
 task_run_id = run.tasks[0].run_id
-out = w.jobs.get_run_output(run_id=task_run_id)
-worker_summary = {}
-if out.notebook_output and out.notebook_output.result:
-    worker_summary = json.loads(out.notebook_output.result)
-    print(json.dumps(worker_summary, indent=2, ensure_ascii=False))
-    if not worker_summary.get("ok", True):
-        # echo the resolver's message verbatim — json.dumps escapes its box-drawing chars/newlines
-        print("\n--- resolver error (verbatim) ---")
-        print(worker_summary.get("error", ""))
-        print(worker_summary.get("stderr_tail", ""))
-else:
-    print("no notebook_output; check the run URL above for logs")
-assert str(run.state.result_state) == "RunResultState.SUCCESS", \
-    f"classic worker did not succeed: {run.state.result_state} / {run.state.state_message}"
+output = workspace.jobs.get_run_output(run_id=task_run_id)
+assert output.notebook_output and output.notebook_output.result, "classic worker returned no manifest"
+manifest = json.loads(output.notebook_output.result)
+print(json.dumps({key: value for key, value in manifest.items() if key != "wheel_files"},
+                 indent=2, ensure_ascii=False))
+assert manifest.get("request_id") == REQUEST_ID, "classic worker returned a stale request"
+assert manifest.get("ok"), f"classic worker failed at {manifest.get('stage')}: {manifest.get('error')}"
 
 # COMMAND ----------
 # MAGIC %md
-# MAGIC ## 4 — Prove seamless resolution (offline --dry-run install on THIS env)
-# MAGIC No index. If pip resolves `requirements.txt` from the wheelhouse + what's already installed
-# MAGIC here, with exit 0, the vendored set is complete and conflict-free for the target.
+# MAGIC ## 3 — verify the exact build offline on AIR
 
 # COMMAND ----------
-verify = subprocess.run(
+wheelhouse = manifest["wheelhouse"]
+effective = manifest["constraints_for_install"]
+delta_lock = manifest["delta_lock"]
+
+resolve_verify = subprocess.run(
     [TARGET_PY, "-m", "pip", "install", "--dry-run", "--no-index",
-     "--find-links", WHEELHOUSE, "-r", f"{STAGE}/requirements.txt",
-     "-c", f"{STAGE}/constraints.txt"],
+     "--find-links", wheelhouse, "-r", f"{STAGE}/requirements.txt", "-c", effective],
     capture_output=True, text=True,
 )
-print(verify.stdout)
-print(verify.stderr)
-seamless = verify.returncode == 0
+hash_verify = subprocess.run(
+    [TARGET_PY, "-m", "pip", "install", "--dry-run", "--no-index", "--no-deps",
+     "--require-hashes", "--find-links", wheelhouse, "-r", delta_lock],
+    capture_output=True, text=True,
+)
+print(resolve_verify.stdout)
+print(resolve_verify.stderr)
+print(hash_verify.stdout)
+print(hash_verify.stderr)
+
+seamless = resolve_verify.returncode == 0 and hash_verify.returncode == 0
 print("=" * 60)
-print(f"VERDICT: {'PASS — vendored set resolves offline against the target env' if seamless else 'FAIL — see stderr above'}")
+print("VERDICT:", "PASS — exact vendored delta resolves offline and hashes match"
+      if seamless else "FAIL — see the offline resolution/hash output above")
 print("=" * 60)
-print("Install line for your workload YAML command:")
-print(f'  pip install --no-index --find-links {WHEELHOUSE} \\\n'
-      f'    -r {STAGE}/requirements.txt -c {STAGE}/constraints.txt')
+print("Install line for the AIR workload command:")
+print(f"  {TARGET_PY} -m pip install --no-index --no-deps --require-hashes \\\n"
+      f"    --find-links {wheelhouse} -r {delta_lock}")
+print(f"  {TARGET_PY} -m pip check")
+assert seamless, "offline wheelhouse verification failed"
 
 dbutils.notebook.exit(json.dumps({
     "seamless": seamless,
-    "wheelhouse": WHEELHOUSE,
-    "worker_summary": worker_summary,
+    "request_id": REQUEST_ID,
+    "manifest": manifest,
 }, ensure_ascii=False))
