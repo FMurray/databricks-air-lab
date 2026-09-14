@@ -83,6 +83,15 @@ class ResolverLogicTest(unittest.TestCase):
         self.assertEqual(args.count("--abi"), 3)
         self.assertEqual(args.count("--platform"), 2)
 
+    def test_uv_platform_uses_air_manylinux_floor(self):
+        self.assertEqual(
+            resolver._uv_platform({
+                "platforms": ["manylinux_2_39_x86_64", "manylinux_2_17_x86_64"],
+                "marker_environment": {"sys_platform": "linux", "platform_machine": "x86_64"},
+            }),
+            "x86_64-manylinux_2_39",
+        )
+
     def test_restores_compatible_pins_and_keeps_hidden_parent_relaxed(self):
         def can_resolve(overrides):
             # The target graph works only when parent is allowed to move. Array is compatible and

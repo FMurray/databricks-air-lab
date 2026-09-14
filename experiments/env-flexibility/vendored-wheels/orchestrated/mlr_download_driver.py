@@ -15,25 +15,28 @@
 dbutils.widgets.text("stage_dir", "/Volumes/<catalog>/<schema>/<vol>/vendor-stage",
                      "UC Volume stage dir (same one air_freeze wrote to)")
 dbutils.widgets.text("index_url", "", "Artifactory index URL (blank = this cluster's pip.conf)")
+dbutils.widgets.dropdown("resolver_engine", "uv", ["uv", "pip"], "Dependency resolver")
 dbutils.widgets.text("overrides", "",
                      "Optional replacement overrides; blank keeps the AIR-staged overrides.txt")
 
 # these variables are read by the worker via %run (namespace is shared)
 stage_dir = dbutils.widgets.get("stage_dir").rstrip("/")
 index_url = dbutils.widgets.get("index_url").strip()
+resolver_engine = dbutils.widgets.get("resolver_engine").strip() or "uv"
 override_text = dbutils.widgets.get("overrides").strip()
 if override_text:
     with open(f"{stage_dir}/overrides.txt", "w") as handle:
         handle.write(override_text + "\n")
-print(f"stage_dir = {stage_dir}\nindex = {'explicit Artifactory URL' if index_url else 'cluster pip.conf'}\n"
+print(f"stage_dir = {stage_dir}\nresolver = {resolver_engine}\n"
+      f"index = {'explicit Artifactory URL' if index_url else 'cluster configuration'}\n"
       f"explicit overrides = {override_text.splitlines() if override_text else 'AIR-staged value'}")
 
 # COMMAND ----------
 # MAGIC %md
 # MAGIC ## The orchestration: %run the worker on this (MLR) cluster
-# MAGIC The worker retains every compatible AIR pin, detects required replacements by walking the
-# MAGIC target package graph, and writes a request-specific wheelhouse plus hashed delta lock. It
-# MAGIC leaves a `manifest` in the namespace (it does not exit, so this driver keeps running).
+# MAGIC The default uv engine treats AIR pins as preferences, retains the compatible versions, and
+# MAGIC globally backtracks across required replacements. The worker writes a request-specific
+# MAGIC wheelhouse plus hashed delta lock and leaves `manifest` in this shared namespace.
 
 # COMMAND ----------
 # MAGIC %run ./resolve_worker

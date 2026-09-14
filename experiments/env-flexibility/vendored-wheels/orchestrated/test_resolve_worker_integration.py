@@ -13,6 +13,7 @@ import importlib.util
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -326,6 +327,69 @@ class OfflineWheelhouseIntegrationTest(unittest.TestCase):
                 "restoring the AIR pin airlab-parent==1.0.0 makes resolution fail",
                 manifest["override_reasons"]["airlab-parent"],
             )
+
+            _run([
+                str(baseline_python), "-m", "pip", "install", "--dry-run", "--no-index",
+                "--find-links", manifest["wheelhouse"], "-r", str(stage / "requirements.txt"),
+                "-c", manifest["constraints_for_install"],
+            ])
+
+    @unittest.skipUnless(shutil.which("uv"), "uv is not installed")
+    def test_uv_preferences_resolve_both_conflict_shapes_in_one_pass(self):
+        with tempfile.TemporaryDirectory(prefix="air-wheelhouse-uv-test-") as temporary:
+            root = Path(temporary)
+            packages, _simple = _build_index(root / "index")
+            baseline = root / "baseline"
+            _run([sys.executable, "-m", "venv", str(baseline)])
+            baseline_python = baseline / "bin" / "python"
+
+            _run([
+                str(baseline_python), "-m", "pip", "install", "--no-index",
+                "--find-links", str(packages),
+                "airlab-openai==1.0.0", "airlab-jiter==0.8.0", "airlab-array==2.1.3",
+                "airlab-parent==1.0.0", "airlab-shared==1.0.0",
+            ])
+
+            stage = root / "stage"
+            stage.mkdir()
+            (stage / "constraints.txt").write_text(_freeze(baseline_python))
+            (stage / "requirements.txt").write_text(
+                "airlab-openai==2.0.0\nairlab-app==1.0.0\n"
+            )
+            (stage / "overrides.txt").write_text("")
+            (stage / "target_env.json").write_text(
+                json.dumps(_target_environment(), indent=2) + "\n"
+            )
+
+            with _isolated_pip_configuration():
+                manifest = resolver.resolve_and_download(
+                    stage,
+                    work_root=root / "worker-scratch",
+                    resolver_engine="uv",
+                    find_links=packages,
+                )
+
+            self.assertTrue(manifest["ok"], json.dumps(manifest, indent=2))
+            self.assertEqual(manifest["engine"], "uv")
+            self.assertEqual(
+                manifest["detected_overrides"],
+                ["airlab-jiter", "airlab-openai", "airlab-parent", "airlab-shared"],
+            )
+            self.assertEqual(manifest["reconciliation_probes"], 0)
+            self.assertEqual(
+                manifest["delta"],
+                [
+                    "airlab-app==1.0.0",
+                    "airlab-jiter==0.11.0",
+                    "airlab-openai==2.0.0",
+                    "airlab-parent==2.0.0",
+                    "airlab-shared==2.0.0",
+                ],
+            )
+            effective = Path(manifest["constraints_for_install"]).read_text()
+            self.assertIn("airlab-array==2.1.3", effective)
+            self.assertNotIn("airlab-array==2.3.0", Path(manifest["resolved_lock"]).read_text())
+            self.assertEqual(len(manifest["wheel_files"]), 5)
 
             _run([
                 str(baseline_python), "-m", "pip", "install", "--dry-run", "--no-index",

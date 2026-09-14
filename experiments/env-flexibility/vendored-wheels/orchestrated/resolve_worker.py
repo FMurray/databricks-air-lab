@@ -6,15 +6,16 @@
 # MAGIC inputs: `requirements.txt`, the complete AIR `constraints.txt`, `overrides.txt` (normally
 # MAGIC empty), and `target_env.json` with AIR's supported wheel tags.
 # MAGIC
-# MAGIC The worker follows one rule: an AIR package is reused when its installed version satisfies
-# MAGIC everything the requested package graph asks of it. If the requested graph requires another
-# MAGIC version, that exact version becomes an override and enters the delta. The final delta is
-# MAGIC therefore computed by **name and version**, never by name alone.
+# MAGIC The uv engine seeds its compile output with AIR's pins, making them solver preferences rather
+# MAGIC than hard constraints. uv retains compatible AIR versions and replaces incompatible ones in
+# MAGIC one backtracking solve. The pip engine remains available as a fallback. Both compute the final
+# MAGIC delta by **name and version**, never by name alone.
 
 # COMMAND ----------
 import hashlib
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -61,6 +62,26 @@ def _load_pins(path):
     return pins
 
 
+def _load_compiled_pins(path):
+    pins = {}
+    for line in Path(path).read_text().splitlines():
+        stripped = line.strip()
+        if not stripped or stripped.startswith(("#", "-")):
+            continue
+        try:
+            requirement = Requirement(stripped)
+        except InvalidRequirement as exc:
+            raise ValueError(f"uv emitted an unsupported lock line: {stripped!r}") from exc
+        exact = [item.version for item in requirement.specifier if item.operator == "=="]
+        if len(exact) != 1 or requirement.url:
+            raise ValueError(f"uv did not emit one exact version for {requirement.name!r}")
+        name = canonicalize_name(requirement.name)
+        if name in pins and pins[name] != exact[0]:
+            raise ValueError(f"uv emitted multiple target versions for {name!r}")
+        pins[name] = exact[0]
+    return pins
+
+
 def _load_override_names(path):
     path = Path(path)
     if not path.exists():
@@ -101,6 +122,82 @@ def _target_args(target_env):
     for platform in target_env.get("platforms", []):
         args += ["--platform", platform]
     return args
+
+
+def _uv_platform(target_env):
+    """Translate AIR's supported platforms into one uv cross-resolution target."""
+    platforms = target_env.get("platforms") or []
+    for platform in platforms:
+        match = re.match(r"manylinux_(\d+)_(\d+)_(x86_64|aarch64)$", platform)
+        if match:
+            major, minor, architecture = match.groups()
+            return f"{architecture}-manylinux_{major}_{minor}"
+        match = re.match(r"manylinux2014_(x86_64|aarch64)$", platform)
+        if match:
+            return f"{match.group(1)}-manylinux2014"
+
+    markers = target_env.get("marker_environment") or {}
+    machine = markers.get("platform_machine", "")
+    system = markers.get("sys_platform", "")
+    if system == "darwin":
+        return "aarch64-apple-darwin" if machine in {"arm64", "aarch64"} \
+            else "x86_64-apple-darwin"
+    if system in {"linux", "linux2"}:
+        return "aarch64-unknown-linux-gnu" if machine in {"arm64", "aarch64"} \
+            else "x86_64-unknown-linux-gnu"
+    if system in {"win32", "cygwin"}:
+        return "aarch64-pc-windows-msvc" if machine in {"arm64", "aarch64"} \
+            else "x86_64-pc-windows-msvc"
+    raise ValueError(f"cannot map AIR platforms to a uv target: {platforms}")
+
+
+def _ensure_uv(index_args):
+    local_uv = Path(sys.executable).parent / "uv"
+    uv = shutil.which("uv") or (str(local_uv) if local_uv.exists() else "")
+    if uv:
+        return uv
+    install = subprocess.run(
+        [sys.executable, "-m", "pip", "install", "--quiet", "uv"] + index_args,
+        capture_output=True, text=True,
+    )
+    uv = shutil.which("uv") or (str(local_uv) if local_uv.exists() else "")
+    if install.returncode != 0 or not uv:
+        raise RuntimeError(f"could not install uv from Artifactory: {install.stderr[-2000:]}")
+    return uv
+
+
+def _configured_pip_index_url():
+    for name in ("UV_DEFAULT_INDEX", "UV_INDEX_URL", "PIP_INDEX_URL"):
+        if os.environ.get(name):
+            return os.environ[name]
+    for key in ("global.index-url", "site.index-url"):
+        configured = subprocess.run(
+            [sys.executable, "-m", "pip", "config", "get", key],
+            capture_output=True, text=True,
+        )
+        if configured.returncode == 0 and configured.stdout.strip():
+            return configured.stdout.strip()
+    return ""
+
+
+def _uv_resolve(requirements, preferences, output, target_env, index_args):
+    """Resolve once with AIR pins as uv preferences rather than hard constraints."""
+    uv = _ensure_uv(index_args)
+    shutil.copy2(preferences, output)
+    python_version = (target_env.get("marker_environment") or {}).get("python_version")
+    if not python_version:
+        compact = target_env["python_version"]
+        python_version = f"{compact[0]}.{compact[1:]}"
+    cmd = [
+        uv, "pip", "compile", str(requirements),
+        "--output-file", str(output),
+        "--python-version", python_version,
+        "--python-platform", _uv_platform(target_env),
+        "--only-binary=:all:",
+        "--cache-dir", str(Path(output).parent / "uv-cache"),
+        "--no-header", "--no-annotate", "--no-progress", "--color", "never",
+    ]
+    return subprocess.run(cmd + index_args, capture_output=True, text=True)
 
 
 def _pip_resolve(requirements, constraints, report, target_args, index_args):
@@ -325,7 +422,7 @@ def _write_manifest(stage, manifest):
     os.replace(temporary, stage / "manifest.json")
 
 
-def resolve_and_download(stage, index_url="", work_root=""):
+def resolve_and_download(stage, index_url="", work_root="", resolver_engine="pip", find_links=""):
     stage = Path(stage)
     requirements = stage / "requirements.txt"
     constraints = stage / "constraints.txt"
@@ -354,31 +451,41 @@ def resolve_and_download(stage, index_url="", work_root=""):
         }
         _write_manifest(stage, manifest)
         return manifest
-    host_python = f"{sys.version_info.major}{sys.version_info.minor}"
-    if host_python != target_env["python_version"]:
-        manifest = {
-            "ok": False, "stage": "inputs",
-            "request_id": request_id,
-            "error": f"classic Python cp{host_python} does not match AIR cp"
-                     f"{target_env['python_version']}; pip's wheel flags cross-target downloads, "
-                     "but dependency markers still require a matching resolver interpreter",
-        }
-        _write_manifest(stage, manifest)
-        return manifest
-    host_markers = default_environment()
-    air_markers = target_env.get("marker_environment") or {}
-    marker_mismatches = {
-        key: {"classic": host_markers.get(key), "air": air_markers.get(key)}
-        for key in ("implementation_name", "platform_machine", "sys_platform")
-        if air_markers.get(key) and host_markers.get(key) != air_markers.get(key)
-    }
-    if marker_mismatches:
+    engine = (resolver_engine or "pip").strip().lower()
+    if engine not in {"pip", "uv"}:
         manifest = {
             "ok": False, "stage": "inputs", "request_id": request_id,
-            "error": f"classic and AIR dependency-marker environments differ: {marker_mismatches}",
+            "error": f"resolver_engine must be 'pip' or 'uv', got {resolver_engine!r}",
         }
         _write_manifest(stage, manifest)
         return manifest
+    if engine == "pip":
+        host_python = f"{sys.version_info.major}{sys.version_info.minor}"
+        if host_python != target_env["python_version"]:
+            manifest = {
+                "ok": False, "stage": "inputs",
+                "request_id": request_id,
+                "error": f"classic Python cp{host_python} does not match AIR cp"
+                         f"{target_env['python_version']}; use resolver_engine=uv for a "
+                         "cross-interpreter resolve",
+            }
+            _write_manifest(stage, manifest)
+            return manifest
+        host_markers = default_environment()
+        air_markers = target_env.get("marker_environment") or {}
+        marker_mismatches = {
+            key: {"classic": host_markers.get(key), "air": air_markers.get(key)}
+            for key in ("implementation_name", "platform_machine", "sys_platform")
+            if air_markers.get(key) and host_markers.get(key) != air_markers.get(key)
+        }
+        if marker_mismatches:
+            manifest = {
+                "ok": False, "stage": "inputs", "request_id": request_id,
+                "error": "classic and AIR dependency-marker environments differ: "
+                         f"{marker_mismatches}; use resolver_engine=uv",
+            }
+            _write_manifest(stage, manifest)
+            return manifest
 
     _write_manifest(stage, {"ok": False, "stage": "running", "request_id": request_id,
                             "error": "classic worker has not finished"})
@@ -401,12 +508,15 @@ def resolve_and_download(stage, index_url="", work_root=""):
         _write_manifest(stage, manifest)
         return manifest
     target_args = _target_args(target_env)
-    index_args = ["--index-url", index_url] if index_url else []
+    if find_links:
+        index_args = ["--no-index", "--find-links", str(find_links)]
+    else:
+        effective_index = index_url or (_configured_pip_index_url() if engine == "uv" else "")
+        index_args = ["--index-url", effective_index] if effective_index else []
     _write_effective_constraints(constraints, effective, explicit)
 
-    print(f"request {request_id} | AIR target {target_env['top_tag']} | "
+    print(f"request {request_id} | engine {engine} | AIR target {target_env['top_tag']} | "
           f"explicit overrides {sorted(explicit) or 'none'}")
-    first = _pip_resolve(requirements, effective, report, target_args, index_args)
     detected = {"overrides": set(), "reasons": {}, "skipped_requirement_lines": [],
                 "missing_candidates": []}
     all_overrides = set(explicit)
@@ -414,111 +524,159 @@ def resolve_and_download(stage, index_url="", work_root=""):
     reconciliation_probes = 0
     override_reasons = {}
 
-    if first.returncode != 0:
-        wants = _pip_resolve(requirements, None, wants_report, target_args, index_args)
-        if wants.returncode != 0:
+    if engine == "uv":
+        uv_lock = local_root / "uv-resolved.txt"
+        try:
+            uv_result = _uv_resolve(
+                requirements, effective, uv_lock, target_env, index_args,
+            )
+        except (OSError, RuntimeError, ValueError) as exc:
             manifest = {
-                "ok": False, "stage": "resolve-wants", "request_id": request_id,
-                "error": "target requirements do not resolve from Artifactory even without AIR constraints",
-                "stderr_tail": wants.stderr[-4000:],
-                "constrained_stderr_tail": first.stderr[-2000:],
+                "ok": False, "stage": "resolve-preferences", "request_id": request_id,
+                "engine": engine, "error": str(exc),
             }
             _write_manifest(stage, manifest)
             return manifest
-
-        wants_install = json.loads(wants_report.read_text()).get("install", [])
-        detected = infer_required_overrides(
-            requirements.read_text().splitlines(), wants_install, baseline,
-            target_env.get("marker_environment") or {}, explicit,
-        )
-        all_overrides |= detected["overrides"]
-        override_reasons.update(detected["reasons"])
+        if uv_result.returncode != 0:
+            manifest = {
+                "ok": False, "stage": "resolve-preferences", "request_id": request_id,
+                "engine": engine,
+                "error": "uv could not resolve the target requirements while preferring AIR pins",
+                "stderr_tail": uv_result.stderr[-4000:],
+            }
+            _write_manifest(stage, manifest)
+            return manifest
+        try:
+            closure = _load_compiled_pins(uv_lock)
+        except (OSError, ValueError) as exc:
+            manifest = {
+                "ok": False, "stage": "resolve-preferences", "request_id": request_id,
+                "engine": engine, "error": str(exc),
+            }
+            _write_manifest(stage, manifest)
+            return manifest
+        reconciled = {
+            name for name in _version_delta(closure, baseline)
+            if name in baseline and name not in explicit
+        }
+        all_overrides |= reconciled
+        for name in sorted(reconciled):
+            override_reasons[name] = [
+                f"uv replaced AIR preference {name}=={baseline[name]} with {name}=={closure[name]}"
+            ]
         _write_effective_constraints(constraints, effective, all_overrides)
-        print(f"detected overrides: {sorted(all_overrides) or 'none'}")
-        final = _pip_resolve(requirements, effective, report, target_args, index_args)
-
-        if final.returncode != 0:
-            wants_closure = {
-                canonicalize_name(item["metadata"]["name"]): item["metadata"]["version"]
-                for item in wants_install
-            }
-            relaxation_candidates = {
-                name for name in _version_delta(wants_closure, baseline)
-                if name in baseline
-            }
-            fixed_overrides = set(explicit) | detected["overrides"]
-            relaxed_overrides = fixed_overrides | relaxation_candidates
-            relaxed_effective = local_root / "constraints.relaxed.txt"
-            relaxed_report = local_root / "relaxed.json"
-            _write_effective_constraints(constraints, relaxed_effective, relaxed_overrides)
-            relaxed = _pip_resolve(
-                requirements, relaxed_effective, relaxed_report, target_args, index_args,
-            )
-            if relaxed.returncode != 0:
+        print(f"uv preference replacements: {sorted(reconciled) or 'none'}")
+    else:
+        first = _pip_resolve(requirements, effective, report, target_args, index_args)
+        if first.returncode != 0:
+            wants = _pip_resolve(requirements, None, wants_report, target_args, index_args)
+            if wants.returncode != 0:
                 manifest = {
-                    "ok": False, "stage": "resolve-relaxed", "request_id": request_id,
-                    "error": "the unconstrained target resolved, but automatically relaxing every "
-                             "different AIR pin did not reproduce that resolution",
-                    "explicit_overrides": sorted(explicit),
-                    "detected_overrides": sorted(detected["overrides"] - explicit),
-                    "override_reasons": override_reasons,
-                    "skipped_requirement_lines": detected["skipped_requirement_lines"],
-                    "missing_candidates": detected["missing_candidates"],
-                    "stderr_tail": relaxed.stderr[-4000:],
+                    "ok": False, "stage": "resolve-wants", "request_id": request_id,
+                    "engine": engine,
+                    "error": "target requirements do not resolve from Artifactory even without "
+                             "AIR constraints",
+                    "stderr_tail": wants.stderr[-4000:],
+                    "constrained_stderr_tail": first.stderr[-2000:],
                 }
                 _write_manifest(stage, manifest)
                 return manifest
 
-            probe_number = 0
-
-            def can_resolve(trial_overrides):
-                nonlocal probe_number
-                probe_number += 1
-                trial_constraints = local_root / f"constraints.probe-{probe_number}.txt"
-                trial_report = local_root / f"probe-{probe_number}.json"
-                _write_effective_constraints(constraints, trial_constraints, trial_overrides)
-                trial = _pip_resolve(
-                    requirements, trial_constraints, trial_report, target_args, index_args,
-                )
-                return trial.returncode == 0
-
-            print("direct conflict walk was insufficient; restoring compatible AIR pins by probe")
-            all_overrides, _restored, reconciliation_probes = restore_compatible_pins(
-                relaxed_overrides, fixed_overrides, can_resolve,
+            wants_install = json.loads(wants_report.read_text()).get("install", [])
+            detected = infer_required_overrides(
+                requirements.read_text().splitlines(), wants_install, baseline,
+                target_env.get("marker_environment") or {}, explicit,
             )
-            reconciled = all_overrides - fixed_overrides
-            for name in sorted(reconciled):
-                override_reasons[name] = [
-                    f"restoring the AIR pin {name}=={baseline[name]} makes resolution fail"
-                ]
-            print(f"automatically reconciled overrides: {sorted(reconciled) or 'none'} "
-                  f"({reconciliation_probes} probes)")
+            all_overrides |= detected["overrides"]
+            override_reasons.update(detected["reasons"])
             _write_effective_constraints(constraints, effective, all_overrides)
+            print(f"detected overrides: {sorted(all_overrides) or 'none'}")
             final = _pip_resolve(requirements, effective, report, target_args, index_args)
-    else:
-        final = first
 
-    if final.returncode != 0:
-        manifest = {
-            "ok": False, "stage": "resolve-effective", "request_id": request_id,
-            "error": "automatic AIR-pin reconciliation produced a constraint set that no longer "
-                     "resolves",
-            "explicit_overrides": sorted(explicit),
-            "detected_overrides": sorted(all_overrides - explicit),
-            "reconciled_overrides": sorted(reconciled),
-            "override_reasons": override_reasons,
-            "skipped_requirement_lines": detected["skipped_requirement_lines"],
-            "missing_candidates": detected["missing_candidates"],
-            "stderr_tail": final.stderr[-4000:],
+            if final.returncode != 0:
+                wants_closure = {
+                    canonicalize_name(item["metadata"]["name"]): item["metadata"]["version"]
+                    for item in wants_install
+                }
+                relaxation_candidates = {
+                    name for name in _version_delta(wants_closure, baseline)
+                    if name in baseline
+                }
+                fixed_overrides = set(explicit) | detected["overrides"]
+                relaxed_overrides = fixed_overrides | relaxation_candidates
+                relaxed_effective = local_root / "constraints.relaxed.txt"
+                relaxed_report = local_root / "relaxed.json"
+                _write_effective_constraints(constraints, relaxed_effective, relaxed_overrides)
+                relaxed = _pip_resolve(
+                    requirements, relaxed_effective, relaxed_report, target_args, index_args,
+                )
+                if relaxed.returncode != 0:
+                    manifest = {
+                        "ok": False, "stage": "resolve-relaxed", "request_id": request_id,
+                        "engine": engine,
+                        "error": "the unconstrained target resolved, but automatically relaxing "
+                                 "every different AIR pin did not reproduce that resolution",
+                        "explicit_overrides": sorted(explicit),
+                        "detected_overrides": sorted(detected["overrides"] - explicit),
+                        "override_reasons": override_reasons,
+                        "skipped_requirement_lines": detected["skipped_requirement_lines"],
+                        "missing_candidates": detected["missing_candidates"],
+                        "stderr_tail": relaxed.stderr[-4000:],
+                    }
+                    _write_manifest(stage, manifest)
+                    return manifest
+
+                probe_number = 0
+
+                def can_resolve(trial_overrides):
+                    nonlocal probe_number
+                    probe_number += 1
+                    trial_constraints = local_root / f"constraints.probe-{probe_number}.txt"
+                    trial_report = local_root / f"probe-{probe_number}.json"
+                    _write_effective_constraints(constraints, trial_constraints, trial_overrides)
+                    trial = _pip_resolve(
+                        requirements, trial_constraints, trial_report, target_args, index_args,
+                    )
+                    return trial.returncode == 0
+
+                print("direct conflict walk was insufficient; restoring compatible AIR pins by probe")
+                all_overrides, _restored, reconciliation_probes = restore_compatible_pins(
+                    relaxed_overrides, fixed_overrides, can_resolve,
+                )
+                reconciled = all_overrides - fixed_overrides
+                for name in sorted(reconciled):
+                    override_reasons[name] = [
+                        f"restoring the AIR pin {name}=={baseline[name]} makes resolution fail"
+                    ]
+                print(f"automatically reconciled overrides: {sorted(reconciled) or 'none'} "
+                      f"({reconciliation_probes} probes)")
+                _write_effective_constraints(constraints, effective, all_overrides)
+                final = _pip_resolve(requirements, effective, report, target_args, index_args)
+        else:
+            final = first
+
+        if final.returncode != 0:
+            manifest = {
+                "ok": False, "stage": "resolve-effective", "request_id": request_id,
+                "engine": engine,
+                "error": "automatic AIR-pin reconciliation produced a constraint set that no "
+                         "longer resolves",
+                "explicit_overrides": sorted(explicit),
+                "detected_overrides": sorted(all_overrides - explicit),
+                "reconciled_overrides": sorted(reconciled),
+                "override_reasons": override_reasons,
+                "skipped_requirement_lines": detected["skipped_requirement_lines"],
+                "missing_candidates": detected["missing_candidates"],
+                "stderr_tail": final.stderr[-4000:],
+            }
+            _write_manifest(stage, manifest)
+            return manifest
+
+        install = json.loads(report.read_text()).get("install", [])
+        closure = {
+            canonicalize_name(item["metadata"]["name"]): item["metadata"]["version"]
+            for item in install
         }
-        _write_manifest(stage, manifest)
-        return manifest
-
-    install = json.loads(report.read_text()).get("install", [])
-    closure = {
-        canonicalize_name(item["metadata"]["name"]): item["metadata"]["version"]
-        for item in install
-    }
     delta = _version_delta(closure, baseline)
     print(f"closure {len(closure)} | reused from AIR {len(closure) - len(delta)} | delta {len(delta)}")
     for name, version in sorted(delta.items()):
@@ -554,6 +712,7 @@ def resolve_and_download(stage, index_url="", work_root=""):
     if failures:
         manifest = {
             "ok": False, "stage": "download", "request_id": request_id,
+            "engine": engine,
             "error": "one or more exact delta wheels could not be downloaded for AIR's tags",
             "failures": failures,
             "explicit_overrides": sorted(explicit),
@@ -587,7 +746,7 @@ def resolve_and_download(stage, index_url="", work_root=""):
 
     manifest = {
         "ok": True,
-        "engine": "pip",
+        "engine": engine,
         "request_id": request_id,
         "closure_count": len(closure),
         "delta": [f"{name}=={version}" for name, version in sorted(delta.items())],
@@ -612,9 +771,10 @@ def resolve_and_download(stage, index_url="", work_root=""):
 if "dbutils" in globals():
     STAGE = _cfg("stage_dir")
     INDEX_URL = _cfg("index_url")
+    RESOLVER_ENGINE = _cfg("resolver_engine", "pip")
     assert STAGE, "stage_dir is required (set it in the driver or as a notebook parameter)"
 
-    manifest = resolve_and_download(STAGE, INDEX_URL)
+    manifest = resolve_and_download(STAGE, INDEX_URL, resolver_engine=RESOLVER_ENGINE)
     print(json.dumps({k: v for k, v in manifest.items() if k != "wheel_files"},
                      indent=2, ensure_ascii=False))
 

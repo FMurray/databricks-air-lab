@@ -15,6 +15,7 @@ dbutils.widgets.text("classic_cluster_id", "", "Classic cluster id with Artifact
 dbutils.widgets.text("worker_notebook_path", "", "Workspace path to resolve_worker")
 dbutils.widgets.text("target_python", "", "Interpreter the workload uses (blank = this notebook's)")
 dbutils.widgets.text("index_url", "", "Artifactory index URL (blank = classic pip.conf)")
+dbutils.widgets.dropdown("resolver_engine", "uv", ["uv", "pip"], "Dependency resolver")
 dbutils.widgets.text("wait_minutes", "45", "Maximum minutes to wait for the classic run")
 
 # COMMAND ----------
@@ -33,6 +34,7 @@ CLASSIC_ID = dbutils.widgets.get("classic_cluster_id").strip()
 WORKER_NB = dbutils.widgets.get("worker_notebook_path").strip()
 TARGET_PY = dbutils.widgets.get("target_python").strip() or sys.executable
 INDEX_URL = dbutils.widgets.get("index_url").strip()
+RESOLVER_ENGINE = dbutils.widgets.get("resolver_engine").strip() or "uv"
 WAIT_MIN = int(dbutils.widgets.get("wait_minutes") or "45")
 
 assert REQ_TEXT, "requirements is empty — list the packages the workload needs"
@@ -52,7 +54,7 @@ def request_fingerprint(stage):
     return digest.hexdigest()[:16]
 
 
-print(f"stage {STAGE}\ntarget interpreter {TARGET_PY}\n"
+print(f"stage {STAGE}\ntarget interpreter {TARGET_PY}\nresolver {RESOLVER_ENGINE}\n"
       f"index {'explicit Artifactory URL' if INDEX_URL else 'classic cluster pip.conf'}")
 
 # COMMAND ----------
@@ -121,7 +123,11 @@ waiter = workspace.jobs.submit(
         existing_cluster_id=CLASSIC_ID,
         notebook_task=jobs.NotebookTask(
             notebook_path=WORKER_NB,
-            base_parameters={"stage_dir": STAGE, "index_url": INDEX_URL},
+            base_parameters={
+                "stage_dir": STAGE,
+                "index_url": INDEX_URL,
+                "resolver_engine": RESOLVER_ENGINE,
+            },
         ),
     )],
 )

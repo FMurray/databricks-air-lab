@@ -14,29 +14,25 @@ from a build-specific effective constraints file and includes the exact replacem
 1. **AIR captures the request.** `pip freeze --all` becomes `constraints.txt`; the requested packages
    become `requirements.txt`; optional operator overrides become `overrides.txt`; the interpreter's
    complete `packaging.tags.sys_tags()` list and marker environment become `target_env.json`.
-2. **Classic tries the AIR baseline.** Pip resolves the target requirements with the AIR constraints
-   and AIR's Python/ABI/platform flags. A successful resolve means no baseline pin conflicts.
-3. **Classic detects required replacements after a failure.** It resolves the requested graph without
-   the AIR constraints to obtain candidate metadata, then walks only packages that must be added or
-   replaced. An AIR pin is removed only when its version fails an actual incoming requirement
-   specifier. A newer unconstrained preference alone is not a conflict.
-4. **Classic resolves the effective environment.** It retries with the AIR freeze minus directly
-   detected and explicitly named overrides. If an older retained AIR parent still makes that graph
-   fail, the worker temporarily relaxes every AIR pin that differs from the valid unconstrained graph,
-   then restores compatible pins in groups. Pins that fail restoration become automatic overrides.
-5. **Classic computes a version-aware delta.** A resolved package is reused only when AIR contains the
+2. **Classic resolves with AIR preferences.** The uv worker copies the AIR freeze to its compile output,
+   then runs `uv pip compile` for AIR's Python and platform without passing the freeze as `-c` constraints.
+   Existing output pins are uv preferences: compatible AIR versions are retained, while uv backtracks
+   across incompatible direct and transitive versions in one solve.
+3. **Classic writes effective constraints.** Every AIR package whose resolved version changed is
+   removed from a build-specific constraints file. Explicit overrides use the same mechanism but are
+   normally unnecessary.
+4. **Classic computes a version-aware delta.** A resolved package is reused only when AIR contains the
    same normalized name **and version**. Every missing or different version is downloaded with
    `pip download --no-deps --only-binary` using AIR's target flags.
-6. **Classic validates and publishes.** Every downloaded wheel must have at least one tag in AIR's
+5. **Classic validates and publishes.** Every downloaded wheel must have at least one tag in AIR's
    supported-tag list. The worker publishes a request-specific wheelhouse, the effective constraints,
    the full resolution lock, an exact hashed delta lock, and `manifest.json`.
-7. **AIR verifies offline.** AIR checks that the manifest fingerprint matches the current request,
+6. **AIR verifies offline.** AIR checks that the manifest fingerprint matches the current request,
    resolves with `--no-index`, and verifies every delta wheel hash before printing the install command.
 
-For the motivating case, requesting a newer OpenAI version marks OpenAI as an override. Walking that
-candidate's metadata finds its `jiter` requirement; when AIR's installed `jiter` does not satisfy the
-specifier, `jiter` also becomes an override and enters the name+version delta. A compatible NumPy
-version remains pinned even when unconstrained pip happens to prefer a newer NumPy.
+For the motivating case, uv replaces the preferred AIR OpenAI and jiter versions but retains the
+preferred AIR NumPy version because it satisfies the new graph. Older parent metadata is part of the
+same global solve, so hidden transitive conflicts do not require a second pass or manual override.
 
 ## Files
 
@@ -44,14 +40,15 @@ version remains pinned even when unconstrained pip happens to prefer a newer Num
 |---|---|---|
 | `air_freeze.py` | AIR env-v5 | Captures the request and verifies the finished build offline |
 | `mlr_download_driver.py` | Classic MLR 17.3 | `%run`s the canonical resolver with Artifactory access |
-| `resolve_worker.py` | Classic MLR 17.3 | Detects conflicts, resolves, downloads, validates, and publishes |
+| `resolve_worker.py` | Classic MLR 17.3 | Canonical uv/pip engines plus shared download, validation, and publishing |
 | `resolve_orchestrator.py` | AIR env-v5 | Performs the full AIR → classic → AIR flow through a Jobs submit |
-| `resolve_worker_uv.py` | Classic MLR 17.3 | Compatibility alias to `resolve_worker`; retained for old notebooks |
+| `resolve_worker_uv.py` | Classic MLR 17.3 | Selects the uv preference engine in the canonical worker |
 | `test_resolve_worker.py` | Local | Unit coverage for conflict traversal and name+version delta logic |
 | `test_resolve_worker_integration.py` | Local | Offline freeze → resolve → wheelhouse → install integration test |
 
-There is one resolver implementation. The earlier uv variant duplicated the algorithm and retained
-name-only delta behavior, so its path now delegates to `resolve_worker`.
+There is one wheelhouse implementation. `resolve_worker_uv` selects uv and delegates shared delta,
+download, tag validation, locking, and publishing to `resolve_worker`. The classic driver defaults to
+uv; select `pip` only when testing the conservative conflict-walk fallback.
 
 ## Local offline verification
 
@@ -63,12 +60,11 @@ python3 -B -m unittest \
   experiments/env-flexibility/vendored-wheels/orchestrated/test_resolve_worker_integration.py
 ```
 
-The integration test creates a temporary `file://` package index and a temporary baseline virtual
-environment. It installs and freezes `airlab-openai==1.0.0`, `airlab-jiter==0.8.0`, and
-`airlab-array==2.1.3`, then requests `airlab-openai==2.0.0`. The new parent requires
-`airlab-jiter>=0.10,<1`; the worker must remove the OpenAI and jiter pins, download their exact
-replacement wheels, keep the compatible array pin, install the hashed delta offline, and pass
-`pip check`. The test deletes all generated environments, indexes, and wheelhouses when it exits.
+The integration test creates a temporary private package source and baseline virtual environment. Its
+uv case combines the OpenAI/jiter conflict with an older compatible-looking parent whose dependency
+metadata conflicts transitively. One uv solve must replace both conflict chains, retain the compatible
+array pin, build the exact wheelhouse delta, and resolve it offline. The test deletes all generated
+environments, indexes, caches, and wheelhouses when it exits.
 
 ## Two-step workflow
 
@@ -77,9 +73,7 @@ the driver's `%run ./resolve_worker` resolves.
 
 1. Run Phase 1 of `air_freeze` on the exact AIR interpreter the workload will use.
 2. Run `mlr_download_driver` on a classic MLR 17.3 cluster with the same `stage_dir`.
-3. If the worker cannot infer a remaining conflict, enter package **names only** in the driver's
-   `overrides` widget and rerun. The driver updates the staged `overrides.txt`.
-4. Run Phase 2 of `air_freeze`. It refuses stale or failed manifests.
+3. Run Phase 2 of `air_freeze`. It refuses stale or failed manifests.
 
 `overrides.txt` is an escape hatch for a proven dependency conflict, not a native-package safety
 classification. The manifest records explicit and detected overrides with their dependency reasons.
@@ -108,15 +102,13 @@ without making a second dependency choice.
 
 ## Boundaries
 
-- The classic resolver's Python major/minor must match AIR. Pip's target flags control wheel and
-  `Requires-Python` selection, while some environment-marker behavior still follows the resolver
-  interpreter. The verified MLR 17.3/AIR v5 pairing is CPython 3.12 on Linux x86_64.
+- uv cross-resolves using AIR's Python version and manylinux platform, so the classic interpreter may
+  differ. The pip fallback still requires matching Python and dependency-marker environments.
 - Wheel tags prove Python ABI and platform compatibility. They do not prove compatibility with an
   external Torch, CUDA, MPI, or system-library ABI. Native replacements still need an AIR import or
   workload smoke test.
-- Requirements-file options and nested `-r` files are passed to pip, but automatic conflict traversal
-  handles ordinary PEP 508 requirement lines. Use explicit overrides when the manifest reports skipped
-  requirement lines.
+- uv must be available from the classic environment or Artifactory. The worker installs it with pip
+  when absent, using the same configured index.
 - An explicit `index_url` is passed as a process argument and never printed. Leaving it blank uses the
   classic cluster's pip configuration.
 - Builds live under `builds/<request-id>/`; Phase 2 validates the request fingerprint before consuming
@@ -125,7 +117,7 @@ without making a second dependency choice.
 ## Existing evidence
 
 The following receipts validate the wheelhouse transport and AIR tag targeting. They predate the
-current conflict-walk rewrite, which still needs an end-to-end OpenAI/jiter verification round.
+current uv preference rewrite, which still needs an end-to-end Artifactory/AIR verification round.
 
 - AIR env-v5 tags were captured on `fevm-forrest-2` by run `433746246158238`.
 - The additive `cowsay` + `numpy-financial` loop resolved on classic run `872088480209335` and verified
