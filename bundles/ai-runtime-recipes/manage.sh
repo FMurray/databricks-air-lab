@@ -13,6 +13,7 @@ Usage:
   ./manage.sh run <recipe> --yes
 
 Recipes:
+  rdma-m1-smoke           2 nodes x 8 H100, 60-second all-reduce smoke
   rdma-m1-soak            2 nodes x 8 H100, 10-minute all-reduce soak
   rdma-m2a-fabric-only    4 nodes x 1 active H100, 10-minute all-reduce soak
   rdma-m2b-p2p-ring       4 nodes x 1 active H100, 10-minute P2P ring soak
@@ -35,6 +36,7 @@ require_cli() {
 
 resource_for_recipe() {
   case "$1" in
+    rdma-m1-smoke) echo rdma_m1_smoke ;;
     rdma-m1-soak) echo rdma_m1_soak ;;
     rdma-m2a-fabric-only) echo rdma_m2a_fabric_only ;;
     rdma-m2b-p2p-ring) echo rdma_m2b_p2p_ring ;;

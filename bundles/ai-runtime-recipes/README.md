@@ -31,12 +31,13 @@ Deployment creates or updates Jobs resources and the code artifact but does not 
 ## Run one recipe
 
 ```bash
-./manage.sh run rdma-m1-soak --yes
+./manage.sh run rdma-m1-smoke --yes
 ```
 
-The explicit `--yes` guard is intentional: `run` starts billable compute. `rdma-m1-soak` is the
-two-node native-task example (`GPU_8xH100`, `accelerator_count: 16`). The other recipe keys and
-their shapes are shown by `./manage.sh list`.
+The explicit `--yes` guard is intentional: `run` starts billable compute. `rdma-m1-smoke` is the
+bounded two-node native-task check (`GPU_8xH100`, `accelerator_count: 16`, 60-second stress loop).
+Use `rdma-m1-soak` for the canonical 10-minute recipe. The other recipe keys and their shapes are
+shown by `./manage.sh list`.
 
 Every job targets the submitting user's `/Workspace/Users/<user>` experiment directory and the
 `air-lab-rdma-stress` MLflow experiment name.

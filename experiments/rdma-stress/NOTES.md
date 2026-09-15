@@ -45,6 +45,32 @@ Verification of the AI-env interpreter is owned by a parallel workstream (duplic
 All numbers from M1/M2 remain **smoke-grade** per the verification skill; M4 output is the
 defensible tier.
 
+## DAB-native M1 smoke — pre-registered 2026-09-15
+
+Question: can the checked-in `bundles/ai-runtime-recipes` DAB package and execute the existing M1
+recipe as a native Jobs `ai_runtime_task` across two 8xH100 nodes?
+
+Target and bounded shape: `fevm-forrest-2`, Databricks CLI v1.16.0, environment v5,
+2×`GPU_8xH100` (`accelerator_count=16`), `STRESS_SECONDS=60`, 1 GiB buffers, no retries, and a
+15-minute task timeout. Evidence lands in the existing `air-lab-rdma-stress` MLflow experiment.
+
+A pass requires all of the following:
+
+1. The deployed Jobs resource contains native `ai_runtime_task`, the uploaded `.tgz` code path,
+   the uploaded M1 smoke command, `GPU_8xH100`, and `accelerator_count=16`.
+2. The bundle-started run terminates `SUCCESS`.
+3. Both node logs report distinct node ranks, `NUM_NODES=2`, `LOCAL_WORLD_SIZE=8`, and world size 16.
+4. Both nodes print `CORRECTNESS_OK all elements == 16`; node 0 prints the pass-gated
+   `MULTINODE_NCCL_V5_OK` sentinel.
+5. Logs explicitly select RDMA/EFA rather than socket fallback. Hardware-counter lists may remain
+   empty; the prior native-task run established that those counters are not container-visible here.
+
+| Claim | Required evidence |
+|---|---|
+| DAB persisted the requested native task and shape | raw Jobs resource JSON |
+| The bundle run executed correctly on two nodes | terminal state plus independent node logs |
+| NCCL used the RDMA path | explicit NCCL transport/provider/channel lines from both nodes |
+
 ## Native `ai_runtime_task` M1 smoke — pre-registered 2026-09-15
 
 Question: can the native Jobs `ai_runtime_task` path that passed two-node A10 DDP also run the
