@@ -2,8 +2,9 @@
 # bandwidth). probe_multinode.sh torchrun-launches allreduce_probe.py — there is no separate
 # allreduce workload in the multinode suite. Size-sweep NVLink bench is nccl-allreduce.example.yaml
 # (allreduce-single, single-node); ctypes/RDMA isolation is the fabric tier.
-# Multinode silently PuPr'd 2026-07-17 (#research-on-air); multiples of 8xH100 only per
-# #ai-air-product-champions 2026-07-22 — the A10 override below tests whether that's enforced.
+# Multinode silently PuPr'd 2026-07-17 (#research-on-air). Earlier guidance said multiples of
+# 8xH100 only; 2xA10 is now verified on the native ai_runtime_task path (2026-09-14, run
+# 1090461481669184). A10 proves orchestration/correctness but uses socket transport, not EFA.
 # H100:  as-is (2 nodes × 8xH100) — uat headline allreduce-fabric.
 # A10:   --override compute.accelerator_type=GPU_1xA10 compute.num_accelerators=2
 #        — uat plumbing multinode-probe.
