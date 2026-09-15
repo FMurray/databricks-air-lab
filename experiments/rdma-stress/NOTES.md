@@ -81,4 +81,19 @@ $ python3 -c '... ast.parse(nccl_allreduce_ctypes.py) ...'
 PYTHON_PARSE_OK
 ```
 
-Target-workspace dry-run and live result pending.
+Target-workspace dry-run passed on 2026-09-15:
+
+```text
+"ai_runtime_task": {
+  "deployments": [{
+    "compute": {
+      "accelerator_type": "GPU_8xH100",
+      "accelerator_count": 16
+    }
+  }]
+}
+"variables": {"STRESS_SECONDS": "60", "BUF_MB": "1024"}
+{"data": {"status": "DRY_RUN_OK", "dry_run": true}}
+```
+
+Live result pending.
