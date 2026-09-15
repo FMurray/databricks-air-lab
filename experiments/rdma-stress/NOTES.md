@@ -89,6 +89,86 @@ The `tgz` includes only paths below `experiments/`, so AI Runtime chose that com
 resolve `node-acceptance/` and `rdma-stress/` directly below `CODE_SOURCE_PATH`; the retry keeps the
 same pre-registered shape and pass criteria.
 
+### Attempt 2 — verified DAB-native two-node RDMA smoke
+
+✅ **VERIFIED 2026-09-15, Jobs run 668822165605665, `fevm-forrest-2`.** Task run
+`925831226996576`; workspace MLflow run
+[`4f1da726cc6748e1867ef1b14f2baa87`](https://fevm-forrest-serverless-stable-2.cloud.databricks.com/ml/experiments/3516368535099647/runs/4f1da726cc6748e1867ef1b14f2baa87?o=7474645252241925).
+The DAB-started run terminated `SUCCESS`. The raw Jobs response preserved the uploaded bundle
+artifact and command paths plus the requested native task shape:
+
+```json
+{
+  "job_id": 996877924018754,
+  "run_id": 668822165605665,
+  "state": {"life_cycle_state": "TERMINATED", "result_state": "SUCCESS"},
+  "tasks": [{
+    "run_id": 925831226996576,
+    "ai_runtime_task": {
+      "code_source_path": "/Workspace/Users/forrest.murray@databricks.com/.bundle/air-rdma-recipes/forrest_serverless/artifacts/.internal/rdma-recipes.tgz",
+      "deployments": [{
+        "command_path": "/Workspace/Users/forrest.murray@databricks.com/.bundle/air-rdma-recipes/forrest_serverless/files/bundles/ai-runtime-recipes/commands/rdma-m1-smoke.sh",
+        "compute": {"accelerator_count": 16, "accelerator_type": "GPU_8xH100"}
+      }]
+    }
+  }]
+}
+```
+
+Independent node receipts:
+
+```text
+# node 0
+NODE 0/2 local=8 world=16 host=main.host.local uuids=9582bf042a7c,...,94c7957b3d38
+NCCL INFO NET/OFI Using transport protocol RDMA (platform set)
+NCCL INFO NET/OFI Selected provider is efa, fabric is efa-direct (found 32 nics)
+NCCL INFO Channel 00/0 : 8[0] -> 0[0] [receive] via NET/Libfabric/0/GDRDMA
+NODE 0 CORRECTNESS_OK all elements == 16
+NODE 0 all_reduce 1024MB x10: 5.2 ms/iter, algbw 208.0 GB/s, busbw ~390.1 GB/s
+NODE 0 STRESS 60s buf=1024MB fabric_only=False p2p_ring=False 12980 iters, sustained busbw ~435.5 GB/s, window drift 12.4% (min 5ms/10it max 5ms/10it)
+NODE 0 RDMA counter deltas (raw/1e9): []
+MULTINODE_NCCL_V5_OK
+
+# node 1
+NODE 1/2 local=8 world=16 host=main.host.local uuids=b1d444a1090f,...,f5c9d5c57fef
+NCCL INFO NET/OFI Using transport protocol RDMA (platform set)
+NCCL INFO NET/OFI Selected provider is efa, fabric is efa-direct (found 32 nics)
+NCCL INFO Channel 01/0 : 0[0] -> 8[0] [receive] via NET/Libfabric/0/GDRDMA
+NODE 1 CORRECTNESS_OK all elements == 16
+NODE 1 all_reduce 1024MB x10: 5.2 ms/iter, algbw 207.5 GB/s, busbw ~389.1 GB/s
+NODE 1 STRESS 60s buf=1024MB fabric_only=False p2p_ring=False 12980 iters, sustained busbw ~435.5 GB/s, window drift 15.2% (min 5ms/10it max 5ms/10it)
+NODE 1 RDMA counter deltas (raw/1e9): []
+```
+
+MLflow records the assertion-gated topology and the following node-0 measurements:
+
+```text
+probe_sentinel=MULTINODE_NCCL_V5_OK
+num_nodes=2
+local_world_size=8
+world_size=16
+algbw_gbps=208.03191094899884
+busbw_gbps=390.05983302937284
+stress_iters=12980
+stress_seconds=60.00560426712036
+stress_sustained_busbw_gbps=435.4958501087697
+stress_window_drift_pct=12.430619916900103
+```
+
+| Claim | Verdict | Evidence |
+|---|---|---|
+| DAB persisted the requested native task and shape | PASS | Jobs response: uploaded `.tgz` + command, `ai_runtime_task`, `GPU_8xH100`, `accelerator_count: 16` |
+| The bundle ran the recipe correctly on two nodes | PASS | terminal `SUCCESS`; node 0 and 1: `local=8 world=16`, `CORRECTNESS_OK`; rank 0: `MULTINODE_NCCL_V5_OK` |
+| NCCL used RDMA rather than socket fallback | PASS | both nodes: `Using transport protocol RDMA`, `efa-direct`; cross-node channels: `NET/Libfabric/.../GDRDMA` |
+| Hardware counters prove byte movement | NOT AVAILABLE | both nodes: `RDMA counter deltas (raw/1e9): []`, consistent with the prior H100 run |
+| Full M1 stability acceptance | NOT RUN | this was the pre-registered 60-second smoke; the canonical M1 recipe is 600 seconds |
+
+The 435.50 GB/s value is **measured, smoke-grade normalized NCCL bus bandwidth**, not raw EFA
+line rate or customer-deck benchmark data. Node-0 window drift was 12.43%, below the
+pre-registered 20% smoke threshold. The workspace MLflow run holds both nodes' raw log artifacts.
+Local archiving is deferred because `experiments/mlflow.db` contains unrelated uncommitted work in
+this checkout.
+
 ## Native `ai_runtime_task` M1 smoke — pre-registered 2026-09-15
 
 Question: can the native Jobs `ai_runtime_task` path that passed two-node A10 DDP also run the
