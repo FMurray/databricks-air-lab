@@ -4,7 +4,7 @@
 # MAGIC
 # MAGIC This helper runs only on classic compute. `build_wheelhouse` resolves a developer
 # MAGIC `requirements.txt` against a checked-in AIR environment profile, publishes the exact wheel
-# MAGIC delta to a UC Volume, and emits an AIR `environment.yaml` tied to the resolved lock.
+# MAGIC delta to a UC Volume, and emits a serverless `environment.yaml` tied to the resolved lock.
 
 # COMMAND ----------
 import hashlib
@@ -196,13 +196,20 @@ def _write_json(path, value):
     os.replace(temporary, path)
 
 
-def _environment_yaml(air_environment, wheel_paths):
+def _environment_yaml(target, wheel_paths):
+    base_environment = target["air_environment"]
+    environment_version = target["environment_version"]
     wheel_paths = [str(path) for path in wheel_paths]
     if not wheel_paths:
-        return f"version: {json.dumps(air_environment)}\ndependencies: []\n"
+        return (
+            f"base_environment: {json.dumps(base_environment)}\n"
+            f"environment_version: {json.dumps(environment_version)}\n"
+            "dependencies: []\n"
+        )
     dependencies = ["--no-index", *wheel_paths]
     return (
-        f"version: {json.dumps(air_environment)}\n"
+        f"base_environment: {json.dumps(base_environment)}\n"
+        f"environment_version: {json.dumps(environment_version)}\n"
         "dependencies:\n"
         + "".join(f"  - {json.dumps(item)}\n" for item in dependencies)
     )
@@ -333,7 +340,7 @@ def build_wheelhouse(requirements_file, wheelhouse_volume, profile_dir, index_ur
         delta_lines.append(f"{name}=={version} {hashes}".rstrip())
     delta_lock.write_text("\n".join(delta_lines) + ("\n" if delta_lines else ""))
     published_wheels = sorted(wheelhouse / record["file"] for record in records)
-    environment_file.write_text(_environment_yaml(air_environment, published_wheels))
+    environment_file.write_text(_environment_yaml(target, published_wheels))
     shutil.copy2(requirements, build / "requirements.txt")
 
     manifest = {
@@ -342,6 +349,7 @@ def build_wheelhouse(requirements_file, wheelhouse_volume, profile_dir, index_ur
         "request_id": request_id,
         "lock_id": lock_id,
         "air_environment": air_environment,
+        "environment_version": target["environment_version"],
         "baseline_count": len(baseline),
         "closure_count": len(closure),
         "reused_from_air": len(closure) - len(delta),

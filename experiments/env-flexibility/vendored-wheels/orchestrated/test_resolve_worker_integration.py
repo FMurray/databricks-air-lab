@@ -97,6 +97,7 @@ def _target_environment():
     return {
         "profile_schema": 1,
         "air_environment": "databricks_ai_test",
+        "environment_version": "5",
         "python_full": "3.12.3",
         "python_version": "312",
         "implementation": "cp",
@@ -213,7 +214,8 @@ class OfflineWheelhouseIntegrationTest(unittest.TestCase):
             built_manifest = json.loads((build / "manifest.json").read_text())
             self.assertEqual(built_manifest["lock_id"], manifest["lock_id"])
             environment = (build / "environment.yaml").read_text()
-            self.assertIn('version: "databricks_ai_test"', environment)
+            self.assertIn('base_environment: "databricks_ai_test"', environment)
+            self.assertIn('environment_version: "5"', environment)
             self.assertNotIn("-r ", environment)
             for wheel in manifest["wheel_files"]:
                 self.assertIn(str(build / "wheelhouse" / wheel["file"]), environment)

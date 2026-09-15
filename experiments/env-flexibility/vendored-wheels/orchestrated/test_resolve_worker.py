@@ -45,7 +45,10 @@ class ResolverLogicTest(unittest.TestCase):
 
     def test_environment_yaml_lists_exact_wheels_without_an_index_or_include(self):
         rendered = resolver._environment_yaml(
-            "databricks_ai_v5",
+            {
+                "air_environment": "databricks_ai_v5",
+                "environment_version": "5",
+            },
             [
                 Path("/Volumes/catalog/schema/wheels/builds/abc/wheelhouse/one-1-py3-none-any.whl"),
                 Path("/Volumes/catalog/schema/wheels/builds/abc/wheelhouse/two-2-py3-none-any.whl"),
@@ -54,7 +57,8 @@ class ResolverLogicTest(unittest.TestCase):
 
         self.assertEqual(
             rendered,
-            'version: "databricks_ai_v5"\n'
+            'base_environment: "databricks_ai_v5"\n'
+            'environment_version: "5"\n'
             "dependencies:\n"
             '  - "--no-index"\n'
             '  - "/Volumes/catalog/schema/wheels/builds/abc/wheelhouse/one-1-py3-none-any.whl"\n'

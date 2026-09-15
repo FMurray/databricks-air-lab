@@ -50,5 +50,5 @@ print(json.dumps({key: value for key, value in manifest.items() if key != "wheel
                  indent=2, ensure_ascii=False))
 assert manifest.get("ok"), f"wheelhouse build failed at {manifest['stage']}: {manifest['error']}"
 
-print("\nUse this file as the AIR workload dependency spec:")
-print(f"  environment:\n    dependencies: {manifest['environment_file']}")
+print("\nApply this custom serverless environment file:")
+print(f"  {manifest['environment_file']}")
