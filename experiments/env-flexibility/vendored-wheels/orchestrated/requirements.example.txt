@@ -1,0 +1,8 @@
+# Example developer input for the wheelhouse builder.
+# All three are absent from the checked-in AIR v5 baseline, and each exercises a different path:
+#   numpy-financial  -> pulls numpy (baked into AIR @ 2.1.3) => numpy is SKIPPED from the delta
+#   python-slugify   -> pulls text-unidecode (also absent)   => closure is larger than the direct reqs
+#   jellyfish        -> compiled Rust extension              => exercises AIR-tag wheel targeting
+numpy-financial
+python-slugify
+jellyfish

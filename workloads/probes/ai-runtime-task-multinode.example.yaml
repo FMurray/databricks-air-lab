@@ -1,0 +1,27 @@
+# Native ai_runtime_task multi-node proof. AIR CLI v1.1+ maps GPU_* accelerator names
+# to ai_runtime_task; accelerator_count=2 on GPU_1xA10 requests two one-GPU nodes.
+experiment_name: air-lab-ai-runtime-task-multinode
+
+environment:
+  version: "5"
+  dependencies: []
+
+compute:
+  num_accelerators: 2
+  accelerator_type: GPU_1xA10
+
+code_source:
+  type: snapshot
+  snapshot:
+    # Deliberately scope provenance to this clean probe directory so unrelated
+    # working-tree changes cannot be uploaded in git_diff.patch.
+    root_path: ../../experiments/ai-runtime-task-multinode
+    include_paths:
+      - train_probe.py
+      - run_probe.sh
+
+command: bash $CODE_SOURCE_PATH/run_probe.sh
+
+max_retries: 0
+timeout_minutes: 15
+mlflow_run_name: ai-runtime-task-2xa10

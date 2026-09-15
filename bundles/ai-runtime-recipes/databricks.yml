@@ -1,0 +1,178 @@
+bundle:
+  name: air-rdma-recipes
+  databricks_cli_version: ">= 1.6.0"
+
+# Make the repository root the common sync root so the tgz can package the
+# existing recipe implementations without copying them into this bundle.
+sync:
+  paths:
+    - .
+    - ../../experiments/node-acceptance
+    - ../../experiments/rdma-stress
+
+artifacts:
+  rdma_recipe_code:
+    type: tgz
+    path: ../..
+    include:
+      - experiments/node-acceptance/nccl_allreduce_ctypes.py
+      - experiments/node-acceptance/vendor
+      - experiments/rdma-stress/build_and_run_nccl_tests.sh
+      - experiments/rdma-stress/nccl-tests-src
+      - experiments/rdma-stress/parambench_probe.py
+    files:
+      - source: ./dist/rdma-recipes.tgz
+
+resources:
+  jobs:
+    rdma_m1_smoke:
+      name: air-lab-rdma-m1-smoke
+      max_concurrent_runs: 1
+      tasks:
+        - task_key: rdma_m1_smoke
+          environment_key: air_v5
+          max_retries: 0
+          timeout_seconds: 900
+          ai_runtime_task:
+            experiment: air-lab-rdma-stress
+            mlflow_experiment_directory: /Workspace/Users/${workspace.current_user.userName}
+            mlflow_run: rdma-m1-dab-smoke
+            code_source_path: ./bundles/ai-runtime-recipes/dist/rdma-recipes.tgz
+            deployments:
+              - command_path: ./commands/rdma-m1-smoke.sh
+                compute:
+                  accelerator_type: GPU_8xH100
+                  accelerator_count: 16
+      environments:
+        - environment_key: air_v5
+          spec:
+            environment_version: "5"
+            dependencies: []
+
+    rdma_m1_soak:
+      name: air-lab-rdma-m1-soak
+      max_concurrent_runs: 1
+      tasks:
+        - task_key: rdma_m1_soak
+          environment_key: air_v5
+          max_retries: 0
+          timeout_seconds: 2700
+          ai_runtime_task:
+            experiment: air-lab-rdma-stress
+            mlflow_experiment_directory: /Workspace/Users/${workspace.current_user.userName}
+            mlflow_run: rdma-m1-soak
+            code_source_path: ./bundles/ai-runtime-recipes/dist/rdma-recipes.tgz
+            deployments:
+              - command_path: ./commands/rdma-m1-soak.sh
+                compute:
+                  accelerator_type: GPU_8xH100
+                  accelerator_count: 16
+      environments:
+        - environment_key: air_v5
+          spec:
+            environment_version: "5"
+            dependencies: []
+
+    rdma_m2a_fabric_only:
+      name: air-lab-rdma-m2a-fabric-only
+      max_concurrent_runs: 1
+      tasks:
+        - task_key: rdma_m2a_fabric_only
+          environment_key: air_v5
+          max_retries: 0
+          timeout_seconds: 2700
+          ai_runtime_task:
+            experiment: air-lab-rdma-stress
+            mlflow_experiment_directory: /Workspace/Users/${workspace.current_user.userName}
+            mlflow_run: rdma-m2a-fabric-only
+            code_source_path: ./bundles/ai-runtime-recipes/dist/rdma-recipes.tgz
+            deployments:
+              - command_path: ./commands/rdma-m2a-fabric-only.sh
+                compute:
+                  accelerator_type: GPU_8xH100
+                  accelerator_count: 32
+      environments:
+        - environment_key: air_v5
+          spec:
+            environment_version: "5"
+            dependencies: []
+
+    rdma_m2b_p2p_ring:
+      name: air-lab-rdma-m2b-p2p-ring
+      max_concurrent_runs: 1
+      tasks:
+        - task_key: rdma_m2b_p2p_ring
+          environment_key: air_v5
+          max_retries: 0
+          timeout_seconds: 2700
+          ai_runtime_task:
+            experiment: air-lab-rdma-stress
+            mlflow_experiment_directory: /Workspace/Users/${workspace.current_user.userName}
+            mlflow_run: rdma-m2b-p2p-ring
+            code_source_path: ./bundles/ai-runtime-recipes/dist/rdma-recipes.tgz
+            deployments:
+              - command_path: ./commands/rdma-m2b-p2p-ring.sh
+                compute:
+                  accelerator_type: GPU_8xH100
+                  accelerator_count: 32
+      environments:
+        - environment_key: air_v5
+          spec:
+            environment_version: "5"
+            dependencies: []
+
+    rdma_m4_nccl_tests:
+      name: air-lab-rdma-m4-nccl-tests
+      max_concurrent_runs: 1
+      tasks:
+        - task_key: rdma_m4_nccl_tests
+          environment_key: air_v5
+          max_retries: 0
+          timeout_seconds: 2400
+          ai_runtime_task:
+            experiment: air-lab-rdma-stress
+            mlflow_experiment_directory: /Workspace/Users/${workspace.current_user.userName}
+            mlflow_run: rdma-m4-nccl-tests
+            code_source_path: ./bundles/ai-runtime-recipes/dist/rdma-recipes.tgz
+            deployments:
+              - command_path: ./commands/rdma-m4-nccl-tests.sh
+                compute:
+                  accelerator_type: GPU_8xH100
+                  accelerator_count: 8
+      environments:
+        - environment_key: air_v5
+          spec:
+            environment_version: "5"
+            dependencies: []
+
+    rdma_m5_parambench:
+      name: air-lab-rdma-m5-parambench
+      max_concurrent_runs: 1
+      tasks:
+        - task_key: rdma_m5_parambench
+          environment_key: air_v5
+          max_retries: 0
+          timeout_seconds: 1200
+          ai_runtime_task:
+            experiment: air-lab-rdma-stress
+            mlflow_experiment_directory: /Workspace/Users/${workspace.current_user.userName}
+            mlflow_run: rdma-m5-parambench
+            code_source_path: ./bundles/ai-runtime-recipes/dist/rdma-recipes.tgz
+            deployments:
+              - command_path: ./commands/rdma-m5-parambench.sh
+                compute:
+                  accelerator_type: GPU_1xA10
+                  accelerator_count: 1
+      environments:
+        - environment_key: air_v5
+          spec:
+            environment_version: "5"
+            dependencies: []
+
+targets:
+  forrest_serverless:
+    default: true
+    mode: development
+    workspace:
+      host: https://fevm-forrest-serverless-stable-2.cloud.databricks.com
+      profile: fevm-forrest-2

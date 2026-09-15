@@ -4,12 +4,19 @@ Goal: train across multiple 8×H100 nodes with torchrun — no custom Docker, no
 
 !!! note "Status: Public Preview (recently)"
     Multi-node reached Public Preview on 2026-07-17 — recent enough that some published docs may
-    still say Private Preview. Shapes: **multiples of `GPU_8xH100` only**. Field guide reports
-    max 16 nodes / 128 GPUs, sweet spot 3–8 nodes, AWS-only (reported, not lab-verified).
+    still say Private Preview. The field guide reports a maximum of 16 nodes / 128 GPUs, a 3–8
+    node sweet spot, and AWS-only (reported, not lab-verified). Earlier 8xH100-only shape guidance
+    is no longer universally true: two one-GPU A10 nodes are now workspace-verified below.
 
 ✅ **Verified end-to-end 2026-07-22** (e2-demo-field-eng): 2 nodes / 16×H100 scheduled on-demand in
 ~40s (run 505819227973807), and a pre-registered distributed-correctness proof passed bit-exact
 (run 723000000990125). Receipts: `experiments/foundation-models/NOTES.md`.
+
+✅ **Verified 2026-09-14** (`fevm-forrest-2`): AIR CLI v1.1.0 rendered
+`GPU_1xA10` + `num_accelerators: 2` as native `ai_runtime_task` with
+`accelerator_count: 2`; a two-node DDP optimizer step passed (run 1090461481669184). This cheap
+shape proves orchestration and correctness. NCCL fell back to socket transport, so continue to use
+8xH100 for fabric/performance testing. Receipt: `experiments/ai-runtime-task-multinode/NOTES.md`.
 
 ## The recipe
 
@@ -52,6 +59,11 @@ Working template: `workloads/multinode-probe.example.yaml`.
 Measured on 2×8×H100 (256 MB all_reduce, 16 ranks): 1.4 ms/iter, algbw 191 GB/s, busbw ~359 GB/s —
 near the p5's 400 GB/s EFA line rate, over GPUDirect RDMA (`efa-direct`, 32 NICs/node) inter-node
 and NVLink/NVLS intra-node.
+
+✅ Re-verified on the native `ai_runtime_task` path 2026-09-15 (`fevm-forrest-2`, run
+970758228903276): both H100 nodes selected `RDMA`, `efa-direct (found 32 nics)`, and inter-node
+`GDRDMA`; the 16-rank correctness sentinel passed. `/sys/class/infiniband` hardware counters were
+not exposed in the containers, so use the explicit NCCL transport/channel logs as the path receipt.
 
 !!! note "Smoke-grade number"
     One message size × 10 iterations is a health check, not a benchmark. Before quoting bandwidth
