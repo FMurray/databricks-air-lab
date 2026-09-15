@@ -38,7 +38,8 @@ The explicit `--yes` guard is intentional: `run` starts billable compute. `rdma-
 two-node native-task example (`GPU_8xH100`, `accelerator_count: 16`). The other recipe keys and
 their shapes are shown by `./manage.sh list`.
 
-Every job writes to the submitting user's `/Users/<user>/air-lab-rdma-stress` MLflow experiment.
+Every job targets the submitting user's `/Workspace/Users/<user>` experiment directory and the
+`air-lab-rdma-stress` MLflow experiment name.
 The task expresses this as the plain `experiment` name plus `mlflow_experiment_directory`, keeping
 the experiment name itself free of path characters.
 The existing recipe code remains under `experiments/`; the adapters only restore the environment
