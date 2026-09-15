@@ -20,6 +20,40 @@ class ResolverLogicTest(unittest.TestCase):
             {"changed": "2.0", "new-package": "3.0"},
         )
 
+    def test_direct_resolution_rejects_missing_or_wrong_direct_packages(self):
+        direct, issues = resolver._direct_resolution(
+            ["transformers==5.15.0", "cdaosdk-openai==2.3.2"],
+            {"transformers": "4.57.1"},
+            {"transformers": "4.57.1"},
+            {},
+        )
+
+        self.assertEqual(
+            direct,
+            ["transformers==5.15.0", "cdaosdk-openai==2.3.2"],
+        )
+        self.assertEqual(
+            [issue["requirement"] for issue in issues],
+            ["transformers==5.15.0", "cdaosdk-openai==2.3.2"],
+        )
+
+    def test_direct_resolution_labels_new_and_changed_packages_as_delta(self):
+        direct, issues = resolver._direct_resolution(
+            ["transformers==5.15.0", "cdaosdk-openai==2.3.2"],
+            {"transformers": "5.15.0", "cdaosdk-openai": "2.3.2"},
+            {"transformers": "4.57.1"},
+            {},
+        )
+
+        self.assertEqual(issues, [])
+        self.assertEqual(
+            direct,
+            [
+                "transformers==5.15.0 -> delta transformers==5.15.0",
+                "cdaosdk-openai==2.3.2 -> delta cdaosdk-openai==2.3.2",
+            ],
+        )
+
     def test_uv_platform_uses_the_highest_supported_manylinux_target(self):
         target = {
             "platforms": ["manylinux_2_39_x86_64", "manylinux_2_17_x86_64"],

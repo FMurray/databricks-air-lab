@@ -64,6 +64,45 @@ def _version_delta(closure, baseline):
     }
 
 
+def _direct_resolution(requirement_lines, closure, baseline, marker_environment):
+    requested = []
+    issues = []
+    for number, line in enumerate(requirement_lines, 1):
+        stripped = line.strip()
+        if not stripped or stripped.startswith(("#", "-")):
+            continue
+        try:
+            requirement = Requirement(stripped)
+        except InvalidRequirement as exc:
+            issues.append({"line": number, "requirement": stripped, "error": str(exc)})
+            continue
+        if requirement.marker and not requirement.marker.evaluate(marker_environment):
+            continue
+        name = canonicalize_name(requirement.name)
+        requested.append(str(requirement))
+        resolved = closure.get(name)
+        if resolved is None:
+            issues.append({
+                "line": number,
+                "requirement": str(requirement),
+                "error": "package is absent from resolved.lock",
+            })
+            continue
+        if requirement.specifier and not requirement.specifier.contains(resolved, prereleases=True):
+            issues.append({
+                "line": number,
+                "requirement": str(requirement),
+                "resolved": resolved,
+                "error": "resolved version does not satisfy the direct requirement",
+            })
+            continue
+        if name not in baseline or not _same_version(resolved, baseline[name]):
+            requested[-1] += f" -> delta {name}=={resolved}"
+        else:
+            requested[-1] += f" -> reused {name}=={resolved}"
+    return requested, issues
+
+
 def _target_args(target):
     args = [
         "--implementation", target.get("implementation", "cp"),
@@ -276,6 +315,10 @@ def build_wheelhouse(requirements_file, wheelhouse_volume, profile_dir, index_ur
             "uv could not resolve the requirements while preferring the AIR baseline",
             stderr_tail=result.stderr[-5000:],
         )
+    version_result = subprocess.run(
+        [str(result.args[0]), "--version"], capture_output=True, text=True,
+    )
+    uv_version = version_result.stdout.strip() or "unknown"
 
     try:
         closure = _load_pins(resolved_path)
@@ -283,8 +326,30 @@ def build_wheelhouse(requirements_file, wheelhouse_volume, profile_dir, index_ur
     except (OSError, ValueError) as exc:
         return _failure(volume, request_id, "lock", str(exc))
     delta = _version_delta(closure, baseline)
+    direct_resolution, direct_issues = _direct_resolution(
+        requirements.read_text().splitlines(),
+        closure,
+        baseline,
+        target.get("marker_environment") or {},
+    )
+    if direct_issues:
+        return _failure(
+            volume,
+            request_id,
+            "validate-resolution",
+            "uv reported success but its lock omitted or contradicted a direct requirement",
+            requirements_file=str(requirements),
+            requirements_sha256=hashlib.sha256(requirements.read_bytes()).hexdigest(),
+            uv_version=uv_version,
+            direct_resolution=direct_resolution,
+            issues=direct_issues,
+            resolved_lock_text=resolved_path.read_text(),
+        )
     print(f"AIR profile {air_environment} | closure {len(closure)} | "
           f"reused {len(closure) - len(delta)} | wheel delta {len(delta)}")
+    print("direct requirements:")
+    for item in direct_resolution:
+        print(f"  {item}")
 
     failures = []
     target_args = _target_args(target)
@@ -356,10 +421,12 @@ def build_wheelhouse(requirements_file, wheelhouse_volume, profile_dir, index_ur
         "lock_id": lock_id,
         "requirements_file": str(requirements),
         "requirements_sha256": hashlib.sha256(requirements.read_bytes()).hexdigest(),
+        "uv_version": uv_version,
         "air_environment": air_environment,
         "environment_version": target["environment_version"],
         "baseline_count": len(baseline),
         "closure_count": len(closure),
+        "direct_resolution": direct_resolution,
         "reused_from_air": len(closure) - len(delta),
         "delta": [f"{name}=={version}" for name, version in sorted(delta.items())],
         "resolved_lock": str(resolved_lock),

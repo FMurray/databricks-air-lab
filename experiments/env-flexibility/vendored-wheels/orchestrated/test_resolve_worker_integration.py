@@ -197,6 +197,10 @@ class OfflineWheelhouseIntegrationTest(unittest.TestCase):
                 manifest["requirements_sha256"],
                 hashlib.sha256(requirements.read_bytes()).hexdigest(),
             )
+            self.assertIn(
+                "airlab-openai==2.0.0 -> delta airlab-openai==2.0.0",
+                manifest["direct_resolution"],
+            )
             self.assertEqual(
                 manifest["delta"],
                 [
