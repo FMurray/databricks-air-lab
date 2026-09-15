@@ -44,3 +44,41 @@ Verification of the AI-env interpreter is owned by a parallel workstream (duplic
 
 All numbers from M1/M2 remain **smoke-grade** per the verification skill; M4 output is the
 defensible tier.
+
+## Native `ai_runtime_task` M1 smoke — pre-registered 2026-09-15
+
+Question: can the native Jobs `ai_runtime_task` path that passed two-node A10 DDP also run the
+existing M1 NCCL/RDMA recipe on two 8xH100 nodes?
+
+Submission target and bounded shape: `fevm-forrest-2`, AIR CLI v1.1.0, environment v5,
+2×`GPU_8xH100` (16 GPUs), M1 with `STRESS_SECONDS=60`, `BUF_MB=1024`, no retries, and a
+20-minute timeout. This is a shortened plumbing/RDMA smoke, **not** the recipe's full 10-minute
+stability acceptance run.
+
+A pass requires all of the following:
+
+1. Dry-run and submitted Jobs metadata contain native `ai_runtime_task` with
+   `accelerator_type=GPU_8xH100` and `accelerator_count=16`.
+2. The run terminates `SUCCESS`; both node logs report distinct `NODE_RANK` values,
+   `NUM_NODES=2`, `LOCAL_WORLD_SIZE=8`, and a 16-rank NCCL communicator.
+3. Both nodes print `CORRECTNESS_OK all elements == 16`, and rank 0 prints the pass-gated
+   `MULTINODE_NCCL_V5_OK` sentinel.
+4. RDMA evidence is explicit: NCCL reports the AWS OFI/EFA transport, and the embedded M3
+   hardware-counter probe prints positive byte/data counter deltas. If counters are unavailable,
+   that criterion fails and the exact fallback evidence is reported rather than promoted to RDMA.
+5. MLflow records the sentinel/topology parameters plus smoke/stress metrics.
+
+| Claim | Required evidence |
+|---|---|
+| Native task has the requested H100 multi-node shape | quoted raw Jobs task JSON |
+| All 16 ranks completed correct collectives | quoted output from node 0 and node 1 plus sentinel |
+| Traffic used RDMA rather than socket fallback | quoted OFI/EFA selection and positive M3 counters |
+
+Local static pre-flight:
+
+```text
+$ python3 -c '... ast.parse(nccl_allreduce_ctypes.py) ...'
+PYTHON_PARSE_OK
+```
+
+Target-workspace dry-run and live result pending.

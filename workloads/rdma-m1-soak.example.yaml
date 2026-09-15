@@ -17,11 +17,14 @@ compute:
 code_source:
   type: snapshot
   snapshot:
-    root_path: ..
+    # Scope the snapshot/provenance to this clean probe directory so unrelated
+    # working-tree changes cannot be uploaded in git_diff.patch.
+    root_path: ../experiments/node-acceptance
     include_paths:
-      - experiments/node-acceptance/
+      - nccl_allreduce_ctypes.py
+      - vendor/
 
-command: python $CODE_SOURCE_PATH/experiments/node-acceptance/nccl_allreduce_ctypes.py
+command: python $CODE_SOURCE_PATH/nccl_allreduce_ctypes.py
 
 max_retries: 0
 timeout_minutes: 45
