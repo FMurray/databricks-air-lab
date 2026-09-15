@@ -43,16 +43,15 @@ class ResolverLogicTest(unittest.TestCase):
         self.assertIn("cp312-abi3-manylinux_2_17_x86_64", tags)
         self.assertIn("py3-none-any", tags)
 
-    def test_environment_yaml_lists_exact_wheels_without_an_index_or_include(self):
+    def test_environment_yaml_replays_the_verified_offline_install(self):
         rendered = resolver._environment_yaml(
             {
                 "air_environment": "databricks_ai_v5",
                 "environment_version": "5",
             },
-            [
-                Path("/Volumes/catalog/schema/wheels/builds/abc/wheelhouse/one-1-py3-none-any.whl"),
-                Path("/Volumes/catalog/schema/wheels/builds/abc/wheelhouse/two-2-py3-none-any.whl"),
-            ],
+            Path("/Volumes/catalog/schema/wheels/builds/abc/wheelhouse"),
+            Path("/Volumes/catalog/schema/wheels/builds/abc/delta.lock"),
+            has_delta=True,
         )
 
         self.assertEqual(
@@ -61,8 +60,10 @@ class ResolverLogicTest(unittest.TestCase):
             'environment_version: "5"\n'
             "dependencies:\n"
             '  - "--no-index"\n'
-            '  - "/Volumes/catalog/schema/wheels/builds/abc/wheelhouse/one-1-py3-none-any.whl"\n'
-            '  - "/Volumes/catalog/schema/wheels/builds/abc/wheelhouse/two-2-py3-none-any.whl"\n',
+            '  - "--no-deps"\n'
+            '  - "--require-hashes"\n'
+            '  - "--find-links /Volumes/catalog/schema/wheels/builds/abc/wheelhouse"\n'
+            '  - "-r /Volumes/catalog/schema/wheels/builds/abc/delta.lock"\n',
         )
 
     def test_checked_in_v5_profile_is_a_complete_exact_pin_set(self):

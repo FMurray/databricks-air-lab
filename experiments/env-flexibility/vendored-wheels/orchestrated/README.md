@@ -60,9 +60,11 @@ Each resolution produces:
   requests/<request-id>.json
 ```
 
-`environment.yaml` selects the serverless AI base and matching environment version, disables
-indexes, and lists each exact wheel path from the resolved delta. Serverless startup therefore makes
-no Artifactory or public PyPI request.
+`environment.yaml` selects the serverless AI base and matching environment version, then replays the
+verified offline install against the hashed delta lock: `--no-index --no-deps --require-hashes
+--find-links <wheelhouse> -r <delta.lock>`. The classic build has already resolved the complete graph:
+new and changed transitive packages are in the delta, while unchanged packages such as Typer come
+from the selected AI base. Serverless startup therefore makes no Artifactory or public PyPI request.
 `delta.lock` carries the same package versions with SHA-256 hashes for audit and offline verification.
 
 `lock-id` is derived from the selected AIR environment and normalized resolution, so the same

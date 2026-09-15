@@ -196,17 +196,22 @@ def _write_json(path, value):
     os.replace(temporary, path)
 
 
-def _environment_yaml(target, wheel_paths):
+def _environment_yaml(target, wheelhouse, delta_lock, has_delta):
     base_environment = target["air_environment"]
     environment_version = target["environment_version"]
-    wheel_paths = [str(path) for path in wheel_paths]
-    if not wheel_paths:
+    if not has_delta:
         return (
             f"base_environment: {json.dumps(base_environment)}\n"
             f"environment_version: {json.dumps(environment_version)}\n"
             "dependencies: []\n"
         )
-    dependencies = ["--no-index", *wheel_paths]
+    dependencies = [
+        "--no-index",
+        "--no-deps",
+        "--require-hashes",
+        f"--find-links {wheelhouse}",
+        f"-r {delta_lock}",
+    ]
     return (
         f"base_environment: {json.dumps(base_environment)}\n"
         f"environment_version: {json.dumps(environment_version)}\n"
@@ -339,8 +344,9 @@ def build_wheelhouse(requirements_file, wheelhouse_volume, profile_dir, index_ur
         )
         delta_lines.append(f"{name}=={version} {hashes}".rstrip())
     delta_lock.write_text("\n".join(delta_lines) + ("\n" if delta_lines else ""))
-    published_wheels = sorted(wheelhouse / record["file"] for record in records)
-    environment_file.write_text(_environment_yaml(target, published_wheels))
+    environment_file.write_text(
+        _environment_yaml(target, wheelhouse, delta_lock, bool(delta))
+    )
     shutil.copy2(requirements, build / "requirements.txt")
 
     manifest = {

@@ -216,13 +216,16 @@ class OfflineWheelhouseIntegrationTest(unittest.TestCase):
             environment = (build / "environment.yaml").read_text()
             self.assertIn('base_environment: "databricks_ai_test"', environment)
             self.assertIn('environment_version: "5"', environment)
-            self.assertNotIn("-r ", environment)
-            for wheel in manifest["wheel_files"]:
-                self.assertIn(str(build / "wheelhouse" / wheel["file"]), environment)
+            self.assertIn('  - "--no-index"', environment)
+            self.assertIn('  - "--no-deps"', environment)
+            self.assertIn('  - "--require-hashes"', environment)
+            self.assertIn(f'  - "--find-links {manifest["wheelhouse"]}"', environment)
+            self.assertIn(f'  - "-r {manifest["delta_lock"]}"', environment)
 
             install = _run([
                 str(baseline_python), "-m", "pip", "install",
-                "--no-index", "--require-hashes", "--find-links", manifest["wheelhouse"],
+                "--no-index", "--no-deps", "--require-hashes",
+                "--find-links", manifest["wheelhouse"],
                 "-r", manifest["delta_lock"],
             ])
             self.assertIn("Successfully installed", install.stdout)
