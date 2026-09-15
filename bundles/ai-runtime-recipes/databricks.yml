@@ -39,7 +39,7 @@ resources:
             code_source_path: ./bundles/ai-runtime-recipes/dist/rdma-recipes.tgz
             deployments:
               - name: rdma-m1-soak
-                command_path: ./bundles/ai-runtime-recipes/commands/rdma-m1-soak.sh
+                command_path: ./commands/rdma-m1-soak.sh
                 compute:
                   accelerator_type: GPU_8xH100
                   accelerator_count: 16
@@ -63,7 +63,7 @@ resources:
             code_source_path: ./bundles/ai-runtime-recipes/dist/rdma-recipes.tgz
             deployments:
               - name: rdma-m2a-fabric-only
-                command_path: ./bundles/ai-runtime-recipes/commands/rdma-m2a-fabric-only.sh
+                command_path: ./commands/rdma-m2a-fabric-only.sh
                 compute:
                   accelerator_type: GPU_8xH100
                   accelerator_count: 32
@@ -87,7 +87,7 @@ resources:
             code_source_path: ./bundles/ai-runtime-recipes/dist/rdma-recipes.tgz
             deployments:
               - name: rdma-m2b-p2p-ring
-                command_path: ./bundles/ai-runtime-recipes/commands/rdma-m2b-p2p-ring.sh
+                command_path: ./commands/rdma-m2b-p2p-ring.sh
                 compute:
                   accelerator_type: GPU_8xH100
                   accelerator_count: 32
@@ -111,7 +111,7 @@ resources:
             code_source_path: ./bundles/ai-runtime-recipes/dist/rdma-recipes.tgz
             deployments:
               - name: rdma-m4-nccl-tests
-                command_path: ./bundles/ai-runtime-recipes/commands/rdma-m4-nccl-tests.sh
+                command_path: ./commands/rdma-m4-nccl-tests.sh
                 compute:
                   accelerator_type: GPU_8xH100
                   accelerator_count: 8
@@ -135,7 +135,7 @@ resources:
             code_source_path: ./bundles/ai-runtime-recipes/dist/rdma-recipes.tgz
             deployments:
               - name: rdma-m5-parambench
-                command_path: ./bundles/ai-runtime-recipes/commands/rdma-m5-parambench.sh
+                command_path: ./commands/rdma-m5-parambench.sh
                 compute:
                   accelerator_type: GPU_1xA10
                   accelerator_count: 1
