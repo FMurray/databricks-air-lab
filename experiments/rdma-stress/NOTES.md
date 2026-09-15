@@ -71,6 +71,24 @@ A pass requires all of the following:
 | The bundle run executed correctly on two nodes | terminal state plus independent node logs |
 | NCCL used the RDMA path | explicit NCCL transport/provider/channel lines from both nodes |
 
+### Attempt 1 — code-source root mismatch
+
+❌ **FAILED 2026-09-15, Jobs run 288681717574238, `fevm-forrest-2`.** Workspace MLflow run
+`3c880ed4a51a40f69173570df7f439ba`. The DAB-created Jobs resource and run metadata contained the
+native task, uploaded artifact/command paths, `GPU_8xH100`, and `accelerator_count=16`, but both
+nodes exited before starting NCCL:
+
+```text
+Code source experiments available at /databricks/code_source/experiments
+python: can't open file '/databricks/code_source/experiments/experiments/node-acceptance/nccl_allreduce_ctypes.py': [Errno 2] No such file or directory
+ERROR: Script failed with exit code 2 after 2s
+```
+
+The `tgz` includes only paths below `experiments/`, so AI Runtime chose that common directory as
+`CODE_SOURCE_PATH`. The command adapters incorrectly appended another `experiments/`. They now
+resolve `node-acceptance/` and `rdma-stress/` directly below `CODE_SOURCE_PATH`; the retry keeps the
+same pre-registered shape and pass criteria.
+
 ## Native `ai_runtime_task` M1 smoke — pre-registered 2026-09-15
 
 Question: can the native Jobs `ai_runtime_task` path that passed two-node A10 DDP also run the

@@ -44,7 +44,9 @@ Every job targets the submitting user's `/Workspace/Users/<user>` experiment dir
 The task expresses this as the plain `experiment` name plus `mlflow_experiment_directory`, keeping
 the experiment name itself free of path characters.
 The existing recipe code remains under `experiments/`; the adapters only restore the environment
-variables that were top-level fields in the AIR CLI YAMLs.
+variables that were top-level fields in the AIR CLI YAMLs. Because every artifact include is under
+`experiments/`, the native task exposes that common directory as `CODE_SOURCE_PATH`; command adapters
+therefore resolve `node-acceptance/` and `rdma-stress/` directly beneath it.
 
 ## What maps from an AIR CLI recipe
 

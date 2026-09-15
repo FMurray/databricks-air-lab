@@ -5,4 +5,4 @@ set -euo pipefail
 export STRESS_SECONDS=60
 export BUF_MB=1024
 
-exec python "$CODE_SOURCE_PATH/experiments/node-acceptance/nccl_allreduce_ctypes.py"
+exec python "$CODE_SOURCE_PATH/node-acceptance/nccl_allreduce_ctypes.py"

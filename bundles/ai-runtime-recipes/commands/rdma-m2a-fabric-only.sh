@@ -6,4 +6,4 @@ export STRESS_SECONDS=600
 export BUF_MB=1024
 export FABRIC_ONLY=1
 
-exec python "$CODE_SOURCE_PATH/experiments/node-acceptance/nccl_allreduce_ctypes.py"
+exec python "$CODE_SOURCE_PATH/node-acceptance/nccl_allreduce_ctypes.py"
