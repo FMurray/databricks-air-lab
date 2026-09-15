@@ -34,7 +34,8 @@ resources:
           max_retries: 0
           timeout_seconds: 2700
           ai_runtime_task:
-            experiment: /Users/${workspace.current_user.userName}/air-lab-rdma-stress
+            experiment: air-lab-rdma-stress
+            mlflow_experiment_directory: /Users/${workspace.current_user.userName}
             mlflow_run: rdma-m1-soak
             code_source_path: ./bundles/ai-runtime-recipes/dist/rdma-recipes.tgz
             deployments:
@@ -58,7 +59,8 @@ resources:
           max_retries: 0
           timeout_seconds: 2700
           ai_runtime_task:
-            experiment: /Users/${workspace.current_user.userName}/air-lab-rdma-stress
+            experiment: air-lab-rdma-stress
+            mlflow_experiment_directory: /Users/${workspace.current_user.userName}
             mlflow_run: rdma-m2a-fabric-only
             code_source_path: ./bundles/ai-runtime-recipes/dist/rdma-recipes.tgz
             deployments:
@@ -82,7 +84,8 @@ resources:
           max_retries: 0
           timeout_seconds: 2700
           ai_runtime_task:
-            experiment: /Users/${workspace.current_user.userName}/air-lab-rdma-stress
+            experiment: air-lab-rdma-stress
+            mlflow_experiment_directory: /Users/${workspace.current_user.userName}
             mlflow_run: rdma-m2b-p2p-ring
             code_source_path: ./bundles/ai-runtime-recipes/dist/rdma-recipes.tgz
             deployments:
@@ -106,7 +109,8 @@ resources:
           max_retries: 0
           timeout_seconds: 2400
           ai_runtime_task:
-            experiment: /Users/${workspace.current_user.userName}/air-lab-rdma-stress
+            experiment: air-lab-rdma-stress
+            mlflow_experiment_directory: /Users/${workspace.current_user.userName}
             mlflow_run: rdma-m4-nccl-tests
             code_source_path: ./bundles/ai-runtime-recipes/dist/rdma-recipes.tgz
             deployments:
@@ -130,7 +134,8 @@ resources:
           max_retries: 0
           timeout_seconds: 1200
           ai_runtime_task:
-            experiment: /Users/${workspace.current_user.userName}/air-lab-rdma-stress
+            experiment: air-lab-rdma-stress
+            mlflow_experiment_directory: /Users/${workspace.current_user.userName}
             mlflow_run: rdma-m5-parambench
             code_source_path: ./bundles/ai-runtime-recipes/dist/rdma-recipes.tgz
             deployments:
