@@ -84,7 +84,7 @@ class ResolverLogicTest(unittest.TestCase):
                 "environment_version": "5",
             },
             Path("/Volumes/catalog/schema/wheels/builds/abc/wheelhouse"),
-            Path("/Volumes/catalog/schema/wheels/builds/abc/delta.lock"),
+            Path("/Volumes/catalog/schema/wheels/builds/abc/environment.lock"),
             has_delta=True,
         )
 
@@ -94,10 +94,9 @@ class ResolverLogicTest(unittest.TestCase):
             'environment_version: "5"\n'
             "dependencies:\n"
             '  - "--no-index"\n'
-            '  - "--no-deps"\n'
             '  - "--require-hashes"\n'
             '  - "--find-links /Volumes/catalog/schema/wheels/builds/abc/wheelhouse"\n'
-            '  - "-r /Volumes/catalog/schema/wheels/builds/abc/delta.lock"\n',
+            '  - "-r /Volumes/catalog/schema/wheels/builds/abc/environment.lock"\n',
         )
 
     def test_checked_in_v5_profile_is_a_complete_exact_pin_set(self):

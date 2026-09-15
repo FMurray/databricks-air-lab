@@ -235,7 +235,7 @@ def _write_json(path, value):
     os.replace(temporary, path)
 
 
-def _environment_yaml(target, wheelhouse, delta_lock, has_delta):
+def _environment_yaml(target, wheelhouse, environment_lock, has_delta):
     base_environment = target["air_environment"]
     environment_version = target["environment_version"]
     if not has_delta:
@@ -246,10 +246,9 @@ def _environment_yaml(target, wheelhouse, delta_lock, has_delta):
         )
     dependencies = [
         "--no-index",
-        "--no-deps",
         "--require-hashes",
         f"--find-links {wheelhouse}",
-        f"-r {delta_lock}",
+        f"-r {environment_lock}",
     ]
     return (
         f"base_environment: {json.dumps(base_environment)}\n"
@@ -353,7 +352,8 @@ def build_wheelhouse(requirements_file, wheelhouse_volume, profile_dir, index_ur
 
     failures = []
     target_args = _target_args(target)
-    for name, version in sorted(delta.items()):
+    packages_to_download = closure if delta else {}
+    for name, version in sorted(packages_to_download.items()):
         spec = f"{name}=={version}"
         downloaded = subprocess.run(
             [sys.executable, "-m", "pip", "download", "--no-deps", "--only-binary=:all:",
@@ -373,7 +373,7 @@ def build_wheelhouse(requirements_file, wheelhouse_volume, profile_dir, index_ur
             })
         records.append(record)
     downloaded_keys = {(item["name"], Version(item["version"])) for item in records}
-    for name, version in delta.items():
+    for name, version in packages_to_download.items():
         if (name, Version(version)) not in downloaded_keys:
             failures.append({"spec": f"{name}=={version}", "error": "no wheel was downloaded"})
     if failures:
@@ -396,6 +396,7 @@ def build_wheelhouse(requirements_file, wheelhouse_volume, profile_dir, index_ur
 
     resolved_lock = build / "resolved.lock"
     delta_lock = build / "delta.lock"
+    environment_lock = build / "environment.lock"
     environment_file = build / "environment.yaml"
     resolved_lock.write_text(lock_text)
     records_by_key = defaultdict(list)
@@ -409,8 +410,18 @@ def build_wheelhouse(requirements_file, wheelhouse_volume, profile_dir, index_ur
         )
         delta_lines.append(f"{name}=={version} {hashes}".rstrip())
     delta_lock.write_text("\n".join(delta_lines) + ("\n" if delta_lines else ""))
+    environment_lines = []
+    for name, version in sorted(packages_to_download.items()):
+        hashes = " ".join(
+            f"--hash=sha256:{item['sha256']}"
+            for item in records_by_key[(name, Version(version))]
+        )
+        environment_lines.append(f"{name}=={version} {hashes}".rstrip())
+    environment_lock.write_text(
+        "\n".join(environment_lines) + ("\n" if environment_lines else "")
+    )
     environment_file.write_text(
-        _environment_yaml(target, wheelhouse, delta_lock, bool(delta))
+        _environment_yaml(target, wheelhouse, environment_lock, bool(delta))
     )
     shutil.copy2(requirements, build / "requirements.txt")
 
@@ -431,6 +442,7 @@ def build_wheelhouse(requirements_file, wheelhouse_volume, profile_dir, index_ur
         "delta": [f"{name}=={version}" for name, version in sorted(delta.items())],
         "resolved_lock": str(resolved_lock),
         "delta_lock": str(delta_lock),
+        "environment_lock": str(environment_lock),
         "wheelhouse": str(wheelhouse),
         "environment_file": str(environment_file),
         "wheel_files": records,

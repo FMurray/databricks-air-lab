@@ -212,7 +212,11 @@ class OfflineWheelhouseIntegrationTest(unittest.TestCase):
                 ],
             )
             self.assertNotIn("airlab-array==2.3.0", Path(manifest["resolved_lock"]).read_text())
-            self.assertEqual(len(manifest["wheel_files"]), 5)
+            self.assertEqual(len(manifest["wheel_files"]), 6)
+            self.assertIn(
+                "airlab-array==2.1.3",
+                Path(manifest["environment_lock"]).read_text(),
+            )
 
             build = volume / "builds" / manifest["lock_id"]
             expected_lock_id = hashlib.sha256(
@@ -226,16 +230,16 @@ class OfflineWheelhouseIntegrationTest(unittest.TestCase):
             self.assertIn('base_environment: "databricks_ai_test"', environment)
             self.assertIn('environment_version: "5"', environment)
             self.assertIn('  - "--no-index"', environment)
-            self.assertIn('  - "--no-deps"', environment)
+            self.assertNotIn("--no-deps", environment)
             self.assertIn('  - "--require-hashes"', environment)
             self.assertIn(f'  - "--find-links {manifest["wheelhouse"]}"', environment)
-            self.assertIn(f'  - "-r {manifest["delta_lock"]}"', environment)
+            self.assertIn(f'  - "-r {manifest["environment_lock"]}"', environment)
 
             install = _run([
                 str(baseline_python), "-m", "pip", "install",
-                "--no-index", "--no-deps", "--require-hashes",
+                "--no-index", "--require-hashes",
                 "--find-links", manifest["wheelhouse"],
-                "-r", manifest["delta_lock"],
+                "-r", manifest["environment_lock"],
             ])
             self.assertIn("Successfully installed", install.stdout)
             _run([str(baseline_python), "-m", "pip", "check"])
