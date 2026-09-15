@@ -192,6 +192,11 @@ class OfflineWheelhouseIntegrationTest(unittest.TestCase):
                 )
 
             self.assertTrue(manifest["ok"], json.dumps(manifest, indent=2))
+            self.assertEqual(manifest["requirements_file"], str(requirements))
+            self.assertEqual(
+                manifest["requirements_sha256"],
+                hashlib.sha256(requirements.read_bytes()).hexdigest(),
+            )
             self.assertEqual(
                 manifest["delta"],
                 [

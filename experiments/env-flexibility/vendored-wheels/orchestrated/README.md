@@ -29,6 +29,9 @@ base_environment: databricks_ai_v5
 environment_version: "5"
 ```
 
+The build cell reads the widgets at execution time. Its manifest records the exact requirements path
+and SHA-256 digest, so rerunning only that cell after changing a widget cannot reuse stale input.
+
 ## Resolution algorithm
 
 1. Start uv with the selected environment's static package pins as preferences.

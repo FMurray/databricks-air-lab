@@ -354,6 +354,8 @@ def build_wheelhouse(requirements_file, wheelhouse_volume, profile_dir, index_ur
         "engine": "uv",
         "request_id": request_id,
         "lock_id": lock_id,
+        "requirements_file": str(requirements),
+        "requirements_sha256": hashlib.sha256(requirements.read_bytes()).hexdigest(),
         "air_environment": air_environment,
         "environment_version": target["environment_version"],
         "baseline_count": len(baseline),
