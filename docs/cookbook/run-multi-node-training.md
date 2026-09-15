@@ -60,6 +60,11 @@ Measured on 2×8×H100 (256 MB all_reduce, 16 ranks): 1.4 ms/iter, algbw 191 GB/
 near the p5's 400 GB/s EFA line rate, over GPUDirect RDMA (`efa-direct`, 32 NICs/node) inter-node
 and NVLink/NVLS intra-node.
 
+✅ Re-verified on the native `ai_runtime_task` path 2026-09-15 (`fevm-forrest-2`, run
+970758228903276): both H100 nodes selected `RDMA`, `efa-direct (found 32 nics)`, and inter-node
+`GDRDMA`; the 16-rank correctness sentinel passed. `/sys/class/infiniband` hardware counters were
+not exposed in the containers, so use the explicit NCCL transport/channel logs as the path receipt.
+
 !!! note "Smoke-grade number"
     One message size × 10 iterations is a health check, not a benchmark. Before quoting bandwidth
     in a deck, run nccl-tests across sizes.

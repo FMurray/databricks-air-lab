@@ -20,10 +20,10 @@ Verification of the AI-env interpreter is owned by a parallel workstream (duplic
 
 | # | Method | Asset | Status |
 |---|---|---|---|
-| M1 | Sustained fabric soak: 1GB all-reduces, 10 min, drift tracking | `workloads/rdma-m1-soak.example.yaml` (2×8xH100) → `nccl_allreduce_ctypes.py` STRESS_SECONDS/BUF_MB | 🧪 staged |
+| M1 | Sustained fabric soak: 1GB all-reduces, 10 min, drift tracking | `workloads/rdma-m1-soak.example.yaml` (2×8xH100) → `nccl_allreduce_ctypes.py` STRESS_SECONDS/BUF_MB | ⚠️ 60s native-task smoke passed; full 10 min still staged |
 | M2a | RDMA isolated from NVLink: 1 GPU/node communicator | `rdma-m2a-fabric-only.example.yaml` (4 nodes), FABRIC_ONLY=1 | 🧪 staged |
 | M2b | Directed p2p send/recv ring across nodes | `rdma-m2b-p2p-ring.example.yaml`, P2P_RING=1 (busbw = per-rank algbw, no 2(n−1)/n) | 🧪 staged |
-| M3 | Prove-it's-RDMA counters: /sys/class/infiniband hw_counters deltas | embedded in every stress run (`rdma_counters()`); ⚠️ A10 container exposes NONE (survey 96419244890099 — A10 has no EFA); H100 exposure = open question, first H100 stress run answers it | 🧪 partial |
+| M3 | Prove-it's-RDMA counters: /sys/class/infiniband hw_counters deltas | embedded in every stress run (`rdma_counters()`); A10 and H100 containers exposed no counters; use explicit NCCL OFI/EFA/GDRDMA logs as the path receipt | ❌ counters unavailable on H100 run 970758228903276 |
 | M4 | Defensible benchmark: nccl-tests built from vendored source with image toolchain | `rdma-m4-nccl-tests.example.yaml` + `build_and_run_nccl_tests.sh` + `nccl-tests-src/` (v2.13.13, BSD) | 🧪 staged; single-node only until MPI exists on image (script reports mpirun) |
 | M5 | parambench-train-comms (in image package list; needs torch → databricks-ai env) | `rdma-m5-parambench.example.yaml` + `parambench_probe.py` | 🧪 staged, probe-grade |
 
@@ -96,4 +96,88 @@ Target-workspace dry-run passed on 2026-09-15:
 {"data": {"status": "DRY_RUN_OK", "dry_run": true}}
 ```
 
-Live result pending.
+### Observed
+
+⚠️ **PARTIAL 2026-09-15, Jobs run 970758228903276, `fevm-forrest-2`.** The native
+task/RDMA smoke passed; the separately pre-registered M3 hardware-counter criterion failed. The
+run terminated `SUCCESS` after 142 seconds. Workspace MLflow run:
+[`3d659da31a484414bbf45472463ee7e9`](https://fevm-forrest-serverless-stable-2.cloud.databricks.com/ml/experiments/3516368535099647/runs/3d659da31a484414bbf45472463ee7e9?o=7474645252241925).
+
+The raw Jobs response proves the native task type and shape:
+
+```json
+{
+  "state": {"life_cycle_state": "TERMINATED", "result_state": "SUCCESS"},
+  "tasks": [{
+    "ai_runtime_task": {
+      "deployments": [{
+        "compute": {
+          "accelerator_count": 16,
+          "accelerator_type": "GPU_8xH100"
+        }
+      }]
+    }
+  }]
+}
+```
+
+Independent node receipts:
+
+```text
+# node 0
+NODE 0/2 local=8 world=16 host=main.host.local uuids=914b82e39ea6,...,aebd03301954
+NCCL INFO NET/OFI Using transport protocol RDMA (platform set)
+NCCL INFO NET/OFI Selected provider is efa, fabric is efa-direct (found 32 nics)
+NODE 0 CORRECTNESS_OK all elements == 16
+NODE 0 all_reduce 1024MB x10: 5.3 ms/iter, algbw 204.1 GB/s, busbw ~382.8 GB/s
+NODE 0 STRESS 60s buf=1024MB fabric_only=False p2p_ring=False 12980 iters, sustained busbw ~435.4 GB/s, window drift 16.3% (min 5ms/10it max 5ms/10it)
+NODE 0 RDMA counter deltas (raw/1e9): []
+MULTINODE_NCCL_V5_OK
+
+# node 1
+NODE 1/2 local=8 world=16 host=main.host.local uuids=331d3f090666,...,48afe9bff23d
+NCCL INFO NET/OFI Using transport protocol RDMA (platform set)
+NCCL INFO NET/OFI Selected provider is efa, fabric is efa-direct (found 32 nics)
+NODE 1 CORRECTNESS_OK all elements == 16
+NODE 1 all_reduce 1024MB x10: 5.2 ms/iter, algbw 204.8 GB/s, busbw ~384.0 GB/s
+NODE 1 STRESS 60s buf=1024MB fabric_only=False p2p_ring=False 12980 iters, sustained busbw ~435.5 GB/s, window drift 16.4% (min 5ms/10it max 5ms/10it)
+NODE 1 RDMA counter deltas (raw/1e9): []
+```
+
+The full logs additionally show inter-node channels explicitly wired as
+`NET/Libfabric/<nic>/GDRDMA`. MLflow records:
+
+```text
+probe_sentinel=MULTINODE_NCCL_V5_OK
+num_nodes=2
+local_world_size=8
+world_size=16
+nccl_version=22907
+buf_mb=1024
+allreduce_smoke_ms=5.259919166564941
+algbw_gbps=204.13656369955606
+busbw_gbps=382.7560569366676
+stress_iters=12980
+stress_seconds=60.01264405250549
+stress_sustained_busbw_gbps=435.44476425229254
+stress_window_drift_pct=16.27078446567605
+```
+
+MLflow contains no `rdma_delta_*` metrics, matching both nodes' empty counter lists. Its artifact
+inventory contains `logs/node_0` and `logs/node_1`, so both raw receipts are durable.
+
+| Claim | Verdict | Evidence |
+|---|---|---|
+| Native task has the requested H100 multi-node shape | PASS | raw Jobs JSON: `ai_runtime_task`, `GPU_8xH100`, `accelerator_count: 16` |
+| All 16 ranks completed correct collectives | PASS | both nodes: `local=8 world=16`, `CORRECTNESS_OK`; rank 0: `MULTINODE_NCCL_V5_OK` |
+| Traffic used RDMA rather than socket fallback | PASS | both nodes: `Using transport protocol RDMA`, `efa-direct`; channel logs: `GDRDMA` |
+| Embedded M3 counters prove byte movement | FAIL | both nodes: `RDMA counter deltas (raw/1e9): []`; no `rdma_delta_*` MLflow metrics |
+| Full M1 stability acceptance | NOT RUN | deliberately shortened to 60s; canonical recipe is 600s |
+
+The 435.44 GB/s value is **measured, smoke-grade normalized NCCL bus bandwidth**, not raw EFA
+line rate and not customer-deck benchmark data. Window drift was 16.27% over this short run; it is
+below the pre-registered 20% threshold but does not replace the full 10-minute acceptance soak.
+
+The MLflow experiment description is set with workspace repro links, exact launch-folder
+provenance, pass criteria, and this partial result. Local archiving is deferred because
+`experiments/mlflow.db` already contains unrelated uncommitted work in this checkout.
