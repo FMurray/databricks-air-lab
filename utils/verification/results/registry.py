@@ -346,6 +346,27 @@ TESTS = [
         "evidence": "MLflow experiment air-lab-fsdp-multinode",
     },
     {
+        "id": "ddp",
+        "sentinels": ["DDP_TRAIN_COMPLETE"],
+        "test": "Multi-node DDP fine-tune",
+        "category": "Workload",
+        "hardware": "H100",
+        "method": "AIR CLI",
+        "asset": "workloads/ddp-multinode.example.yaml",
+        "evidence_source": "sentinels DDP_TRAIN_COMPLETE / DDP_SUITE_COMPLETE + acceptance report",
+        "what": "Full model replicated across nodes, gradients all-reduced + checkpointing",
+        "why": "Data-parallel baseline + the DDP-vs-FSDP memory counterfactual (open-q #17)",
+        "expected": "Replicas identical; all-reduce correct; loss converges; checkpoint resumes",
+        "criteria": "Replication + all-reduce + convergence (+ checkpoint/resume for the suite)",
+        "verdict": "NOT RUN",
+        "result_note": "Trainer + workload YAML ready (mirrors the FSDP suite: Proof 1 inverts to "
+                       "replication, Proof 2 is all-reduce not reduce-scatter, Proof 4 is plain "
+                       "single-writer torch.save). Local CPU/gloo pre-flight + loss-ceiling/tol "
+                       "re-pin pending; not yet submitted to a workspace",
+        "workspace": "(pending)",
+        "evidence": "experiments/foundation-models/ddp/train_ddp.py (unrun)",
+    },
+    {
         "id": "telemetry",
         "test": "GPU telemetry pipeline (optional)",
         "category": "Advanced",
