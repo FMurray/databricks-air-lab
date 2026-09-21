@@ -97,6 +97,7 @@ def _target_environment():
     return {
         "profile_schema": 1,
         "air_environment": "databricks_ai_test",
+        "environment_version": "5",
         "python_full": "3.12.3",
         "python_version": "312",
         "implementation": "cp",
@@ -191,6 +192,15 @@ class OfflineWheelhouseIntegrationTest(unittest.TestCase):
                 )
 
             self.assertTrue(manifest["ok"], json.dumps(manifest, indent=2))
+            self.assertEqual(manifest["requirements_file"], str(requirements))
+            self.assertEqual(
+                manifest["requirements_sha256"],
+                hashlib.sha256(requirements.read_bytes()).hexdigest(),
+            )
+            self.assertIn(
+                "airlab-openai==2.0.0 -> delta airlab-openai==2.0.0",
+                manifest["direct_resolution"],
+            )
             self.assertEqual(
                 manifest["delta"],
                 [
@@ -202,7 +212,11 @@ class OfflineWheelhouseIntegrationTest(unittest.TestCase):
                 ],
             )
             self.assertNotIn("airlab-array==2.3.0", Path(manifest["resolved_lock"]).read_text())
-            self.assertEqual(len(manifest["wheel_files"]), 5)
+            self.assertEqual(len(manifest["wheel_files"]), 6)
+            self.assertIn(
+                "airlab-array==2.1.3",
+                Path(manifest["environment_lock"]).read_text(),
+            )
 
             build = volume / "builds" / manifest["lock_id"]
             expected_lock_id = hashlib.sha256(
@@ -213,15 +227,19 @@ class OfflineWheelhouseIntegrationTest(unittest.TestCase):
             built_manifest = json.loads((build / "manifest.json").read_text())
             self.assertEqual(built_manifest["lock_id"], manifest["lock_id"])
             environment = (build / "environment.yaml").read_text()
-            self.assertIn('version: "databricks_ai_test"', environment)
-            self.assertNotIn("-r ", environment)
-            for wheel in manifest["wheel_files"]:
-                self.assertIn(str(build / "wheelhouse" / wheel["file"]), environment)
+            self.assertIn('base_environment: "databricks_ai_test"', environment)
+            self.assertIn('environment_version: "5"', environment)
+            self.assertIn('  - "--no-index"', environment)
+            self.assertNotIn("--no-deps", environment)
+            self.assertIn('  - "--require-hashes"', environment)
+            self.assertIn(f'  - "--find-links {manifest["wheelhouse"]}"', environment)
+            self.assertIn(f'  - "-r {manifest["environment_lock"]}"', environment)
 
             install = _run([
                 str(baseline_python), "-m", "pip", "install",
-                "--no-index", "--require-hashes", "--find-links", manifest["wheelhouse"],
-                "-r", manifest["delta_lock"],
+                "--no-index", "--require-hashes",
+                "--find-links", manifest["wheelhouse"],
+                "-r", manifest["environment_lock"],
             ])
             self.assertIn("Successfully installed", install.stdout)
             _run([str(baseline_python), "-m", "pip", "check"])

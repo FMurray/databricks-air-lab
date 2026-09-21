@@ -4,7 +4,7 @@
 # MAGIC
 # MAGIC This helper runs only on classic compute. `build_wheelhouse` resolves a developer
 # MAGIC `requirements.txt` against a checked-in AIR environment profile, publishes the exact wheel
-# MAGIC delta to a UC Volume, and emits an AIR `environment.yaml` tied to the resolved lock.
+# MAGIC delta to a UC Volume, and emits a serverless `environment.yaml` tied to the resolved lock.
 
 # COMMAND ----------
 import hashlib
@@ -62,6 +62,45 @@ def _version_delta(closure, baseline):
         for name, version in closure.items()
         if name not in baseline or not _same_version(version, baseline[name])
     }
+
+
+def _direct_resolution(requirement_lines, closure, baseline, marker_environment):
+    requested = []
+    issues = []
+    for number, line in enumerate(requirement_lines, 1):
+        stripped = line.strip()
+        if not stripped or stripped.startswith(("#", "-")):
+            continue
+        try:
+            requirement = Requirement(stripped)
+        except InvalidRequirement as exc:
+            issues.append({"line": number, "requirement": stripped, "error": str(exc)})
+            continue
+        if requirement.marker and not requirement.marker.evaluate(marker_environment):
+            continue
+        name = canonicalize_name(requirement.name)
+        requested.append(str(requirement))
+        resolved = closure.get(name)
+        if resolved is None:
+            issues.append({
+                "line": number,
+                "requirement": str(requirement),
+                "error": "package is absent from resolved.lock",
+            })
+            continue
+        if requirement.specifier and not requirement.specifier.contains(resolved, prereleases=True):
+            issues.append({
+                "line": number,
+                "requirement": str(requirement),
+                "resolved": resolved,
+                "error": "resolved version does not satisfy the direct requirement",
+            })
+            continue
+        if name not in baseline or not _same_version(resolved, baseline[name]):
+            requested[-1] += f" -> delta {name}=={resolved}"
+        else:
+            requested[-1] += f" -> reused {name}=={resolved}"
+    return requested, issues
 
 
 def _target_args(target):
@@ -196,13 +235,24 @@ def _write_json(path, value):
     os.replace(temporary, path)
 
 
-def _environment_yaml(air_environment, wheel_paths):
-    wheel_paths = [str(path) for path in wheel_paths]
-    if not wheel_paths:
-        return f"version: {json.dumps(air_environment)}\ndependencies: []\n"
-    dependencies = ["--no-index", *wheel_paths]
+def _environment_yaml(target, wheelhouse, environment_lock, has_delta):
+    base_environment = target["air_environment"]
+    environment_version = target["environment_version"]
+    if not has_delta:
+        return (
+            f"base_environment: {json.dumps(base_environment)}\n"
+            f"environment_version: {json.dumps(environment_version)}\n"
+            "dependencies: []\n"
+        )
+    dependencies = [
+        "--no-index",
+        "--require-hashes",
+        f"--find-links {wheelhouse}",
+        f"-r {environment_lock}",
+    ]
     return (
-        f"version: {json.dumps(air_environment)}\n"
+        f"base_environment: {json.dumps(base_environment)}\n"
+        f"environment_version: {json.dumps(environment_version)}\n"
         "dependencies:\n"
         + "".join(f"  - {json.dumps(item)}\n" for item in dependencies)
     )
@@ -264,6 +314,10 @@ def build_wheelhouse(requirements_file, wheelhouse_volume, profile_dir, index_ur
             "uv could not resolve the requirements while preferring the AIR baseline",
             stderr_tail=result.stderr[-5000:],
         )
+    version_result = subprocess.run(
+        [str(result.args[0]), "--version"], capture_output=True, text=True,
+    )
+    uv_version = version_result.stdout.strip() or "unknown"
 
     try:
         closure = _load_pins(resolved_path)
@@ -271,12 +325,35 @@ def build_wheelhouse(requirements_file, wheelhouse_volume, profile_dir, index_ur
     except (OSError, ValueError) as exc:
         return _failure(volume, request_id, "lock", str(exc))
     delta = _version_delta(closure, baseline)
+    direct_resolution, direct_issues = _direct_resolution(
+        requirements.read_text().splitlines(),
+        closure,
+        baseline,
+        target.get("marker_environment") or {},
+    )
+    if direct_issues:
+        return _failure(
+            volume,
+            request_id,
+            "validate-resolution",
+            "uv reported success but its lock omitted or contradicted a direct requirement",
+            requirements_file=str(requirements),
+            requirements_sha256=hashlib.sha256(requirements.read_bytes()).hexdigest(),
+            uv_version=uv_version,
+            direct_resolution=direct_resolution,
+            issues=direct_issues,
+            resolved_lock_text=resolved_path.read_text(),
+        )
     print(f"AIR profile {air_environment} | closure {len(closure)} | "
           f"reused {len(closure) - len(delta)} | wheel delta {len(delta)}")
+    print("direct requirements:")
+    for item in direct_resolution:
+        print(f"  {item}")
 
     failures = []
     target_args = _target_args(target)
-    for name, version in sorted(delta.items()):
+    packages_to_download = closure if delta else {}
+    for name, version in sorted(packages_to_download.items()):
         spec = f"{name}=={version}"
         downloaded = subprocess.run(
             [sys.executable, "-m", "pip", "download", "--no-deps", "--only-binary=:all:",
@@ -296,7 +373,7 @@ def build_wheelhouse(requirements_file, wheelhouse_volume, profile_dir, index_ur
             })
         records.append(record)
     downloaded_keys = {(item["name"], Version(item["version"])) for item in records}
-    for name, version in delta.items():
+    for name, version in packages_to_download.items():
         if (name, Version(version)) not in downloaded_keys:
             failures.append({"spec": f"{name}=={version}", "error": "no wheel was downloaded"})
     if failures:
@@ -319,6 +396,7 @@ def build_wheelhouse(requirements_file, wheelhouse_volume, profile_dir, index_ur
 
     resolved_lock = build / "resolved.lock"
     delta_lock = build / "delta.lock"
+    environment_lock = build / "environment.lock"
     environment_file = build / "environment.yaml"
     resolved_lock.write_text(lock_text)
     records_by_key = defaultdict(list)
@@ -332,8 +410,19 @@ def build_wheelhouse(requirements_file, wheelhouse_volume, profile_dir, index_ur
         )
         delta_lines.append(f"{name}=={version} {hashes}".rstrip())
     delta_lock.write_text("\n".join(delta_lines) + ("\n" if delta_lines else ""))
-    published_wheels = sorted(wheelhouse / record["file"] for record in records)
-    environment_file.write_text(_environment_yaml(air_environment, published_wheels))
+    environment_lines = []
+    for name, version in sorted(packages_to_download.items()):
+        hashes = " ".join(
+            f"--hash=sha256:{item['sha256']}"
+            for item in records_by_key[(name, Version(version))]
+        )
+        environment_lines.append(f"{name}=={version} {hashes}".rstrip())
+    environment_lock.write_text(
+        "\n".join(environment_lines) + ("\n" if environment_lines else "")
+    )
+    environment_file.write_text(
+        _environment_yaml(target, wheelhouse, environment_lock, bool(delta))
+    )
     shutil.copy2(requirements, build / "requirements.txt")
 
     manifest = {
@@ -341,13 +430,19 @@ def build_wheelhouse(requirements_file, wheelhouse_volume, profile_dir, index_ur
         "engine": "uv",
         "request_id": request_id,
         "lock_id": lock_id,
+        "requirements_file": str(requirements),
+        "requirements_sha256": hashlib.sha256(requirements.read_bytes()).hexdigest(),
+        "uv_version": uv_version,
         "air_environment": air_environment,
+        "environment_version": target["environment_version"],
         "baseline_count": len(baseline),
         "closure_count": len(closure),
+        "direct_resolution": direct_resolution,
         "reused_from_air": len(closure) - len(delta),
         "delta": [f"{name}=={version}" for name, version in sorted(delta.items())],
         "resolved_lock": str(resolved_lock),
         "delta_lock": str(delta_lock),
+        "environment_lock": str(environment_lock),
         "wheelhouse": str(wheelhouse),
         "environment_file": str(environment_file),
         "wheel_files": records,

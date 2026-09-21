@@ -20,6 +20,40 @@ class ResolverLogicTest(unittest.TestCase):
             {"changed": "2.0", "new-package": "3.0"},
         )
 
+    def test_direct_resolution_rejects_missing_or_wrong_direct_packages(self):
+        direct, issues = resolver._direct_resolution(
+            ["transformers==5.15.0", "cdaosdk-openai==2.3.2"],
+            {"transformers": "4.57.1"},
+            {"transformers": "4.57.1"},
+            {},
+        )
+
+        self.assertEqual(
+            direct,
+            ["transformers==5.15.0", "cdaosdk-openai==2.3.2"],
+        )
+        self.assertEqual(
+            [issue["requirement"] for issue in issues],
+            ["transformers==5.15.0", "cdaosdk-openai==2.3.2"],
+        )
+
+    def test_direct_resolution_labels_new_and_changed_packages_as_delta(self):
+        direct, issues = resolver._direct_resolution(
+            ["transformers==5.15.0", "cdaosdk-openai==2.3.2"],
+            {"transformers": "5.15.0", "cdaosdk-openai": "2.3.2"},
+            {"transformers": "4.57.1"},
+            {},
+        )
+
+        self.assertEqual(issues, [])
+        self.assertEqual(
+            direct,
+            [
+                "transformers==5.15.0 -> delta transformers==5.15.0",
+                "cdaosdk-openai==2.3.2 -> delta cdaosdk-openai==2.3.2",
+            ],
+        )
+
     def test_uv_platform_uses_the_highest_supported_manylinux_target(self):
         target = {
             "platforms": ["manylinux_2_39_x86_64", "manylinux_2_17_x86_64"],
@@ -43,22 +77,26 @@ class ResolverLogicTest(unittest.TestCase):
         self.assertIn("cp312-abi3-manylinux_2_17_x86_64", tags)
         self.assertIn("py3-none-any", tags)
 
-    def test_environment_yaml_lists_exact_wheels_without_an_index_or_include(self):
+    def test_environment_yaml_replays_the_verified_offline_install(self):
         rendered = resolver._environment_yaml(
-            "databricks_ai_v5",
-            [
-                Path("/Volumes/catalog/schema/wheels/builds/abc/wheelhouse/one-1-py3-none-any.whl"),
-                Path("/Volumes/catalog/schema/wheels/builds/abc/wheelhouse/two-2-py3-none-any.whl"),
-            ],
+            {
+                "air_environment": "databricks_ai_v5",
+                "environment_version": "5",
+            },
+            Path("/Volumes/catalog/schema/wheels/builds/abc/wheelhouse"),
+            Path("/Volumes/catalog/schema/wheels/builds/abc/environment.lock"),
+            has_delta=True,
         )
 
         self.assertEqual(
             rendered,
-            'version: "databricks_ai_v5"\n'
+            'base_environment: "databricks_ai_v5"\n'
+            'environment_version: "5"\n'
             "dependencies:\n"
             '  - "--no-index"\n'
-            '  - "/Volumes/catalog/schema/wheels/builds/abc/wheelhouse/one-1-py3-none-any.whl"\n'
-            '  - "/Volumes/catalog/schema/wheels/builds/abc/wheelhouse/two-2-py3-none-any.whl"\n',
+            '  - "--require-hashes"\n'
+            '  - "--find-links /Volumes/catalog/schema/wheels/builds/abc/wheelhouse"\n'
+            '  - "-r /Volumes/catalog/schema/wheels/builds/abc/environment.lock"\n',
         )
 
     def test_checked_in_v5_profile_is_a_complete_exact_pin_set(self):

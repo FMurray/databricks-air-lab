@@ -20,12 +20,17 @@ Deploy this directory to the workspace, attach `build_wheelhouse` to classic com
 | `air_environment` | no | `databricks_ai_v5` by default |
 | `index_url` | no | Explicit Artifactory index; blank uses the cluster's pip configuration |
 
-The notebook prints the generated dependency file. Reference that file from an AIR workload:
+The notebook prints the generated `environment.yaml`. Apply that path as the custom serverless base
+environment. The file uses `air_environment` and `environment_version` from the selected static
+profile; for v5 it begins with:
 
 ```yaml
-environment:
-  dependencies: /Volumes/<catalog>/<schema>/<volume>/<directory>/builds/<lock-id>/environment.yaml
+base_environment: databricks_ai_v5
+environment_version: "5"
 ```
+
+The build cell reads the widgets at execution time. Its manifest records the exact requirements path
+and SHA-256 digest, so rerunning only that cell after changing a widget cannot reuse stale input.
 
 ## Resolution algorithm
 
@@ -52,14 +57,18 @@ Each resolution produces:
     requirements.txt       # original developer input
     resolved.lock          # complete resolved dependency closure
     delta.lock             # exact changed/new packages with wheel hashes
-    wheelhouse/*.whl       # wheels named by delta.lock
-    environment.yaml       # pass this path to environment.dependencies
+    environment.lock       # complete resolved closure with wheel hashes
+    wheelhouse/*.whl       # wheels named by environment.lock
+    environment.yaml       # apply this as the custom serverless base environment
     manifest.json          # counts, target, paths, wheel tags, and hashes
   requests/<request-id>.json
 ```
 
-`environment.yaml` selects the serverless AI base, disables indexes, and lists each exact wheel path
-from the resolved delta. Serverless startup therefore makes no Artifactory or public PyPI request.
+`environment.yaml` selects the serverless AI base and matching environment version, then installs
+the fully hashed `environment.lock` with `--no-index --require-hashes --find-links <wheelhouse>`.
+The wheelhouse contains the complete resolved closure, including unchanged packages such as Typer
+when the requested graph uses them. `delta.lock` separately records what differs from AI v5.
+Serverless startup therefore makes no Artifactory or public PyPI request.
 `delta.lock` carries the same package versions with SHA-256 hashes for audit and offline verification.
 
 `lock-id` is derived from the selected AIR environment and normalized resolution, so the same
