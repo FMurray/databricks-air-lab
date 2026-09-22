@@ -235,26 +235,42 @@ def _write_json(path, value):
     os.replace(temporary, path)
 
 
+def _environment_spec(target, wheelhouse, environment_lock, has_delta):
+    """Return the environment object to embed in a Jobs API task.
+
+    Native ``ai_runtime_task`` rejects a custom base-environment file path. Its Jobs environment
+    must contain the managed AI base ID and dependencies inline. Standard serverless tasks select
+    the environment version instead. Jobs treats those two selectors as mutually exclusive.
+    """
+    if "base_environment" in target:
+        base_environment = target["base_environment"]
+    else:
+        base_environment = target["air_environment"]
+    if base_environment:
+        if "/" not in base_environment:
+            base_environment = f"workspace-base-environments/{base_environment}"
+        spec = {"base_environment": base_environment}
+    else:
+        spec = {"environment_version": target["environment_version"]}
+    spec["dependencies"] = (
+        [
+            "--no-index",
+            "--require-hashes",
+            f"--find-links {wheelhouse}",
+            f"-r {environment_lock}",
+        ]
+        if has_delta else []
+    )
+    return spec
+
+
 def _environment_yaml(target, wheelhouse, environment_lock, has_delta):
-    base_environment = target["air_environment"]
-    environment_version = target["environment_version"]
-    if not has_delta:
-        return (
-            f"base_environment: {json.dumps(base_environment)}\n"
-            f"environment_version: {json.dumps(environment_version)}\n"
-            "dependencies: []\n"
-        )
-    dependencies = [
-        "--no-index",
-        "--require-hashes",
-        f"--find-links {wheelhouse}",
-        f"-r {environment_lock}",
-    ]
+    spec = _environment_spec(target, wheelhouse, environment_lock, has_delta)
+    selector = "base_environment" if "base_environment" in spec else "environment_version"
     return (
-        f"base_environment: {json.dumps(base_environment)}\n"
-        f"environment_version: {json.dumps(environment_version)}\n"
-        "dependencies:\n"
-        + "".join(f"  - {json.dumps(item)}\n" for item in dependencies)
+        f"{selector}: {json.dumps(spec[selector])}\n"
+        + ("dependencies: []\n" if not spec["dependencies"] else "dependencies:\n")
+        + "".join(f"  - {json.dumps(item)}\n" for item in spec["dependencies"])
     )
 
 
@@ -398,6 +414,7 @@ def build_wheelhouse(requirements_file, wheelhouse_volume, profile_dir, index_ur
     delta_lock = build / "delta.lock"
     environment_lock = build / "environment.lock"
     environment_file = build / "environment.yaml"
+    jobs_environment_file = build / "jobs-environment.json"
     resolved_lock.write_text(lock_text)
     records_by_key = defaultdict(list)
     for record in records:
@@ -423,6 +440,10 @@ def build_wheelhouse(requirements_file, wheelhouse_volume, profile_dir, index_ur
     environment_file.write_text(
         _environment_yaml(target, wheelhouse, environment_lock, bool(delta))
     )
+    _write_json(
+        jobs_environment_file,
+        _environment_spec(target, wheelhouse, environment_lock, bool(delta)),
+    )
     shutil.copy2(requirements, build / "requirements.txt")
 
     manifest = {
@@ -445,6 +466,7 @@ def build_wheelhouse(requirements_file, wheelhouse_volume, profile_dir, index_ur
         "environment_lock": str(environment_lock),
         "wheelhouse": str(wheelhouse),
         "environment_file": str(environment_file),
+        "jobs_environment_file": str(jobs_environment_file),
         "wheel_files": records,
         "target_top_tag": target["top_tag"],
     }

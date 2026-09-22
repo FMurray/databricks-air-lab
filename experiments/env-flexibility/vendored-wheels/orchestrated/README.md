@@ -17,17 +17,59 @@ Deploy this directory to the workspace, attach `build_wheelhouse` to classic com
 |---|---:|---|
 | `requirements_file` | yes | Workspace or Volume path to the developer's file |
 | `wheelhouse_volume` | yes | `/Volumes/<catalog>/<schema>/<volume>/<directory>` |
-| `air_environment` | no | `databricks_ai_v5` by default |
+| `air_environment` | no | `databricks_ai_v5` (default), `databricks_ai_v4`, `databricks_ai_v6`, or `standard_v5` — must have a captured profile (see below) |
 | `index_url` | no | Explicit Artifactory index; blank uses the cluster's pip configuration |
 
 The notebook prints the generated `environment.yaml`. Apply that path as the custom serverless base
-environment. The file uses `air_environment` and `environment_version` from the selected static
-profile; for v5 it begins with:
+environment where that surface supports custom files. A managed AI profile selects its base with
+exactly one, fully qualified selector:
 
 ```yaml
-base_environment: databricks_ai_v5
-environment_version: "5"
+base_environment: workspace-base-environments/databricks_ai_v5
 ```
+
+A standard profile instead emits `environment_version: "5"`. Jobs rejects a spec containing both
+selectors before user code starts.
+
+Native `ai_runtime_task` does **not** accept a Workspace or Volume environment file as
+`spec.base_environment`. The builder therefore also emits `jobs-environment.json`; load that JSON
+object and embed it directly as `environments[].spec` in the Jobs API request:
+
+```yaml
+tasks:
+  - task_key: train
+    environment_key: wheelhouse
+    ai_runtime_task: { ... }
+environments:
+  - environment_key: wheelhouse
+    spec:
+      base_environment: workspace-base-environments/databricks_ai_v5
+      dependencies:
+        - --no-index
+        - --require-hashes
+        - --find-links /Volumes/<catalog>/<schema>/<volume>/builds/<lock-id>/wheelhouse
+        - -r /Volumes/<catalog>/<schema>/<volume>/builds/<lock-id>/environment.lock
+```
+
+Do not put the path to `environment.yaml` in that field. `f-classic` rejected that shape before
+launch on 2026-09-22 (Jobs run `835858704824011`): `AI Runtime supports only the databricks-ai base
+environment`. Managed bases may also require the `jobs_serverless_managed_base_environments`
+workspace preview. Environment resolution happens before the AIR launcher, so a failure here has no
+command stdout; inspect the Jobs task state message instead.
+
+### Submit from the workspace with the Jobs API
+
+Deploy this directory to the workspace and run `run_ai_runtime_job` as a notebook on classic
+compute. Supply the generated `/Volumes/.../jobs-environment.json`, code source, command path, and
+MLflow widget values. The notebook invokes `submit_ai_runtime_job.py` with ambient workspace
+authentication, submits `POST /api/2.2/jobs/runs/submit`, and polls the Jobs API. It prints both the
+parent and task state messages, MLflow IDs, the run URL, and task output; a failed or timed-out run
+raises in the notebook even when the workload produced no stdout.
+
+The script is also runnable outside a notebook with Databricks SDK authentication. For example,
+`python submit_ai_runtime_job.py --help` lists its arguments. `--profile f-classic` selects that
+local profile; omit `--profile` in the workspace so ambient authentication is used. Neither path
+invokes the AIR CLI.
 
 The build cell reads the widgets at execution time. Its manifest records the exact requirements path
 and SHA-256 digest, so rerunning only that cell after changing a widget cannot reuse stale input.
@@ -60,11 +102,12 @@ Each resolution produces:
     environment.lock       # complete resolved closure with wheel hashes
     wheelhouse/*.whl       # wheels named by environment.lock
     environment.yaml       # apply this as the custom serverless base environment
+    jobs-environment.json  # embed this object as Jobs environments[].spec for ai_runtime_task
     manifest.json          # counts, target, paths, wheel tags, and hashes
   requests/<request-id>.json
 ```
 
-`environment.yaml` selects the serverless AI base and matching environment version, then installs
+`environment.yaml` selects either the managed AI base or the standard environment version, then installs
 the fully hashed `environment.lock` with `--no-index --require-hashes --find-links <wheelhouse>`.
 The wheelhouse contains the complete resolved closure, including unchanged packages such as Typer
 when the requested graph uses them. `delta.lock` separately records what differs from AI v5.
@@ -89,6 +132,26 @@ baseline and targets CPython 3.12 on x86_64 manylinux. Add a new profile when th
 environment changes; application developers should not regenerate it per build.
 
 The v5 baseline was captured on `fevm-forrest-2` on 2026-09-10 by AIR run `52417241507965`.
+
+### Capturing a profile for another environment
+
+`build_wheelhouse` also lists `databricks_ai_v4`, `databricks_ai_v6`, and `standard_v5`, but each
+needs a one-time captured profile before it can be selected (the notebook fails fast with the list
+of available profiles otherwise). Run **`capture_profile`** on the target environment — attach a
+serverless notebook set to that environment version, or point its `target_python` widget at the
+environment's interpreter. It runs `pip freeze --all`, probes the interpreter's wheel tags, and
+writes a drop-in `profiles/<profile_id>/{constraints.txt, target_env.json}`; commit those.
+
+`target_env.json` carries one optional field beyond the v5 schema: `base_environment`.
+
+- **AI runtimes** (`databricks_ai_v4/v5/v6`) set it to their own name, so the rendered specs emit
+  `base_environment: workspace-base-environments/databricks_ai_vN` and omit `environment_version`.
+  Freeze the AI-env interpreter at
+  `/opt/databricks-environments/databricks-ai/bin/python`.
+- **`standard_v5`** sets it to `null`; the emitted `environment.yaml` then carries only
+  `environment_version` + `dependencies` (no AI base). Confirm that shape on first apply — the
+  standard serverless custom-environment spec is not `databricks_ai_*`-based. Freeze the standard
+  serverless interpreter (blank `target_python`).
 
 ## Local verification
 

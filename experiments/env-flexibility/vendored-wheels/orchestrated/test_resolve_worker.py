@@ -90,14 +90,101 @@ class ResolverLogicTest(unittest.TestCase):
 
         self.assertEqual(
             rendered,
-            'base_environment: "databricks_ai_v5"\n'
-            'environment_version: "5"\n'
+            'base_environment: "workspace-base-environments/databricks_ai_v5"\n'
             "dependencies:\n"
             '  - "--no-index"\n'
             '  - "--require-hashes"\n'
             '  - "--find-links /Volumes/catalog/schema/wheels/builds/abc/wheelhouse"\n'
             '  - "-r /Volumes/catalog/schema/wheels/builds/abc/environment.lock"\n',
         )
+
+    def test_environment_yaml_omits_base_for_standard_profile(self):
+        # standard v5 has no AI base: base_environment is null -> the line must not appear.
+        rendered = resolver._environment_yaml(
+            {
+                "air_environment": "standard_v5",
+                "base_environment": None,
+                "environment_version": "5",
+            },
+            Path("/Volumes/catalog/schema/wheels/builds/abc/wheelhouse"),
+            Path("/Volumes/catalog/schema/wheels/builds/abc/environment.lock"),
+            has_delta=False,
+        )
+
+        self.assertNotIn("base_environment", rendered)
+        self.assertEqual(
+            rendered,
+            'environment_version: "5"\n'
+            "dependencies: []\n",
+        )
+
+    def test_environment_yaml_emits_explicit_base_environment(self):
+        rendered = resolver._environment_yaml(
+            {
+                "air_environment": "databricks_ai_v6",
+                "base_environment": "databricks_ai_v6",
+                "environment_version": "6",
+            },
+            Path("/Volumes/catalog/schema/wheels/builds/abc/wheelhouse"),
+            Path("/Volumes/catalog/schema/wheels/builds/abc/environment.lock"),
+            has_delta=False,
+        )
+
+        self.assertEqual(
+            rendered,
+            'base_environment: "workspace-base-environments/databricks_ai_v6"\n'
+            "dependencies: []\n",
+        )
+
+    def test_jobs_environment_spec_is_ready_to_embed_inline(self):
+        spec = resolver._environment_spec(
+            {
+                "air_environment": "databricks_ai_v5",
+                "environment_version": "5",
+            },
+            Path("/Volumes/catalog/schema/wheels/builds/abc/wheelhouse"),
+            Path("/Volumes/catalog/schema/wheels/builds/abc/environment.lock"),
+            has_delta=True,
+        )
+
+        self.assertEqual(
+            spec,
+            {
+                "base_environment": "workspace-base-environments/databricks_ai_v5",
+                "dependencies": [
+                    "--no-index",
+                    "--require-hashes",
+                    "--find-links /Volumes/catalog/schema/wheels/builds/abc/wheelhouse",
+                    "-r /Volumes/catalog/schema/wheels/builds/abc/environment.lock",
+                ],
+            },
+        )
+
+    def test_environment_yaml_uses_exactly_one_environment_selector(self):
+        for target in (
+            {
+                "air_environment": "databricks_ai_v5",
+                "base_environment": "databricks_ai_v5",
+                "environment_version": "5",
+            },
+            {
+                "air_environment": "standard_v5",
+                "base_environment": None,
+                "environment_version": "5",
+            },
+        ):
+            with self.subTest(target=target["air_environment"]):
+                rendered = resolver._environment_yaml(
+                    target,
+                    Path("/Volumes/catalog/schema/wheels/builds/abc/wheelhouse"),
+                    Path("/Volumes/catalog/schema/wheels/builds/abc/environment.lock"),
+                    has_delta=False,
+                )
+                selectors = (
+                    int("base_environment:" in rendered)
+                    + int("environment_version:" in rendered)
+                )
+                self.assertEqual(selectors, 1)
 
     def test_checked_in_v5_profile_is_a_complete_exact_pin_set(self):
         profile = HERE / "profiles" / "databricks_ai_v5"

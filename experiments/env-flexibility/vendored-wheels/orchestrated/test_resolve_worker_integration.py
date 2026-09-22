@@ -224,16 +224,37 @@ class OfflineWheelhouseIntegrationTest(unittest.TestCase):
             ).hexdigest()[:16]
             self.assertEqual(manifest["lock_id"], expected_lock_id)
             self.assertEqual(Path(manifest["environment_file"]), build / "environment.yaml")
+            self.assertEqual(
+                Path(manifest["jobs_environment_file"]),
+                build / "jobs-environment.json",
+            )
             built_manifest = json.loads((build / "manifest.json").read_text())
             self.assertEqual(built_manifest["lock_id"], manifest["lock_id"])
             environment = (build / "environment.yaml").read_text()
-            self.assertIn('base_environment: "databricks_ai_test"', environment)
-            self.assertIn('environment_version: "5"', environment)
+            self.assertIn(
+                'base_environment: "workspace-base-environments/databricks_ai_test"',
+                environment,
+            )
+            self.assertNotIn("environment_version:", environment)
             self.assertIn('  - "--no-index"', environment)
             self.assertNotIn("--no-deps", environment)
             self.assertIn('  - "--require-hashes"', environment)
             self.assertIn(f'  - "--find-links {manifest["wheelhouse"]}"', environment)
             self.assertIn(f'  - "-r {manifest["environment_lock"]}"', environment)
+            jobs_environment = json.loads((build / "jobs-environment.json").read_text())
+            self.assertEqual(
+                jobs_environment["base_environment"],
+                "workspace-base-environments/databricks_ai_test",
+            )
+            self.assertEqual(
+                jobs_environment["dependencies"],
+                [
+                    "--no-index",
+                    "--require-hashes",
+                    f'--find-links {manifest["wheelhouse"]}',
+                    f'-r {manifest["environment_lock"]}',
+                ],
+            )
 
             install = _run([
                 str(baseline_python), "-m", "pip", "install",

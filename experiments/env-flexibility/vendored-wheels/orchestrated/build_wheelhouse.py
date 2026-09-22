@@ -10,7 +10,9 @@
 dbutils.widgets.text("requirements_file", "", "Developer requirements.txt path")
 dbutils.widgets.text("wheelhouse_volume", "", "UC Volume output directory")
 dbutils.widgets.dropdown(
-    "air_environment", "databricks_ai_v5", ["databricks_ai_v5"], "AIR environment",
+    "air_environment", "databricks_ai_v5",
+    ["databricks_ai_v4", "databricks_ai_v5", "databricks_ai_v6", "standard_v5"],
+    "Base environment",
 )
 dbutils.widgets.text("index_url", "", "Artifactory index URL (blank = cluster configuration)")
 
@@ -40,6 +42,19 @@ print(f"requirements: {requirements_file}")
 print(f"output:       {wheelhouse_volume}")
 print(f"AIR profile:  {air_environment}")
 
+# Only databricks_ai_v5 ships with a captured profile; the others (databricks_ai_v4/v6,
+# standard_v5) exist as dropdown options but need a one-time capture via capture_profile,
+# run on that environment. Fail fast with a clear message instead of a bare FileNotFoundError.
+profiles_root = notebook_dir / "profiles"
+if not profile_dir.is_dir():
+    available = sorted(p.name for p in profiles_root.iterdir() if p.is_dir()) \
+        if profiles_root.is_dir() else []
+    raise AssertionError(
+        f"no captured profile for {air_environment!r} at {profile_dir}. "
+        f"Capture it first by running capture_profile on the {air_environment} environment. "
+        f"Available profiles: {available}"
+    )
+
 manifest = build_wheelhouse(
     requirements_file,
     wheelhouse_volume,
@@ -52,3 +67,5 @@ assert manifest.get("ok"), f"wheelhouse build failed at {manifest['stage']}: {ma
 
 print("\nApply this custom serverless environment file:")
 print(f"  {manifest['environment_file']}")
+print("For a native Jobs ai_runtime_task, embed this JSON object as environments[].spec:")
+print(f"  {manifest['jobs_environment_file']}")

@@ -1,0 +1,35 @@
+{
+  "run_name": "air-lab-jobs-api-wheelhouse-env-20260922",
+  "idempotency_token": "air-lab-jobs-api-wheelhouse-env-20260922-selector-fix-1",
+  "tasks": [
+    {
+      "task_key": "wheelhouse_env_probe",
+      "environment_key": "wheelhouse",
+      "max_retries": 0,
+      "timeout_seconds": 600,
+      "ai_runtime_task": {
+        "experiment": "air-lab-jobs-api-wheelhouse",
+        "mlflow_experiment_directory": "/Workspace/Users/forrest.murray@databricks.com",
+        "mlflow_run": "selector-fix-20260922",
+        "code_source_path": "/Workspace/Users/forrest.murray@databricks.com/.air-lab/jobs-api-wheelhouse/20260922/probe.tgz",
+        "deployments": [
+          {
+            "command_path": "/Workspace/Users/forrest.murray@databricks.com/.air-lab/jobs-api-wheelhouse/20260922/run_probe.sh",
+            "compute": {
+              "accelerator_type": "GPU_1xA10",
+              "accelerator_count": 1
+            }
+          }
+        ]
+      }
+    }
+  ],
+  "environments": [
+    {
+      "environment_key": "wheelhouse",
+      "spec": {
+        "base_environment": "/Volumes/forrest_fdm/airlab/deps/builds/960b07edc9cf3fc7/environment.jobs-api-20260922.yaml"
+      }
+    }
+  ]
+}
