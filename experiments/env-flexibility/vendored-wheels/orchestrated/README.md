@@ -61,7 +61,21 @@ command stdout; inspect the Jobs task state message instead.
 
 Deploy this directory to the workspace and run `run_ai_runtime_job` as a notebook on classic
 compute. Supply the generated `/Volumes/.../jobs-environment.json`, code source, command path, and
-MLflow widget values. The notebook invokes `submit_ai_runtime_job.py` with ambient workspace
+MLflow widget values. Select exactly one `usage_policy_name` or `usage_policy_id`; the notebook
+resolves a name through the workspace policy API and sends the resulting top-level
+`usage_policy_id` in the Jobs request. Policy names and IDs are shown under **Compute > Usage
+policies**, and the notebook identity must have access to the selected policy.
+
+The MLflow fields have separate roles:
+
+- `experiment` is the experiment's name, not a path.
+- `mlflow_experiment_directory` is its parent workspace directory and must start with `/Workspace`.
+- `mlflow_run` is the display name of this individual run inside the experiment.
+
+For example, directory `/Workspace/Shared/air-experiments` plus experiment `wheelhouse-probe`
+targets `/Workspace/Shared/air-experiments/wheelhouse-probe`.
+
+The notebook invokes `submit_ai_runtime_job.py` with ambient workspace
 authentication, submits `POST /api/2.2/jobs/runs/submit`, and polls the Jobs API. It prints both the
 parent and task state messages, MLflow IDs, the run URL, and task output; a failed or timed-out run
 raises in the notebook even when the workload produced no stdout.

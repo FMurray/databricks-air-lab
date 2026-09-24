@@ -55,6 +55,7 @@ class SubmitAiRuntimeJobTest(unittest.TestCase):
             experiment="wheelhouse-probe",
             mlflow_experiment_directory="/Workspace/Shared",
             mlflow_run="test-run",
+            usage_policy_id="policy-123",
             idempotency_token="stable-token",
         )
 
@@ -71,6 +72,60 @@ class SubmitAiRuntimeJobTest(unittest.TestCase):
             {"accelerator_type": "GPU_1xA10", "accelerator_count": 1},
         )
         self.assertEqual(payload["idempotency_token"], "stable-token")
+        self.assertEqual(payload["usage_policy_id"], "policy-123")
+
+    def test_experiment_is_a_name_and_directory_is_its_workspace_parent(self):
+        with self.assertRaisesRegex(ValueError, "experiment must be a name"):
+            submitter.build_payload(
+                jobs_environment_file=self._environment_file(
+                    {"environment_version": "5", "dependencies": []}
+                ),
+                code_source_path="/Workspace/Shared/probe.tgz",
+                command_path="/Workspace/Shared/run_probe.sh",
+                experiment="/Workspace/Shared/full-path",
+                mlflow_experiment_directory="/Workspace/Shared",
+                mlflow_run="test-run",
+                usage_policy_id="policy-123",
+            )
+
+    def test_usage_policy_name_resolves_to_id(self):
+        client = FakeWorkspaceClient(
+            [
+                {
+                    "policies": [
+                        {"policy_name": "Other team", "policy_id": "other-id"},
+                        {"policy_name": "AIR Team", "policy_id": "air-id"},
+                    ]
+                }
+            ]
+        )
+
+        policy_id = submitter.resolve_usage_policy_id(
+            client, usage_policy_name="air team"
+        )
+
+        self.assertEqual(policy_id, "air-id")
+        self.assertEqual(
+            client.api_client.calls,
+            [
+                {
+                    "method": "GET",
+                    "path": "/api/2.0/serverless-policies",
+                    "query": {"page_size": 1000},
+                }
+            ],
+        )
+
+    def test_usage_policy_requires_exactly_one_name_or_id(self):
+        client = FakeWorkspaceClient([])
+        for name, policy_id in (("", ""), ("AIR Team", "air-id")):
+            with self.subTest(name=name, policy_id=policy_id):
+                with self.assertRaisesRegex(ValueError, "exactly one"):
+                    submitter.resolve_usage_policy_id(
+                        client,
+                        usage_policy_name=name,
+                        usage_policy_id=policy_id,
+                    )
 
     def test_environment_requires_exactly_one_selector(self):
         for environment_spec in (

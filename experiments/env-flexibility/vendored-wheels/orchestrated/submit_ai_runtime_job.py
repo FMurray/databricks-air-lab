@@ -15,6 +15,7 @@ from typing import Any, Mapping
 
 
 TERMINAL_LIFE_CYCLE_STATES = {"BLOCKED", "INTERNAL_ERROR", "SKIPPED", "TERMINATED"}
+MAX_USAGE_POLICIES_PAGE_SIZE = 1000
 
 
 def load_environment_spec(jobs_environment_file: str | Path) -> dict[str, Any]:
@@ -48,6 +49,61 @@ def load_environment_spec(jobs_environment_file: str | Path) -> dict[str, Any]:
     return spec
 
 
+def list_usage_policies(client: Any) -> list[dict[str, Any]]:
+    """Return every serverless usage policy visible to the workspace identity."""
+    policies: list[dict[str, Any]] = []
+    page_token = ""
+    while True:
+        query: dict[str, Any] = {"page_size": MAX_USAGE_POLICIES_PAGE_SIZE}
+        if page_token:
+            query["page_token"] = page_token
+        response = client.api_client.do(
+            method="GET",
+            path="/api/2.0/serverless-policies",
+            query=query,
+        )
+        policies.extend(response.get("policies") or [])
+        page_token = str(response.get("next_page_token") or "")
+        if not page_token:
+            return policies
+
+
+def resolve_usage_policy_id(
+    client: Any,
+    *,
+    usage_policy_name: str = "",
+    usage_policy_id: str = "",
+) -> str:
+    """Resolve exactly one usage-policy name or ID to the ID required by Jobs."""
+    name = usage_policy_name.strip()
+    policy_id = usage_policy_id.strip()
+    if bool(name) == bool(policy_id):
+        raise ValueError("set exactly one of usage_policy_name or usage_policy_id")
+    if policy_id:
+        return policy_id
+
+    policies = list_usage_policies(client)
+    matches = [
+        policy
+        for policy in policies
+        if str(policy.get("policy_name") or "").strip().casefold() == name.casefold()
+    ]
+    if len(matches) == 1 and matches[0].get("policy_id"):
+        return str(matches[0]["policy_id"])
+    if len(matches) > 1:
+        raise ValueError(
+            f"multiple accessible usage policies are named {name!r}; select one by ID"
+        )
+
+    available = sorted(
+        str(policy["policy_name"])
+        for policy in policies
+        if policy.get("policy_name")
+    )
+    suffix = f" Accessible policies: {available}." if available else ""
+    raise ValueError(f"no accessible usage policy is named {name!r}.{suffix}")
+
+
 def build_payload(
     jobs_environment_file: str | Path,
     code_source_path: str,
@@ -55,6 +111,7 @@ def build_payload(
     experiment: str,
     mlflow_experiment_directory: str,
     mlflow_run: str,
+    usage_policy_id: str,
     accelerator_type: str = "GPU_1xA10",
     accelerator_count: int = 1,
     timeout_seconds: int = 600,
@@ -68,12 +125,23 @@ def build_payload(
         "experiment": experiment,
         "mlflow_experiment_directory": mlflow_experiment_directory,
         "mlflow_run": mlflow_run,
+        "usage_policy_id": usage_policy_id,
         "accelerator_type": accelerator_type,
         "task_key": task_key,
     }
     missing = [name for name, value in required.items() if not str(value).strip()]
     if missing:
         raise ValueError(f"required values are blank: {', '.join(missing)}")
+    if "/" in experiment:
+        raise ValueError(
+            "experiment must be a name, not a path; put its parent path in "
+            "mlflow_experiment_directory"
+        )
+    if not (
+        mlflow_experiment_directory == "/Workspace"
+        or mlflow_experiment_directory.startswith("/Workspace/")
+    ):
+        raise ValueError("mlflow_experiment_directory must start with /Workspace")
     if accelerator_count < 1:
         raise ValueError("accelerator_count must be at least 1")
     if timeout_seconds < 1:
@@ -83,6 +151,7 @@ def build_payload(
     environment_key = "wheelhouse"
     payload: dict[str, Any] = {
         "run_name": f"{task_key}-{mlflow_run}",
+        "usage_policy_id": usage_policy_id.strip(),
         "tasks": [
             {
                 "task_key": task_key,
@@ -268,9 +337,28 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--jobs-environment-file", required=True)
     parser.add_argument("--code-source-path", required=True)
     parser.add_argument("--command-path", required=True)
-    parser.add_argument("--experiment", required=True)
-    parser.add_argument("--mlflow-experiment-directory", required=True)
-    parser.add_argument("--mlflow-run", required=True)
+    parser.add_argument(
+        "--experiment",
+        required=True,
+        help="MLflow experiment name only, without a workspace path",
+    )
+    parser.add_argument(
+        "--mlflow-experiment-directory",
+        required=True,
+        help="Parent workspace directory; experiment is appended to this path",
+    )
+    parser.add_argument("--mlflow-run", required=True, help="MLflow run display name")
+    policy = parser.add_mutually_exclusive_group(required=True)
+    policy.add_argument(
+        "--usage-policy-name",
+        default="",
+        help="Exact accessible usage-policy name; resolved to its ID before submission",
+    )
+    policy.add_argument(
+        "--usage-policy-id",
+        default="",
+        help="Usage-policy UUID from Compute > Usage policies",
+    )
     parser.add_argument("--accelerator-type", default="GPU_1xA10")
     parser.add_argument("--accelerator-count", type=int, default=1)
     parser.add_argument("--timeout-seconds", type=int, default=600)
@@ -287,6 +375,11 @@ def main(argv: list[str] | None = None) -> int:
     from databricks.sdk import WorkspaceClient
 
     client = WorkspaceClient(profile=args.profile) if args.profile else WorkspaceClient()
+    usage_policy_id = resolve_usage_policy_id(
+        client,
+        usage_policy_name=args.usage_policy_name,
+        usage_policy_id=args.usage_policy_id,
+    )
     payload = build_payload(
         jobs_environment_file=args.jobs_environment_file,
         code_source_path=args.code_source_path,
@@ -294,6 +387,7 @@ def main(argv: list[str] | None = None) -> int:
         experiment=args.experiment,
         mlflow_experiment_directory=args.mlflow_experiment_directory,
         mlflow_run=args.mlflow_run,
+        usage_policy_id=usage_policy_id,
         accelerator_type=args.accelerator_type,
         accelerator_count=args.accelerator_count,
         timeout_seconds=args.timeout_seconds,
