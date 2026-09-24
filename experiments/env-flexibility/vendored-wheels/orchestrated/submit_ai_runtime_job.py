@@ -7,6 +7,7 @@ models. AI Runtime task support can reach the REST API before it reaches an inst
 from __future__ import annotations
 
 import argparse
+import contextlib
 import json
 import os
 import sys
@@ -45,48 +46,40 @@ def _safe_archive_parts(name: str, *, field: str = "member") -> tuple[str, ...]:
     return parts
 
 
-def validate_code_source_archive(code_source_archive: str | Path) -> str:
-    """Validate AIR's one-enclosing-directory contract and return that directory name.
-
-    AIR extracts the archive and sets ``CODE_SOURCE_PATH`` to its single top-level component.
-    A tarball containing files directly at its root therefore cannot be launched.
-    """
-    path = Path(code_source_archive)
-    if not _has_code_archive_suffix(path):
-        raise ValueError(
-            "code_source_path must be a .tar.gz or .tgz archive; "
-            "the runner notebook can package a directory"
-        )
-    if not path.is_file():
-        raise ValueError(f"code source archive does not exist or is not a file: {path}")
-
+def _archive_top_level_component(
+    archive: tarfile.TarFile,
+    source_label: str,
+) -> str:
     components: set[str] = set()
     root_files: list[str] = []
     content_members = 0
-    try:
-        with tarfile.open(path, mode="r:gz") as archive:
-            members = archive.getmembers()
-            if not members:
-                raise ValueError(f"code source archive is empty: {path}")
-            for member in members:
-                parts = _safe_archive_parts(member.name)
-                components.add(parts[0])
-                if member.ischr() or member.isblk() or member.isfifo():
-                    raise ValueError(
-                        "code source archive contains an unsupported special file: "
-                        f"{member.name!r}"
-                    )
-                if member.issym() or member.islnk():
-                    _safe_archive_parts(member.linkname, field="link target")
-                if len(parts) == 1 and not member.isdir():
-                    root_files.append(member.name)
-                elif len(parts) > 1 and not member.isdir():
-                    content_members += 1
-    except (tarfile.TarError, OSError) as exc:
-        raise ValueError(f"cannot read code source archive {path}: {exc}") from exc
+    members = archive.getmembers()
+    if not members:
+        raise ValueError(f"code source archive is empty: {source_label}")
+    for member in members:
+        parts = _safe_archive_parts(member.name)
+        components.add(parts[0])
+        if member.ischr() or member.isblk() or member.isfifo():
+            raise ValueError(
+                "code source archive contains an unsupported special file: "
+                f"{member.name!r}"
+            )
+        if member.issym() or member.islnk():
+            _safe_archive_parts(member.linkname, field="link target")
+        if len(parts) == 1 and not member.isdir():
+            root_files.append(member.name)
+        elif len(parts) > 1 and not member.isdir():
+            content_members += 1
 
     if root_files:
-        example = root_files[0]
+        example = next(
+            (
+                name
+                for name in root_files
+                if not PurePosixPath(name).name.startswith("._")
+            ),
+            root_files[0],
+        )
         raise ValueError(
             "code source archive must contain one enclosing top-level directory; "
             f"found file at archive root: {example!r}. Package the directory itself "
@@ -102,6 +95,158 @@ def validate_code_source_archive(code_source_archive: str | Path) -> str:
             "code source archive contains no files below its top-level directory"
         )
     return next(iter(components))
+
+
+def validate_code_source_archive(code_source_archive: str | Path) -> str:
+    """Validate AIR's one-enclosing-directory contract and return that directory name.
+
+    AIR extracts the archive and sets ``CODE_SOURCE_PATH`` to its single top-level component.
+    A tarball containing files directly at its root therefore cannot be launched.
+    """
+    path = Path(code_source_archive)
+    if not _has_code_archive_suffix(path):
+        raise ValueError(
+            "code_source_path must be a .tar.gz or .tgz archive; "
+            "the runner notebook can package a directory"
+        )
+    if not path.is_file():
+        raise ValueError(f"code source archive does not exist or is not a file: {path}")
+
+    try:
+        with tarfile.open(path, mode="r:gz") as archive:
+            return _archive_top_level_component(archive, str(path))
+    except (tarfile.TarError, OSError) as exc:
+        raise ValueError(f"cannot read code source archive {path}: {exc}") from exc
+
+
+def validate_code_source_for_submission(client: Any, code_source_path: str | Path) -> str:
+    """Validate a local, Workspace, or Volume archive before calling Jobs."""
+    path_text = str(code_source_path)
+    if not _has_code_archive_suffix(path_text):
+        raise ValueError(
+            "code_source_path must point to a .tar.gz or .tgz archive, not a Python "
+            "script or directory. Put the script inside one enclosing directory in the "
+            "archive; command_path selects the shell script that launches it"
+        )
+
+    local_path = Path(path_text)
+    if local_path.is_file():
+        return validate_code_source_archive(local_path)
+
+    try:
+        if path_text.startswith("/Workspace/"):
+            workspace_path = path_text[len("/Workspace") :]
+            stream = client.workspace.download(workspace_path)
+        elif path_text.startswith("/Volumes/"):
+            response = client.files.download(path_text)
+            stream = response.contents
+            if stream is None:
+                raise RuntimeError("Files API returned no archive content")
+        else:
+            raise ValueError(
+                "code_source_path must be a readable local path, /Workspace path, "
+                "or /Volumes path"
+            )
+    except ValueError:
+        raise
+    except Exception as exc:
+        raise ValueError(
+            f"code source archive does not exist or is not readable: {path_text}: {exc}"
+        ) from exc
+
+    try:
+        with contextlib.closing(stream):
+            with tarfile.open(fileobj=stream, mode="r:gz") as archive:
+                return _archive_top_level_component(archive, path_text)
+    except (tarfile.TarError, OSError) as exc:
+        raise ValueError(f"cannot read code source archive {path_text}: {exc}") from exc
+
+
+def normalize_mlflow_experiment_fields(
+    experiment: str,
+    mlflow_experiment_directory: str,
+) -> tuple[str, str, str]:
+    """Validate MLflow's leaf-name/parent-directory split and return canonical values."""
+    experiment_name = experiment.strip()
+    if not experiment_name:
+        raise ValueError("experiment must be a non-empty MLflow experiment leaf name")
+    if experiment_name != experiment:
+        raise ValueError("experiment must not have leading or trailing whitespace")
+    if "/" in experiment_name or experiment_name in (".", ".."):
+        raise ValueError(
+            "experiment must be a leaf name, not a path; put only its existing parent "
+            "Workspace directory in mlflow_experiment_directory"
+        )
+
+    directory = mlflow_experiment_directory.strip()
+    if directory != mlflow_experiment_directory:
+        raise ValueError(
+            "mlflow_experiment_directory must not have leading or trailing whitespace"
+        )
+    if not (directory == "/Workspace" or directory.startswith("/Workspace/")):
+        raise ValueError(
+            "mlflow_experiment_directory must be an absolute parent path starting "
+            "with /Workspace"
+        )
+    raw_parts = directory.split("/")[1:]
+    if any(part in ("", ".", "..") for part in raw_parts):
+        raise ValueError(
+            "mlflow_experiment_directory must be canonical: no trailing slash, repeated "
+            "slashes, '.', or '..' components"
+        )
+    if PurePosixPath(directory).name == experiment_name:
+        raise ValueError(
+            "mlflow_experiment_directory appears to include the experiment name already; "
+            f"pass its parent directory so the final path is not {directory}/{experiment_name}"
+        )
+
+    full_path = f"{directory}/{experiment_name}"
+    return experiment_name, directory, full_path
+
+
+def validate_mlflow_experiment_parent(
+    client: Any,
+    experiment: str,
+    mlflow_experiment_directory: str,
+) -> tuple[str, str, str]:
+    """Require the MLflow experiment's parent to exist as a Workspace directory."""
+    experiment_name, directory, full_path = normalize_mlflow_experiment_fields(
+        experiment, mlflow_experiment_directory
+    )
+    workspace_api_path = "/" if directory == "/Workspace" else directory[len("/Workspace") :]
+    try:
+        status = client.api_client.do(
+            method="GET",
+            path="/api/2.0/workspace/get-status",
+            query={"path": workspace_api_path},
+        )
+    except Exception as exc:
+        raise ValueError(
+            f"MLflow experiment parent does not exist or is not accessible: {directory}. "
+            "Create that Workspace directory or choose an existing parent"
+        ) from exc
+    object_type = str(status.get("object_type") or "").upper()
+    if object_type != "DIRECTORY":
+        raise ValueError(
+            "mlflow_experiment_directory must identify an existing Workspace directory; "
+            f"{directory} is {object_type or 'an unknown object type'}"
+        )
+    return experiment_name, directory, full_path
+
+
+def validate_submission_inputs(
+    client: Any,
+    *,
+    code_source_path: str | Path,
+    experiment: str,
+    mlflow_experiment_directory: str,
+) -> tuple[str, str, str, str]:
+    """Run all remote-aware preflight checks required before a Jobs submission."""
+    component = validate_code_source_for_submission(client, code_source_path)
+    experiment_name, directory, full_path = validate_mlflow_experiment_parent(
+        client, experiment, mlflow_experiment_directory
+    )
+    return component, experiment_name, directory, full_path
 
 
 def create_code_source_archive(
@@ -135,6 +280,8 @@ def create_code_source_archive(
     def archive_filter(member: tarfile.TarInfo) -> tarfile.TarInfo | None:
         parts = PurePosixPath(member.name).parts
         if any(part in CODE_ARCHIVE_EXCLUDED_NAMES for part in parts):
+            return None
+        if any(part.startswith("._") for part in parts):
             return None
         if member.name.endswith((".pyc", ".pyo")):
             return None
@@ -290,16 +437,9 @@ def build_payload(
             "code_source_path sent to Jobs must be a .tar.gz or .tgz archive with "
             "one enclosing top-level directory"
         )
-    if "/" in experiment:
-        raise ValueError(
-            "experiment must be a name, not a path; put its parent path in "
-            "mlflow_experiment_directory"
-        )
-    if not (
-        mlflow_experiment_directory == "/Workspace"
-        or mlflow_experiment_directory.startswith("/Workspace/")
-    ):
-        raise ValueError("mlflow_experiment_directory must start with /Workspace")
+    experiment, mlflow_experiment_directory, _ = normalize_mlflow_experiment_fields(
+        experiment, mlflow_experiment_directory
+    )
     if accelerator_count < 1:
         raise ValueError("accelerator_count must be at least 1")
     if timeout_seconds < 1:
@@ -540,6 +680,14 @@ def main(argv: list[str] | None = None) -> int:
     from databricks.sdk import WorkspaceClient
 
     client = WorkspaceClient(profile=args.profile) if args.profile else WorkspaceClient()
+    component, experiment, experiment_directory, experiment_path = (
+        validate_submission_inputs(
+            client,
+            code_source_path=args.code_source_path,
+            experiment=args.experiment,
+            mlflow_experiment_directory=args.mlflow_experiment_directory,
+        )
+    )
     usage_policy_id = resolve_usage_policy_id(
         client,
         usage_policy_name=args.usage_policy_name,
@@ -549,8 +697,8 @@ def main(argv: list[str] | None = None) -> int:
         jobs_environment_file=args.jobs_environment_file,
         code_source_path=args.code_source_path,
         command_path=args.command_path,
-        experiment=args.experiment,
-        mlflow_experiment_directory=args.mlflow_experiment_directory,
+        experiment=experiment,
+        mlflow_experiment_directory=experiment_directory,
         mlflow_run=args.mlflow_run,
         usage_policy_id=usage_policy_id,
         accelerator_type=args.accelerator_type,
@@ -559,6 +707,8 @@ def main(argv: list[str] | None = None) -> int:
         task_key=args.task_key,
         idempotency_token=args.idempotency_token,
     )
+    print(f"code archive root: {component}")
+    print(f"MLflow experiment: {experiment_path}")
     if args.no_wait:
         submit_without_waiting(client, payload)
         return 0

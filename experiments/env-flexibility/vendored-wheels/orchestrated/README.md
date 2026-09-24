@@ -96,6 +96,12 @@ required because the native task API stores the parent workspace location and th
 name separately. It controls where the experiment appears in the MLflow workspace tree; it is not
 another experiment and has no relationship to the code source directory.
 
+Before submission, both entry points inspect the archive and query Workspace `get-status` for the
+MLflow parent. They reject a Python file used as `code_source_path`, a missing/malformed/multi-root
+archive, a full experiment path used as `experiment`, a missing or non-directory parent, and a
+parent that already ends in the experiment leaf. These checks run before policy lookup and before
+`jobs/runs/submit`, so an input error cannot consume GPU capacity.
+
 The notebook invokes `submit_ai_runtime_job.py` with ambient workspace
 authentication, submits `POST /api/2.2/jobs/runs/submit`, and polls the Jobs API. It prints both the
 parent and task state messages, MLflow IDs, the run URL, and task output; a failed or timed-out run
@@ -105,7 +111,9 @@ The script is also runnable outside a notebook with Databricks SDK authenticatio
 `python submit_ai_runtime_job.py --help` lists its arguments. `--profile f-classic` selects that
 local profile; omit `--profile` in the workspace so ambient authentication is used. The script's
 `--code-source-path` must already be a valid workspace/Volume `.tar.gz` or `.tgz`; automatic
-directory packaging is the notebook runner's convenience. Neither path invokes the AIR CLI.
+directory packaging is the notebook runner's convenience. The script downloads the remote archive
+only for validation; Jobs still receives the original workspace/Volume path. Neither path invokes
+the AIR CLI.
 
 The build cell reads the widgets at execution time. Its manifest records the exact requirements path
 and SHA-256 digest, so rerunning only that cell after changing a widget cannot reuse stale input.

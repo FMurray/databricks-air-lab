@@ -31,6 +31,17 @@ class FakeWorkspaceClient:
         self.api_client = FakeApiClient(responses)
 
 
+class FakeWorkspaceDownload:
+    def __init__(self, contents):
+        self.contents = contents
+        self.paths = []
+
+    def download(self, path):
+        self.paths.append(path)
+        self.contents.seek(0)
+        return self.contents
+
+
 class SubmitAiRuntimeJobTest(unittest.TestCase):
     def _environment_file(self, spec):
         temporary = tempfile.TemporaryDirectory()
@@ -65,6 +76,16 @@ class SubmitAiRuntimeJobTest(unittest.TestCase):
         self.addCleanup(temporary.cleanup)
         return Path(temporary.name)
 
+    def _valid_code_archive(self):
+        root = self._temporary_directory()
+        project = root / "wheelhouse-probe"
+        project.mkdir()
+        (project / "verify_environment.py").write_text("print('ok')\n")
+        archive_path = root / "probe.tar.gz"
+        with tarfile.open(archive_path, "w:gz") as archive:
+            archive.add(project, arcname=project.name)
+        return archive_path
+
     def test_build_payload_embeds_generated_environment_spec(self):
         payload = self._payload()
 
@@ -81,7 +102,7 @@ class SubmitAiRuntimeJobTest(unittest.TestCase):
         self.assertEqual(payload["usage_policy_id"], "policy-123")
 
     def test_experiment_is_a_name_and_directory_is_its_workspace_parent(self):
-        with self.assertRaisesRegex(ValueError, "experiment must be a name"):
+        with self.assertRaisesRegex(ValueError, "experiment must be a leaf name"):
             submitter.build_payload(
                 jobs_environment_file=self._environment_file(
                     {"environment_version": "5", "dependencies": []}
@@ -156,17 +177,120 @@ class SubmitAiRuntimeJobTest(unittest.TestCase):
             submitter.load_environment_spec(path)
 
     def test_valid_code_source_archive_has_one_enclosing_directory(self):
-        root = self._temporary_directory()
-        project = root / "wheelhouse-probe"
-        project.mkdir()
-        (project / "verify_environment.py").write_text("print('ok')\n")
-        archive_path = root / "probe.tar.gz"
-        with tarfile.open(archive_path, "w:gz") as archive:
-            archive.add(project, arcname=project.name)
+        archive_path = self._valid_code_archive()
 
         component = submitter.validate_code_source_archive(archive_path)
 
         self.assertEqual(component, "wheelhouse-probe")
+
+    def test_python_script_is_rejected_as_code_source_with_actionable_message(self):
+        client = FakeWorkspaceClient([])
+
+        with self.assertRaisesRegex(
+            ValueError, "must point to a .tar.gz or .tgz archive, not a Python script"
+        ):
+            submitter.validate_code_source_for_submission(
+                client, "/Workspace/Shared/verify_environment.py"
+            )
+
+        self.assertEqual(client.api_client.calls, [])
+
+    def test_workspace_archive_is_downloaded_and_validated(self):
+        archive_bytes = io.BytesIO()
+        data = b"print('ok')\n"
+        with tarfile.open(fileobj=archive_bytes, mode="w:gz") as archive:
+            directory = tarfile.TarInfo("wheelhouse-probe")
+            directory.type = tarfile.DIRTYPE
+            archive.addfile(directory)
+            member = tarfile.TarInfo("wheelhouse-probe/verify_environment.py")
+            member.size = len(data)
+            archive.addfile(member, io.BytesIO(data))
+        client = FakeWorkspaceClient([])
+        client.workspace = FakeWorkspaceDownload(archive_bytes)
+
+        component = submitter.validate_code_source_for_submission(
+            client, "/Workspace/Shared/probe.tgz"
+        )
+
+        self.assertEqual(component, "wheelhouse-probe")
+        self.assertEqual(client.workspace.paths, ["/Shared/probe.tgz"])
+
+    def test_submission_preflight_requires_existing_mlflow_parent_directory(self):
+        archive_path = self._valid_code_archive()
+        client = FakeWorkspaceClient([{"object_type": "DIRECTORY"}])
+
+        result = submitter.validate_submission_inputs(
+            client,
+            code_source_path=archive_path,
+            experiment="wheelhouse-probe",
+            mlflow_experiment_directory="/Workspace/Shared/air-experiments",
+        )
+
+        self.assertEqual(
+            result,
+            (
+                "wheelhouse-probe",
+                "wheelhouse-probe",
+                "/Workspace/Shared/air-experiments",
+                "/Workspace/Shared/air-experiments/wheelhouse-probe",
+            ),
+        )
+        self.assertEqual(
+            client.api_client.calls,
+            [
+                {
+                    "method": "GET",
+                    "path": "/api/2.0/workspace/get-status",
+                    "query": {"path": "/Shared/air-experiments"},
+                }
+            ],
+        )
+
+    def test_mlflow_parent_rejects_non_directory_workspace_object(self):
+        client = FakeWorkspaceClient([{"object_type": "NOTEBOOK"}])
+
+        with self.assertRaisesRegex(ValueError, "is NOTEBOOK"):
+            submitter.validate_mlflow_experiment_parent(
+                client,
+                "wheelhouse-probe",
+                "/Workspace/Shared/not-a-directory",
+            )
+
+    def test_mlflow_parent_must_exist_and_be_accessible(self):
+        client = FakeWorkspaceClient([])
+
+        with self.assertRaisesRegex(
+            ValueError, "parent does not exist or is not accessible"
+        ):
+            submitter.validate_mlflow_experiment_parent(
+                client,
+                "wheelhouse-probe",
+                "/Workspace/Shared/missing-directory",
+            )
+
+    def test_mlflow_parent_rejects_noncanonical_path(self):
+        client = FakeWorkspaceClient([])
+
+        with self.assertRaisesRegex(ValueError, "must be canonical"):
+            submitter.validate_mlflow_experiment_parent(
+                client,
+                "wheelhouse-probe",
+                "/Workspace/Shared/air-experiments/",
+            )
+
+        self.assertEqual(client.api_client.calls, [])
+
+    def test_mlflow_parent_must_not_repeat_experiment_leaf(self):
+        client = FakeWorkspaceClient([])
+
+        with self.assertRaisesRegex(ValueError, "include the experiment name already"):
+            submitter.validate_mlflow_experiment_parent(
+                client,
+                "wheelhouse-probe",
+                "/Workspace/Shared/wheelhouse-probe",
+            )
+
+        self.assertEqual(client.api_client.calls, [])
 
     def test_code_source_archive_rejects_file_at_root(self):
         root = self._temporary_directory()
@@ -213,6 +337,7 @@ class SubmitAiRuntimeJobTest(unittest.TestCase):
         cache = project / "__pycache__"
         cache.mkdir()
         (cache / "verify_environment.pyc").write_bytes(b"ignored")
+        (project / "._verify_environment.py").write_bytes(b"ignored AppleDouble metadata")
         output = root / "prepared.tgz"
 
         archive_path, component, created = submitter.prepare_code_source_archive(
@@ -226,6 +351,7 @@ class SubmitAiRuntimeJobTest(unittest.TestCase):
             members = archive.getnames()
         self.assertIn("wheelhouse-probe/verify_environment.py", members)
         self.assertFalse(any("__pycache__" in name for name in members))
+        self.assertFalse(any(Path(name).name.startswith("._") for name in members))
 
     def test_payload_requires_a_gzip_tar_code_source_path(self):
         with self.assertRaisesRegex(ValueError, "must be a .tar.gz or .tgz"):

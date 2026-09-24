@@ -18,7 +18,9 @@
 # MAGIC `/Workspace/Shared/air-experiments/wheelhouse-probe`. The directory is required because the
 # MAGIC Jobs API models the parent workspace location separately from the experiment's leaf name;
 # MAGIC it is not a second experiment and it is unrelated to the code archive. `mlflow_run` names
-# MAGIC this individual run inside that experiment.
+# MAGIC this individual run inside that experiment. Before submission, the notebook verifies that
+# MAGIC the parent exists and is a Workspace directory and that the experiment value is only a leaf
+# MAGIC name.
 
 # COMMAND ----------
 dbutils.widgets.text("jobs_environment_file", "", "Generated jobs-environment.json")
@@ -110,6 +112,21 @@ code_source_archive, code_source_component, archive_created = (
 )
 
 client = WorkspaceClient()
+(
+    validated_component,
+    experiment,
+    mlflow_experiment_directory,
+    mlflow_experiment_path,
+) = submitter.validate_submission_inputs(
+    client,
+    code_source_path=code_source_archive,
+    experiment=values["experiment"],
+    mlflow_experiment_directory=values["mlflow_experiment_directory"],
+)
+assert validated_component == code_source_component, (
+    "code archive component changed during validation: "
+    f"{code_source_component!r} != {validated_component!r}"
+)
 usage_policy_id = submitter.resolve_usage_policy_id(
     client,
     usage_policy_name=values["usage_policy_name"],
@@ -120,8 +137,8 @@ payload = submitter.build_payload(
     jobs_environment_file=values["jobs_environment_file"],
     code_source_path=code_source_archive,
     command_path=values["command_path"],
-    experiment=values["experiment"],
-    mlflow_experiment_directory=values["mlflow_experiment_directory"],
+    experiment=experiment,
+    mlflow_experiment_directory=mlflow_experiment_directory,
     mlflow_run=values["mlflow_run"],
     usage_policy_id=usage_policy_id,
     accelerator_type=values["accelerator_type"],
@@ -139,10 +156,7 @@ print(f"CODE_SOURCE_PATH:    <runtime>/{code_source_component}")
 print(f"command:          {values['command_path']}")
 print(f"compute:          {values['accelerator_count']} x {values['accelerator_type']}")
 print(f"usage policy id:  {usage_policy_id}")
-print(
-    "MLflow experiment: "
-    f"{values['mlflow_experiment_directory'].rstrip('/')}/{values['experiment']}"
-)
+print(f"MLflow experiment: {mlflow_experiment_path}")
 
 if values["wait"].lower() == "true":
     exit_code = submitter.submit_and_wait(
