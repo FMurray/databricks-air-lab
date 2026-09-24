@@ -1,0 +1,9 @@
+{
+  "base_environment": "workspace-base-environments/databricks_ai_v5",
+  "dependencies": [
+    "--no-index",
+    "--require-hashes",
+    "--find-links /Volumes/forrest_fdm/airlab/deps/builds/960b07edc9cf3fc7/wheelhouse",
+    "-r /Volumes/forrest_fdm/airlab/deps/builds/960b07edc9cf3fc7/environment.lock"
+  ]
+}

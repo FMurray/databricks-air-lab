@@ -61,10 +61,28 @@ command stdout; inspect the Jobs task state message instead.
 
 Deploy this directory to the workspace and run `run_ai_runtime_job` as a notebook on classic
 compute. Supply the generated `/Volumes/.../jobs-environment.json`, code source, command path, and
-MLflow widget values. Select exactly one `usage_policy_name` or `usage_policy_id`; the notebook
-resolves a name through the workspace policy API and sends the resulting top-level
-`usage_policy_id` in the Jobs request. Policy names and IDs are shown under **Compute > Usage
-policies**, and the notebook identity must have access to the selected policy.
+MLflow widget values. `code_source_path` can be a source directory visible from the notebook or an
+existing `.tar.gz`/`.tgz` archive. For a directory, the notebook creates a sibling archive by
+default; set `code_source_archive_path` to choose another output path. It validates the archive
+before calling Jobs.
+
+The archive must have exactly one enclosing directory:
+
+```text
+wheelhouse-probe/
+  verify_environment.py
+```
+
+An archive with `verify_environment.py` directly at its root fails before user code with
+`could not determine top level component from tarball`. AIR extracts the enclosing directory and
+sets `CODE_SOURCE_PATH` to it, so `run_probe.sh` can execute
+`$CODE_SOURCE_PATH/verify_environment.py`. This is why a directory input is packaged as the
+directory itself, rather than packaging only its contents.
+
+Select exactly one `usage_policy_name` or `usage_policy_id`; the notebook resolves a name through
+the workspace policy API and sends the resulting top-level `usage_policy_id` in the Jobs request.
+Policy names and IDs are shown under **Compute > Usage policies**, and the notebook identity must
+have access to the selected policy.
 
 The MLflow fields have separate roles:
 
@@ -73,7 +91,10 @@ The MLflow fields have separate roles:
 - `mlflow_run` is the display name of this individual run inside the experiment.
 
 For example, directory `/Workspace/Shared/air-experiments` plus experiment `wheelhouse-probe`
-targets `/Workspace/Shared/air-experiments/wheelhouse-probe`.
+targets `/Workspace/Shared/air-experiments/wheelhouse-probe`. The separate directory field is
+required because the native task API stores the parent workspace location and the experiment leaf
+name separately. It controls where the experiment appears in the MLflow workspace tree; it is not
+another experiment and has no relationship to the code source directory.
 
 The notebook invokes `submit_ai_runtime_job.py` with ambient workspace
 authentication, submits `POST /api/2.2/jobs/runs/submit`, and polls the Jobs API. It prints both the
@@ -82,8 +103,9 @@ raises in the notebook even when the workload produced no stdout.
 
 The script is also runnable outside a notebook with Databricks SDK authentication. For example,
 `python submit_ai_runtime_job.py --help` lists its arguments. `--profile f-classic` selects that
-local profile; omit `--profile` in the workspace so ambient authentication is used. Neither path
-invokes the AIR CLI.
+local profile; omit `--profile` in the workspace so ambient authentication is used. The script's
+`--code-source-path` must already be a valid workspace/Volume `.tar.gz` or `.tgz`; automatic
+directory packaging is the notebook runner's convenience. Neither path invokes the AIR CLI.
 
 The build cell reads the widgets at execution time. Its manifest records the exact requirements path
 and SHA-256 digest, so rerunning only that cell after changing a widget cannot reuse stale input.

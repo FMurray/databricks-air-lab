@@ -2,6 +2,7 @@ import contextlib
 import importlib.util
 import io
 import json
+import tarfile
 import tempfile
 import unittest
 from pathlib import Path
@@ -58,6 +59,11 @@ class SubmitAiRuntimeJobTest(unittest.TestCase):
             usage_policy_id="policy-123",
             idempotency_token="stable-token",
         )
+
+    def _temporary_directory(self):
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        return Path(temporary.name)
 
     def test_build_payload_embeds_generated_environment_spec(self):
         payload = self._payload()
@@ -148,6 +154,92 @@ class SubmitAiRuntimeJobTest(unittest.TestCase):
 
         with self.assertRaisesRegex(ValueError, "list of strings"):
             submitter.load_environment_spec(path)
+
+    def test_valid_code_source_archive_has_one_enclosing_directory(self):
+        root = self._temporary_directory()
+        project = root / "wheelhouse-probe"
+        project.mkdir()
+        (project / "verify_environment.py").write_text("print('ok')\n")
+        archive_path = root / "probe.tar.gz"
+        with tarfile.open(archive_path, "w:gz") as archive:
+            archive.add(project, arcname=project.name)
+
+        component = submitter.validate_code_source_archive(archive_path)
+
+        self.assertEqual(component, "wheelhouse-probe")
+
+    def test_code_source_archive_rejects_file_at_root(self):
+        root = self._temporary_directory()
+        source = root / "verify_environment.py"
+        source.write_text("print('ok')\n")
+        archive_path = root / "probe.tgz"
+        with tarfile.open(archive_path, "w:gz") as archive:
+            archive.add(source, arcname=source.name)
+
+        with self.assertRaisesRegex(ValueError, "found file at archive root"):
+            submitter.validate_code_source_archive(archive_path)
+
+    def test_code_source_archive_rejects_multiple_top_level_directories(self):
+        root = self._temporary_directory()
+        archive_path = root / "probe.tar.gz"
+        for name in ("one", "two"):
+            directory = root / name
+            directory.mkdir()
+            (directory / "main.py").write_text("print('ok')\n")
+        with tarfile.open(archive_path, "w:gz") as archive:
+            archive.add(root / "one", arcname="one")
+            archive.add(root / "two", arcname="two")
+
+        with self.assertRaisesRegex(ValueError, "exactly one top-level directory"):
+            submitter.validate_code_source_archive(archive_path)
+
+    def test_code_source_archive_rejects_unsafe_member_path(self):
+        root = self._temporary_directory()
+        archive_path = root / "probe.tgz"
+        data = b"print('unsafe')\n"
+        member = tarfile.TarInfo("../escape.py")
+        member.size = len(data)
+        with tarfile.open(archive_path, "w:gz") as archive:
+            archive.addfile(member, io.BytesIO(data))
+
+        with self.assertRaisesRegex(ValueError, "unsafe member path"):
+            submitter.validate_code_source_archive(archive_path)
+
+    def test_directory_is_packaged_with_its_name_as_archive_root(self):
+        root = self._temporary_directory()
+        project = root / "wheelhouse-probe"
+        project.mkdir()
+        (project / "verify_environment.py").write_text("print('ok')\n")
+        cache = project / "__pycache__"
+        cache.mkdir()
+        (cache / "verify_environment.pyc").write_bytes(b"ignored")
+        output = root / "prepared.tgz"
+
+        archive_path, component, created = submitter.prepare_code_source_archive(
+            project, output
+        )
+
+        self.assertTrue(created)
+        self.assertEqual(Path(archive_path), output)
+        self.assertEqual(component, "wheelhouse-probe")
+        with tarfile.open(output, "r:gz") as archive:
+            members = archive.getnames()
+        self.assertIn("wheelhouse-probe/verify_environment.py", members)
+        self.assertFalse(any("__pycache__" in name for name in members))
+
+    def test_payload_requires_a_gzip_tar_code_source_path(self):
+        with self.assertRaisesRegex(ValueError, "must be a .tar.gz or .tgz"):
+            submitter.build_payload(
+                jobs_environment_file=self._environment_file(
+                    {"environment_version": "5", "dependencies": []}
+                ),
+                code_source_path="/Workspace/Shared/source-directory",
+                command_path="/Workspace/Shared/run_probe.sh",
+                experiment="wheelhouse-probe",
+                mlflow_experiment_directory="/Workspace/Shared",
+                mlflow_run="test-run",
+                usage_policy_id="policy-123",
+            )
 
     def test_submit_and_wait_reports_success_and_uses_raw_jobs_endpoints(self):
         payload = self._payload()

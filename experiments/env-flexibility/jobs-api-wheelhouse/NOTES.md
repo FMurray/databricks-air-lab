@@ -27,7 +27,8 @@ A pass requires all of the following:
 
 ## Pre-flight
 
-Local pre-flight passed on 2026-09-22:
+The original 2026-09-22 pre-flight compiled the scripts, but its archive listing exposed an invalid
+layout that was not recognized at the time:
 
 ```text
 $ python3 -B -m py_compile verify_environment.py
@@ -36,6 +37,21 @@ $ bash -n run_probe.sh
 [exit 0]
 $ tar -tzf jobs-api-wheelhouse-probe.tgz
 verify_environment.py
+```
+
+`verify_environment.py` at the tar root is not a valid native `ai_runtime_task` code source. AIR
+must be able to identify one enclosing component and expects, for example,
+`jobs-api-wheelhouse/verify_environment.py`. A submission with the root-level layout fails before
+user code with `could not determine top level component from tarball`.
+
+The workspace runner now either packages a directory with its directory name preserved or validates
+an existing `.tar.gz`/`.tgz` before submission. Local regression on 2026-09-24:
+
+```text
+$ python3 -B -m unittest experiments/env-flexibility/vendored-wheels/orchestrated/test_submit_ai_runtime_job.py
+...............
+Ran 15 tests in 0.022s
+OK
 ```
 
 The renderer copy matches the canonical acceptance renderer. The Jobs payload is

@@ -8,14 +8,167 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
+import tarfile
 import time
 from pathlib import Path
+from pathlib import PurePosixPath
 from typing import Any, Mapping
+from uuid import uuid4
 
 
 TERMINAL_LIFE_CYCLE_STATES = {"BLOCKED", "INTERNAL_ERROR", "SKIPPED", "TERMINATED"}
 MAX_USAGE_POLICIES_PAGE_SIZE = 1000
+CODE_ARCHIVE_SUFFIXES = (".tar.gz", ".tgz")
+CODE_ARCHIVE_EXCLUDED_NAMES = {".DS_Store", ".git", "__pycache__"}
+
+
+def _has_code_archive_suffix(path: str | Path) -> bool:
+    return str(path).lower().endswith(CODE_ARCHIVE_SUFFIXES)
+
+
+def _safe_archive_parts(name: str, *, field: str = "member") -> tuple[str, ...]:
+    """Return an archive path's parts, rejecting ambiguous or unsafe paths."""
+    trimmed = name.rstrip("/")
+    raw_parts = trimmed.split("/") if trimmed else []
+    if (
+        not raw_parts
+        or name.startswith("/")
+        or "\\" in name
+        or any(part in ("", ".", "..") for part in raw_parts)
+    ):
+        raise ValueError(f"code source archive has unsafe {field} path: {name!r}")
+    parts = PurePosixPath(trimmed).parts
+    if not parts:
+        raise ValueError(f"code source archive has an empty {field} path")
+    return parts
+
+
+def validate_code_source_archive(code_source_archive: str | Path) -> str:
+    """Validate AIR's one-enclosing-directory contract and return that directory name.
+
+    AIR extracts the archive and sets ``CODE_SOURCE_PATH`` to its single top-level component.
+    A tarball containing files directly at its root therefore cannot be launched.
+    """
+    path = Path(code_source_archive)
+    if not _has_code_archive_suffix(path):
+        raise ValueError(
+            "code_source_path must be a .tar.gz or .tgz archive; "
+            "the runner notebook can package a directory"
+        )
+    if not path.is_file():
+        raise ValueError(f"code source archive does not exist or is not a file: {path}")
+
+    components: set[str] = set()
+    root_files: list[str] = []
+    content_members = 0
+    try:
+        with tarfile.open(path, mode="r:gz") as archive:
+            members = archive.getmembers()
+            if not members:
+                raise ValueError(f"code source archive is empty: {path}")
+            for member in members:
+                parts = _safe_archive_parts(member.name)
+                components.add(parts[0])
+                if member.ischr() or member.isblk() or member.isfifo():
+                    raise ValueError(
+                        "code source archive contains an unsupported special file: "
+                        f"{member.name!r}"
+                    )
+                if member.issym() or member.islnk():
+                    _safe_archive_parts(member.linkname, field="link target")
+                if len(parts) == 1 and not member.isdir():
+                    root_files.append(member.name)
+                elif len(parts) > 1 and not member.isdir():
+                    content_members += 1
+    except (tarfile.TarError, OSError) as exc:
+        raise ValueError(f"cannot read code source archive {path}: {exc}") from exc
+
+    if root_files:
+        example = root_files[0]
+        raise ValueError(
+            "code source archive must contain one enclosing top-level directory; "
+            f"found file at archive root: {example!r}. Package the directory itself "
+            f"(for example, project/{PurePosixPath(example).name}), not only its contents"
+        )
+    if len(components) != 1:
+        raise ValueError(
+            "code source archive must contain exactly one top-level directory; "
+            f"found {sorted(components)}"
+        )
+    if content_members == 0:
+        raise ValueError(
+            "code source archive contains no files below its top-level directory"
+        )
+    return next(iter(components))
+
+
+def create_code_source_archive(
+    code_source_directory: str | Path,
+    output_archive: str | Path = "",
+) -> tuple[str, str]:
+    """Package a directory in AIR's required ``directory_name/...`` archive layout."""
+    source = Path(code_source_directory)
+    if not source.is_dir():
+        raise ValueError(f"code source directory does not exist: {source}")
+    if source.name in ("", ".", ".."):
+        raise ValueError(f"code source directory must have a usable name: {source}")
+
+    output = (
+        Path(output_archive)
+        if str(output_archive).strip()
+        else source.with_name(f"{source.name}.tar.gz")
+    )
+    if not _has_code_archive_suffix(output):
+        raise ValueError("code source archive output must end in .tar.gz or .tgz")
+    if not output.parent.is_dir():
+        raise ValueError(f"code source archive parent directory does not exist: {output.parent}")
+
+    source_resolved = source.resolve()
+    output_resolved = output.resolve()
+    if output_resolved == source_resolved or source_resolved in output_resolved.parents:
+        raise ValueError("code source archive output must be outside the source directory")
+
+    temporary = output.with_name(f".{uuid4().hex}.{output.name}")
+
+    def archive_filter(member: tarfile.TarInfo) -> tarfile.TarInfo | None:
+        parts = PurePosixPath(member.name).parts
+        if any(part in CODE_ARCHIVE_EXCLUDED_NAMES for part in parts):
+            return None
+        if member.name.endswith((".pyc", ".pyo")):
+            return None
+        return member
+
+    try:
+        with tarfile.open(temporary, mode="w:gz") as archive:
+            archive.add(source, arcname=source.name, recursive=True, filter=archive_filter)
+        component = validate_code_source_archive(temporary)
+        os.replace(temporary, output)
+    except Exception:
+        try:
+            temporary.unlink()
+        except FileNotFoundError:
+            pass
+        raise
+    return str(output), component
+
+
+def prepare_code_source_archive(
+    code_source_path: str | Path,
+    output_archive: str | Path = "",
+) -> tuple[str, str, bool]:
+    """Validate an archive or package a source directory for notebook submission."""
+    source = Path(code_source_path)
+    if source.is_dir():
+        archive_path, component = create_code_source_archive(source, output_archive)
+        return archive_path, component, True
+    if str(output_archive).strip():
+        raise ValueError(
+            "code_source_archive_path is only used when code_source_path is a directory"
+        )
+    component = validate_code_source_archive(source)
+    return str(source), component, False
 
 
 def load_environment_spec(jobs_environment_file: str | Path) -> dict[str, Any]:
@@ -132,6 +285,11 @@ def build_payload(
     missing = [name for name, value in required.items() if not str(value).strip()]
     if missing:
         raise ValueError(f"required values are blank: {', '.join(missing)}")
+    if not _has_code_archive_suffix(code_source_path):
+        raise ValueError(
+            "code_source_path sent to Jobs must be a .tar.gz or .tgz archive with "
+            "one enclosing top-level directory"
+        )
     if "/" in experiment:
         raise ValueError(
             "experiment must be a name, not a path; put its parent path in "
@@ -335,7 +493,14 @@ def submit_and_wait(client: Any, payload: Mapping[str, Any], poll_seconds: float
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--jobs-environment-file", required=True)
-    parser.add_argument("--code-source-path", required=True)
+    parser.add_argument(
+        "--code-source-path",
+        required=True,
+        help=(
+            "Workspace/Volume .tar.gz or .tgz archive containing exactly one enclosing "
+            "top-level directory"
+        ),
+    )
     parser.add_argument("--command-path", required=True)
     parser.add_argument(
         "--experiment",

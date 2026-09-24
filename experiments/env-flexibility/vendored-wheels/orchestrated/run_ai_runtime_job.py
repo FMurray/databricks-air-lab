@@ -6,15 +6,26 @@
 # MAGIC workspace's ambient authentication and the generated `jobs-environment.json`; it does not
 # MAGIC invoke the AIR CLI.
 # MAGIC
+# MAGIC `code_source_path` may be a workspace/Volume directory or an existing `.tar.gz`/`.tgz`.
+# MAGIC AIR does not accept a directory directly: its archive must contain one enclosing directory
+# MAGIC (`project/script.py`, not `script.py` at the archive root). This notebook packages a source
+# MAGIC directory automatically and validates an existing archive before it submits anything.
+# MAGIC `CODE_SOURCE_PATH` in the task points at that extracted enclosing directory.
+# MAGIC
 # MAGIC The MLflow experiment path is assembled as
 # MAGIC `<mlflow_experiment_directory>/<experiment>`. For example, directory
 # MAGIC `/Workspace/Shared/air-experiments` plus experiment `wheelhouse-probe` creates or reuses
-# MAGIC `/Workspace/Shared/air-experiments/wheelhouse-probe`. `mlflow_run` names this individual
-# MAGIC run inside that experiment.
+# MAGIC `/Workspace/Shared/air-experiments/wheelhouse-probe`. The directory is required because the
+# MAGIC Jobs API models the parent workspace location separately from the experiment's leaf name;
+# MAGIC it is not a second experiment and it is unrelated to the code archive. `mlflow_run` names
+# MAGIC this individual run inside that experiment.
 
 # COMMAND ----------
 dbutils.widgets.text("jobs_environment_file", "", "Generated jobs-environment.json")
-dbutils.widgets.text("code_source_path", "", "Workspace code archive or directory")
+dbutils.widgets.text("code_source_path", "", "Source directory or .tar.gz/.tgz archive")
+dbutils.widgets.text(
+    "code_source_archive_path", "", "Archive output for a directory (blank = sibling .tar.gz)"
+)
 dbutils.widgets.text("command_path", "", "Workspace command/script path")
 dbutils.widgets.text("experiment", "", "MLflow experiment name (not a path)")
 dbutils.widgets.text(
@@ -55,6 +66,7 @@ values = {
     for name in (
         "jobs_environment_file",
         "code_source_path",
+        "code_source_archive_path",
         "command_path",
         "experiment",
         "mlflow_experiment_directory",
@@ -90,6 +102,13 @@ assert values["jobs_environment_file"].startswith("/Volumes/"), (
     "jobs_environment_file must be a /Volumes path emitted by build_wheelhouse"
 )
 
+code_source_archive, code_source_component, archive_created = (
+    submitter.prepare_code_source_archive(
+        values["code_source_path"],
+        values["code_source_archive_path"],
+    )
+)
+
 client = WorkspaceClient()
 usage_policy_id = submitter.resolve_usage_policy_id(
     client,
@@ -99,7 +118,7 @@ usage_policy_id = submitter.resolve_usage_policy_id(
 
 payload = submitter.build_payload(
     jobs_environment_file=values["jobs_environment_file"],
-    code_source_path=values["code_source_path"],
+    code_source_path=code_source_archive,
     command_path=values["command_path"],
     experiment=values["experiment"],
     mlflow_experiment_directory=values["mlflow_experiment_directory"],
@@ -113,7 +132,10 @@ payload = submitter.build_payload(
 )
 
 print(f"environment spec: {values['jobs_environment_file']}")
-print(f"code source:      {values['code_source_path']}")
+print(f"code source input:   {values['code_source_path']}")
+print(f"code source archive: {code_source_archive}")
+print(f"archive action:      {'created' if archive_created else 'validated'}")
+print(f"CODE_SOURCE_PATH:    <runtime>/{code_source_component}")
 print(f"command:          {values['command_path']}")
 print(f"compute:          {values['accelerator_count']} x {values['accelerator_type']}")
 print(f"usage policy id:  {usage_policy_id}")
