@@ -22,11 +22,20 @@ Reserved vs on-demand (source of truth: go/airuntime-field-billing-faq, CONFIRME
 emitted ON_DEMAND_COMPUTE rows (751.3 DBUs) and ZERO reserved-SKU rows account-wide over 30d —
 consistent with pool usage not (yet) stamped as reserved in this PrPr account. Don't equate
 "ran on the pool" with "billed as reserved" until by_capacity_bucket shows reserved rows.
+
+Schema migration (relates to open-q #5): the newer `serverless_gpu` attribution schema has since
+landed. Verified 2026-09-02 on an internal serverless-GPU sandbox account,
+`product_features.serverless_gpu.workload_type` (SGC_WORKLOAD_NOTEBOOK / SGC_WORKLOAD_JOBS) now
+coexists with the older `ai_runtime` rows over the same window (not a clean date cutover — both
+schemas emit concurrently, workspace/flag-gated). The new schema is what carries
+`usage_metadata.notebook_id`, so it is what makes *interactive notebook* attribution possible
+(see notebook_attribution); old `ai_runtime` rows carry identity but no notebook_id.
 """
 
 from __future__ import annotations
 
 import os
+import re
 
 AIR_PREDICATE = """(product_features.ai_runtime.compute_type IS NOT NULL
        OR product_features.serverless_gpu.workload_type IS NOT NULL)"""
@@ -195,6 +204,292 @@ GROUP BY usage_date
 ORDER BY usage_date DESC"""
 
 
+def notebook_attribution(days: int = 30) -> str:
+    """Which *notebooks* ran on serverless GPU, and who ran them.
+
+    Interactive notebook attaches create no job, so the Jobs API and the ai-compute-manager
+    workloads API don't see them — billing does, but only on the newer serverless_gpu schema:
+    workload_type = SGC_WORKLOAD_NOTEBOOK carries usage_metadata.notebook_id, and identity is in
+    identity_metadata. The older ai_runtime schema (ON_DEMAND_COMPUTE) carries identity but NO
+    notebook_id, so confirm the target workspace has cut over before relying on this (module
+    docstring). Verified 2026-09-02 on an internal sandbox account: 648 distinct notebooks across
+    235 principals over 90d, account-wide.
+
+    notebook_id is a numeric object id, not a path — resolve it via notebook_paths_from_audit.
+    """
+    return f"""
+SELECT
+  usage_metadata.notebook_id AS notebook_id,
+  {_IDENTITY} AS principal,
+  COUNT(*) AS rows,
+  SUM(usage_quantity) AS dbus,
+  MIN(usage_date) AS first_seen,
+  MAX(usage_date) AS last_seen
+FROM system.billing.usage
+WHERE product_features.serverless_gpu.workload_type = 'SGC_WORKLOAD_NOTEBOOK'
+  AND usage_metadata.notebook_id IS NOT NULL
+  AND usage_date >= date_sub(current_date(), {_days(days)})
+GROUP BY ALL
+ORDER BY dbus DESC"""
+
+
+def notebook_paths_from_audit(days: int = 30) -> str:
+    """Resolve serverless-GPU notebook_ids to workspace paths + attach identity.
+
+    billing.usage carries only the numeric notebook_id; the attach event in system.access.audit
+    (service_name='notebook', action_name='attachNotebook') carries the path, the user, and the
+    timestamp. Join key: usage.notebook_id == audit.request_params.notebookId. Audit alone can't
+    tell GPU from non-GPU (the attach is generic; clusterId isn't labeled) — the billing side is
+    the GPU filter. Coverage is partial in any fixed window: attachNotebook fires once while usage
+    accrues daily, so widen `days` to raise it. Verified 2026-09-02: 24/230 GPU notebooks resolved
+    to a path in a 30d window. Needs SELECT on system.access.audit in addition to billing.usage.
+    """
+    d = _days(days)
+    return f"""
+WITH gpu_nb AS (
+  SELECT DISTINCT usage_metadata.notebook_id AS notebook_id,
+         {_IDENTITY} AS bill_principal
+  FROM system.billing.usage
+  WHERE product_features.serverless_gpu.workload_type = 'SGC_WORKLOAD_NOTEBOOK'
+    AND usage_metadata.notebook_id IS NOT NULL
+    AND usage_date >= date_sub(current_date(), {d})
+),
+attach AS (
+  SELECT request_params.notebookId AS notebook_id,
+         MAX(request_params.path) AS path,
+         MAX(user_identity.email) AS attach_user,
+         MAX(event_time) AS last_attach
+  FROM system.access.audit
+  WHERE service_name = 'notebook' AND action_name = 'attachNotebook'
+    AND event_date >= date_sub(current_date(), {d})
+  GROUP BY 1
+)
+SELECT g.notebook_id, a.path, g.bill_principal, a.attach_user, a.last_attach
+FROM gpu_nb g
+LEFT JOIN attach a ON g.notebook_id = a.notebook_id
+ORDER BY (a.path IS NULL), g.notebook_id"""
+
+
+def _cluster_id(cluster_id: str) -> str:
+    # Interpolated into SQL (run() has no parameter binding), so allow id characters only.
+    if not re.fullmatch(r"[A-Za-z0-9_-]+", cluster_id or ""):
+        raise ValueError(f"bad cluster_id: {cluster_id!r}")
+    return cluster_id
+
+
+def reserved_notebook_sessions(cluster_id: str, days: int = 30) -> str:
+    """Notebooks attached to a reserved GPU pool, with owner + attached hours (audit-only).
+
+    Port of the field "Attribution for GPU Pools" spec, Milestone 0 (notebooks). Reserved-pool
+    billing rows carry no identity_metadata (module docstring), so this skips billing entirely:
+    it pairs attachNotebook/detachNotebook events for the pool's compute id into sessions,
+    clips them to the window, and takes the createNotebook user as owner.
+
+    UNVERIFIED — not yet run against a reserved pool. Things to check when testing:
+      - audit request_params.clusterId actually equals the pool's compute id;
+      - duration_attached_hours is wall-clock attached time, NOT GPU-hours (no GPU-count
+        multiplier; idle attached time counts);
+      - an attach followed by another attach (no detach between) is dropped, and a session
+        ended without a detachNotebook event runs to the window end;
+      - all_attachment_events / notebook_creators scan full audit history (no event_date bound).
+    """
+    cid = _cluster_id(cluster_id)
+    return f"""
+WITH bounds AS (
+  SELECT
+    current_timestamp() - INTERVAL {_days(days)} DAYS AS window_start,
+    current_timestamp()                    AS window_end
+),
+
+-- All attachment-state changes for the specified compute.
+all_attachment_events AS (
+  SELECT
+    a.workspace_id,
+    a.request_params['notebookId'] AS notebook_id,
+    a.request_params['path']       AS notebook_path,
+    a.request_params['clusterId']  AS cluster_id,
+    a.action_name,
+    a.event_time
+  FROM system.access.audit AS a
+  CROSS JOIN bounds AS b
+  WHERE a.service_name = 'notebook'
+    AND a.action_name IN ('attachNotebook', 'detachNotebook')
+    AND a.request_params['clusterId'] = '{cid}'
+    AND a.request_params['notebookId'] IS NOT NULL
+    AND a.event_time <= b.window_end
+),
+
+-- Include events inside the window plus the last event before it.
+-- The latter determines whether a notebook was already attached when
+-- the window began.
+relevant_events AS (
+  SELECT e.*
+  FROM all_attachment_events AS e
+  CROSS JOIN bounds AS b
+  WHERE e.event_time >= b.window_start
+
+  UNION ALL
+
+  SELECT e.*
+  FROM all_attachment_events AS e
+  CROSS JOIN bounds AS b
+  WHERE e.event_time < b.window_start
+  QUALIFY ROW_NUMBER() OVER (
+    PARTITION BY e.workspace_id, e.notebook_id, e.cluster_id
+    ORDER BY e.event_time DESC
+  ) = 1
+),
+
+ordered_events AS (
+  SELECT
+    *,
+    LEAD(action_name) OVER (
+      PARTITION BY workspace_id, notebook_id, cluster_id
+      ORDER BY event_time
+    ) AS next_action,
+    LEAD(event_time) OVER (
+      PARTITION BY workspace_id, notebook_id, cluster_id
+      ORDER BY event_time
+    ) AS next_event_time
+  FROM relevant_events
+),
+
+-- Construct one interval for each attachment.
+attachment_sessions AS (
+  SELECT
+    e.workspace_id,
+    e.notebook_id,
+    e.notebook_path,
+    GREATEST(e.event_time, b.window_start) AS session_start,
+    LEAST(
+      CASE
+        WHEN e.next_action = 'detachNotebook'
+          THEN e.next_event_time
+        ELSE b.window_end
+      END,
+      b.window_end
+    ) AS session_end
+  FROM ordered_events AS e
+  CROSS JOIN bounds AS b
+  WHERE e.action_name = 'attachNotebook'
+    AND (
+      e.next_action = 'detachNotebook'
+      OR e.next_action IS NULL
+    )
+    AND COALESCE(e.next_event_time, b.window_end) > b.window_start
+),
+
+-- Treat the user who generated createNotebook as the creator/owner.
+notebook_creators AS (
+  SELECT
+    workspace_id,
+    request_params['notebookId'] AS notebook_id,
+    user_identity.email          AS owner
+  FROM system.access.audit
+  WHERE service_name = 'notebook'
+    AND action_name = 'createNotebook'
+    AND request_params['notebookId'] IS NOT NULL
+  QUALIFY ROW_NUMBER() OVER (
+    PARTITION BY workspace_id, request_params['notebookId']
+    ORDER BY event_time
+  ) = 1
+)
+
+SELECT
+  s.notebook_id,
+  COALESCE(
+    c.owner,
+    'UNKNOWN - creation event unavailable'
+  ) AS owner,
+  ROUND(
+    SUM(
+      TIMESTAMPDIFF(SECOND, s.session_start, s.session_end)
+    ) / 3600.0,
+    2
+  ) AS duration_attached_hours
+FROM attachment_sessions AS s
+LEFT JOIN notebook_creators AS c
+  ON  c.workspace_id = s.workspace_id
+  AND c.notebook_id  = s.notebook_id
+WHERE s.session_end > s.session_start
+GROUP BY
+  s.notebook_id,
+  c.owner
+ORDER BY
+  duration_attached_hours DESC"""
+
+
+def reserved_job_runs(cluster_id: str, days: int = 30) -> list[dict]:
+    """Job runs that used a reserved GPU pool, with author + duration (Jobs API, not SQL).
+
+    Port of the same spec's Milestone 0 (jobs): page /api/2.2/jobs/runs/list with expanded
+    tasks and keep runs whose top-level or task cluster_instance.cluster_id is the pool's id.
+    Auth is ambient SDK config (like run()) instead of the spec's DATABRICKS_HOST/TOKEN.
+    Workspace-scoped: covers only the workspace the SDK resolves to.
+
+    UNVERIFIED — not yet run against a reserved pool. Check that reserved-pool runs populate
+    cluster_instance.cluster_id at all (CLI `air run` SUBMIT_RUN runs expose no compute block
+    on the run object — docs/fleet-ops/attribute-usage.md). duration_seconds is wall-clock
+    run time, not GPU-hours.
+    """
+    import time
+    from datetime import datetime, timedelta, timezone
+
+    from databricks.sdk import WorkspaceClient
+
+    target = _cluster_id(cluster_id)
+    api = WorkspaceClient().api_client
+    cutoff_ms = int((datetime.now(timezone.utc) - timedelta(days=_days(days))).timestamp() * 1000)
+    now_ms = int(time.time() * 1000)
+    params = {"start_time_from": cutoff_ms, "expand_tasks": "true", "limit": 25}
+
+    results = []
+    while True:
+        page = api.do("GET", "/api/2.2/jobs/runs/list", query=params)
+
+        for run in page.get("runs", []):
+            cluster_ids = {
+                task.get("cluster_instance", {}).get("cluster_id")
+                for task in run.get("tasks", [])
+            }
+            top_level_cluster = run.get("cluster_instance", {}).get("cluster_id")
+            if top_level_cluster:
+                cluster_ids.add(top_level_cluster)
+            cluster_ids.discard(None)
+
+            if target not in cluster_ids:
+                continue
+
+            # run_duration is the completed run's duration, including repairs.
+            # For an active run, calculate elapsed time.
+            if run.get("end_time", 0):
+                duration_ms = run.get("run_duration", run["end_time"] - run["start_time"])
+            else:
+                duration_ms = now_ms - run["start_time"]
+
+            results.append({
+                "job_id": run.get("job_id"),
+                "run_id": run["run_id"],
+                "run_name": run.get("run_name"),
+                "author": run.get("creator_user_name"),
+                "start_time": datetime.fromtimestamp(
+                    run["start_time"] / 1000, timezone.utc
+                ).isoformat(),
+                "duration_seconds": duration_ms / 1000,
+                "result": (
+                    run.get("status", {}).get("state")
+                    or run.get("state", {}).get("result_state")
+                ),
+            })
+
+        token = page.get("next_page_token")
+        if not token:
+            break
+        params["page_token"] = token
+
+    return results
+
+
 # --- execution helpers (lazy deps) ---------------------------------------------------
 
 
@@ -242,13 +537,29 @@ if __name__ == "__main__":
         "attribution": attribution_coverage,
         "tags": tag_inventory,
         "utilization": reservation_utilization_daily,
+        "notebooks": notebook_attribution,
+        "notebook-paths": notebook_paths_from_audit,
     }
+    # Reserved-pool queries take the pool's compute id; reserved-jobs is a Jobs API call.
+    reserved = {"reserved-notebooks": reserved_notebook_sessions, "reserved-jobs": reserved_job_runs}
     ap = argparse.ArgumentParser(description="Run an AIR billing query")
-    ap.add_argument("query", choices=builders)
+    ap.add_argument("query", choices=[*builders, *reserved])
     ap.add_argument("--days", type=int, default=30)
+    ap.add_argument("--cluster-id", help="reserved GPU pool compute id (reserved-* queries)")
     ap.add_argument("--sql-only", action="store_true", help="print SQL, don't execute")
     args = ap.parse_args()
-    stmt = builders[args.query](args.days)
+    if args.query in reserved and not args.cluster_id:
+        ap.error(f"{args.query} requires --cluster-id")
+    if args.query == "reserved-jobs":
+        import pandas as pd
+
+        print(f"-- {workspace_host()}")
+        print(pd.DataFrame(reserved_job_runs(args.cluster_id, args.days)).to_string(index=False))
+        raise SystemExit
+    if args.query == "reserved-notebooks":
+        stmt = reserved_notebook_sessions(args.cluster_id, args.days)
+    else:
+        stmt = builders[args.query](args.days)
     if args.sql_only:
         print(stmt)
     else:

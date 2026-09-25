@@ -6,6 +6,7 @@ requires-python = ">=3.10"
 dependencies = [
   "typer>=0.12",   # CLI framework (brings rich as a dep, but pin it explicitly below too)
   "rich>=13",      # pretty tables / live poll / colored verdicts
+  "mlflow>=3.15.2",
 ]                    # the run/status verbs still shell out to the `air` + `databricks` CLIs
 
 [project.scripts]
@@ -32,4 +33,9 @@ only-include = [
   "utils/verification/uat_tui.py",
   "utils/verification/results/__init__.py",
   "utils/verification/results/registry.py",
+]
+
+[dependency-groups]
+dev = [
+    "ruff>=0.16.8",
 ]
