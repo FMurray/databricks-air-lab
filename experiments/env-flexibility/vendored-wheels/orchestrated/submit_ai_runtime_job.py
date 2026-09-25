@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import argparse
 import contextlib
+import io
 import json
 import os
 import sys
@@ -23,6 +24,7 @@ TERMINAL_LIFE_CYCLE_STATES = {"BLOCKED", "INTERNAL_ERROR", "SKIPPED", "TERMINATE
 MAX_USAGE_POLICIES_PAGE_SIZE = 1000
 CODE_ARCHIVE_SUFFIXES = (".tar.gz", ".tgz")
 CODE_ARCHIVE_EXCLUDED_NAMES = {".DS_Store", ".git", "__pycache__"}
+REQUIREMENTS_YAML_NAME = "requirements.yaml"
 
 
 def _has_code_archive_suffix(path: str | Path) -> bool:
@@ -49,6 +51,8 @@ def _safe_archive_parts(name: str, *, field: str = "member") -> tuple[str, ...]:
 def _archive_top_level_component(
     archive: tarfile.TarFile,
     source_label: str,
+    *,
+    required_members: tuple[str, ...] = (),
 ) -> str:
     components: set[str] = set()
     root_files: list[str] = []
@@ -94,14 +98,32 @@ def _archive_top_level_component(
         raise ValueError(
             "code source archive contains no files below its top-level directory"
         )
-    return next(iter(components))
+    component = next(iter(components))
+    if required_members:
+        names = {member.name.rstrip("/") for member in members}
+        for required in required_members:
+            parts = _safe_archive_parts(required, field="required member")
+            expected = "/".join((component, *parts))
+            if expected not in names:
+                raise ValueError(
+                    f"code source archive must contain {required!r} colocated with the "
+                    f"training script at {expected!r}; the AI Runtime launcher installs "
+                    "workload dependencies from that file. Package the source directory with "
+                    "the runner so it stages requirements.yaml, or add it to the archive"
+                )
+    return component
 
 
-def validate_code_source_archive(code_source_archive: str | Path) -> str:
+def validate_code_source_archive(
+    code_source_archive: str | Path,
+    *,
+    required_members: tuple[str, ...] = (),
+) -> str:
     """Validate AIR's one-enclosing-directory contract and return that directory name.
 
     AIR extracts the archive and sets ``CODE_SOURCE_PATH`` to its single top-level component.
-    A tarball containing files directly at its root therefore cannot be launched.
+    A tarball containing files directly at its root therefore cannot be launched. When
+    ``required_members`` is set, each named file must exist under that component.
     """
     path = Path(code_source_archive)
     if not _has_code_archive_suffix(path):
@@ -114,12 +136,19 @@ def validate_code_source_archive(code_source_archive: str | Path) -> str:
 
     try:
         with tarfile.open(path, mode="r:gz") as archive:
-            return _archive_top_level_component(archive, str(path))
+            return _archive_top_level_component(
+                archive, str(path), required_members=required_members
+            )
     except (tarfile.TarError, OSError) as exc:
         raise ValueError(f"cannot read code source archive {path}: {exc}") from exc
 
 
-def validate_code_source_for_submission(client: Any, code_source_path: str | Path) -> str:
+def validate_code_source_for_submission(
+    client: Any,
+    code_source_path: str | Path,
+    *,
+    required_members: tuple[str, ...] = (),
+) -> str:
     """Validate a local, Workspace, or Volume archive before calling Jobs."""
     path_text = str(code_source_path)
     if not _has_code_archive_suffix(path_text):
@@ -131,7 +160,7 @@ def validate_code_source_for_submission(client: Any, code_source_path: str | Pat
 
     local_path = Path(path_text)
     if local_path.is_file():
-        return validate_code_source_archive(local_path)
+        return validate_code_source_archive(local_path, required_members=required_members)
 
     try:
         if path_text.startswith("/Workspace/"):
@@ -157,7 +186,9 @@ def validate_code_source_for_submission(client: Any, code_source_path: str | Pat
     try:
         with contextlib.closing(stream):
             with tarfile.open(fileobj=stream, mode="r:gz") as archive:
-                return _archive_top_level_component(archive, path_text)
+                return _archive_top_level_component(
+                    archive, path_text, required_members=required_members
+                )
     except (tarfile.TarError, OSError) as exc:
         raise ValueError(f"cannot read code source archive {path_text}: {exc}") from exc
 
@@ -240,20 +271,86 @@ def validate_submission_inputs(
     code_source_path: str | Path,
     experiment: str,
     mlflow_experiment_directory: str,
+    require_requirements_yaml: bool = False,
 ) -> tuple[str, str, str, str]:
-    """Run all remote-aware preflight checks required before a Jobs submission."""
-    component = validate_code_source_for_submission(client, code_source_path)
+    """Run all remote-aware preflight checks required before a Jobs submission.
+
+    Set ``require_requirements_yaml`` to reject an archive that does not carry a
+    ``requirements.yaml`` colocated with the training script — the file the AI Runtime
+    launcher installs workload dependencies from for a native ``ai_runtime_task``.
+    """
+    required_members = (REQUIREMENTS_YAML_NAME,) if require_requirements_yaml else ()
+    component = validate_code_source_for_submission(
+        client, code_source_path, required_members=required_members
+    )
     experiment_name, directory, full_path = validate_mlflow_experiment_parent(
         client, experiment, mlflow_experiment_directory
     )
     return component, experiment_name, directory, full_path
 
 
+def render_requirements_yaml(environment_spec: Mapping[str, Any]) -> str:
+    """Render an AIR ``requirements.yaml`` from a generated Jobs environment spec.
+
+    A native ``ai_runtime_task`` launcher installs workload dependencies from a
+    ``requirements.yaml`` colocated with the training script, not from the Jobs
+    ``environments[].spec``. This converts that spec into the CLI-style file: its base
+    selector becomes ``version`` and its dependency list carries over unchanged.
+    """
+    base_environment = str(environment_spec.get("base_environment") or "").strip()
+    environment_version = str(environment_spec.get("environment_version") or "").strip()
+    if bool(base_environment) == bool(environment_version):
+        raise ValueError(
+            "environment spec must set exactly one of base_environment or environment_version"
+        )
+    # base_environment is a fully qualified id (workspace-base-environments/databricks_ai_v5);
+    # requirements.yaml keys the AI base by its bare name, standard by its numeric version.
+    version = base_environment.rsplit("/", 1)[-1] if base_environment else environment_version
+    if not version:
+        raise ValueError("environment spec selector resolved to an empty version")
+
+    dependencies = environment_spec.get("dependencies", [])
+    if not isinstance(dependencies, list) or not all(
+        isinstance(dependency, str) for dependency in dependencies
+    ):
+        raise ValueError("environment spec dependencies must be a list of strings")
+
+    lines = [f"version: {json.dumps(version)}"]
+    if dependencies:
+        lines.append("dependencies:")
+        lines.extend(f"  - {json.dumps(dependency)}" for dependency in dependencies)
+    else:
+        lines.append("dependencies: []")
+    return "\n".join(lines) + "\n"
+
+
+def _normalize_staged_files(
+    component: str,
+    staged_files: Mapping[str, str] | None,
+) -> dict[str, bytes]:
+    """Map ``{relative-name: text}`` staged files to ``{component/parts: bytes}`` members."""
+    normalized: dict[str, bytes] = {}
+    for relative_name, content in (staged_files or {}).items():
+        if not isinstance(content, str):
+            raise ValueError(f"staged file content must be text: {relative_name!r}")
+        parts = _safe_archive_parts(relative_name, field="staged file")
+        arcname = "/".join((component, *parts))
+        normalized[arcname] = content.encode("utf-8")
+    return normalized
+
+
 def create_code_source_archive(
     code_source_directory: str | Path,
     output_archive: str | Path = "",
+    *,
+    staged_files: Mapping[str, str] | None = None,
 ) -> tuple[str, str]:
-    """Package a directory in AIR's required ``directory_name/...`` archive layout."""
+    """Package a directory in AIR's required ``directory_name/...`` archive layout.
+
+    ``staged_files`` maps a relative path to text written into the archive under the
+    enclosing directory (for example ``requirements.yaml`` next to the training script).
+    A staged file replaces any same-named file already in the source directory.
+    """
     source = Path(code_source_directory)
     if not source.is_dir():
         raise ValueError(f"code source directory does not exist: {source}")
@@ -275,6 +372,7 @@ def create_code_source_archive(
     if output_resolved == source_resolved or source_resolved in output_resolved.parents:
         raise ValueError("code source archive output must be outside the source directory")
 
+    staged = _normalize_staged_files(source.name, staged_files)
     temporary = output.with_name(f".{uuid4().hex}.{output.name}")
 
     def archive_filter(member: tarfile.TarInfo) -> tarfile.TarInfo | None:
@@ -285,12 +383,22 @@ def create_code_source_archive(
             return None
         if member.name.endswith((".pyc", ".pyo")):
             return None
+        if member.name in staged:  # a staged file replaces the source's copy
+            return None
         return member
 
     try:
         with tarfile.open(temporary, mode="w:gz") as archive:
             archive.add(source, arcname=source.name, recursive=True, filter=archive_filter)
-        component = validate_code_source_archive(temporary)
+            for arcname, data in staged.items():
+                info = tarfile.TarInfo(name=arcname)
+                info.size = len(data)
+                info.mtime = int(time.time())
+                info.mode = 0o644
+                archive.addfile(info, io.BytesIO(data))
+        component = validate_code_source_archive(
+            temporary, required_members=tuple(staged_files or ())
+        )
         os.replace(temporary, output)
     except Exception:
         try:
@@ -304,17 +412,28 @@ def create_code_source_archive(
 def prepare_code_source_archive(
     code_source_path: str | Path,
     output_archive: str | Path = "",
+    *,
+    staged_files: Mapping[str, str] | None = None,
 ) -> tuple[str, str, bool]:
-    """Validate an archive or package a source directory for notebook submission."""
+    """Validate an archive or package a source directory for notebook submission.
+
+    ``staged_files`` are written next to the training script when a directory is packaged.
+    An existing archive cannot be modified here, so those files must already be present in
+    it; otherwise this raises before submission.
+    """
     source = Path(code_source_path)
     if source.is_dir():
-        archive_path, component = create_code_source_archive(source, output_archive)
+        archive_path, component = create_code_source_archive(
+            source, output_archive, staged_files=staged_files
+        )
         return archive_path, component, True
     if str(output_archive).strip():
         raise ValueError(
             "code_source_archive_path is only used when code_source_path is a directory"
         )
-    component = validate_code_source_archive(source)
+    component = validate_code_source_archive(
+        source, required_members=tuple(staged_files or ())
+    )
     return str(source), component, False
 
 
@@ -680,12 +799,24 @@ def main(argv: list[str] | None = None) -> int:
     from databricks.sdk import WorkspaceClient
 
     client = WorkspaceClient(profile=args.profile) if args.profile else WorkspaceClient()
+
+    # The AI Runtime launcher installs workload dependencies from a requirements.yaml
+    # colocated with the training script. This standalone path takes an already-built
+    # archive, so it cannot stage the file; show what it must contain and require it.
+    environment_spec = load_environment_spec(args.jobs_environment_file)
+    requirements_yaml = render_requirements_yaml(environment_spec)
+    print(
+        f"requirements.yaml the launcher expects at <CODE_SOURCE_PATH>/{REQUIREMENTS_YAML_NAME}:"
+    )
+    print(requirements_yaml.rstrip("\n"))
+
     component, experiment, experiment_directory, experiment_path = (
         validate_submission_inputs(
             client,
             code_source_path=args.code_source_path,
             experiment=args.experiment,
             mlflow_experiment_directory=args.mlflow_experiment_directory,
+            require_requirements_yaml=True,
         )
     )
     usage_policy_id = resolve_usage_policy_id(

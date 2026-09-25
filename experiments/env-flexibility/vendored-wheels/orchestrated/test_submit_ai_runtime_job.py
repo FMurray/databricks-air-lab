@@ -353,6 +353,111 @@ class SubmitAiRuntimeJobTest(unittest.TestCase):
         self.assertFalse(any("__pycache__" in name for name in members))
         self.assertFalse(any(Path(name).name.startswith("._") for name in members))
 
+    def test_render_requirements_yaml_keys_ai_base_by_bare_name(self):
+        text = submitter.render_requirements_yaml(
+            {
+                "base_environment": "workspace-base-environments/databricks_ai_v5",
+                "dependencies": [
+                    "--no-index",
+                    "-r /Volumes/catalog/schema/wheels/builds/abc/environment.lock",
+                ],
+            }
+        )
+
+        self.assertIn('version: "databricks_ai_v5"', text)
+        self.assertIn('  - "--no-index"', text)
+        self.assertIn(
+            '  - "-r /Volumes/catalog/schema/wheels/builds/abc/environment.lock"', text
+        )
+
+    def test_render_requirements_yaml_keys_standard_by_environment_version(self):
+        text = submitter.render_requirements_yaml(
+            {"environment_version": "5", "dependencies": []}
+        )
+
+        self.assertIn('version: "5"', text)
+        self.assertIn("dependencies: []", text)
+
+    def test_render_requirements_yaml_requires_exactly_one_selector(self):
+        for spec in ({"dependencies": []}, {
+            "base_environment": "workspace-base-environments/databricks_ai_v5",
+            "environment_version": "5",
+            "dependencies": [],
+        }):
+            with self.subTest(spec=spec):
+                with self.assertRaisesRegex(ValueError, "exactly one"):
+                    submitter.render_requirements_yaml(spec)
+
+    def test_directory_packaging_stages_requirements_yaml_by_the_script(self):
+        root = self._temporary_directory()
+        project = root / "wheelhouse-probe"
+        project.mkdir()
+        (project / "verify_environment.py").write_text("print('ok')\n")
+        output = root / "prepared.tgz"
+        requirements_yaml = 'version: "databricks_ai_v5"\ndependencies:\n  - "--no-index"\n'
+
+        archive_path, component, created = submitter.prepare_code_source_archive(
+            project,
+            output,
+            staged_files={submitter.REQUIREMENTS_YAML_NAME: requirements_yaml},
+        )
+
+        self.assertTrue(created)
+        self.assertEqual(component, "wheelhouse-probe")
+        with tarfile.open(output, "r:gz") as archive:
+            members = archive.getnames()
+            staged = archive.extractfile(
+                "wheelhouse-probe/requirements.yaml"
+            ).read().decode()
+        self.assertIn("wheelhouse-probe/verify_environment.py", members)
+        self.assertIn("wheelhouse-probe/requirements.yaml", members)
+        self.assertEqual(staged, requirements_yaml)
+
+    def test_staged_requirements_yaml_replaces_a_source_copy(self):
+        root = self._temporary_directory()
+        project = root / "wheelhouse-probe"
+        project.mkdir()
+        (project / "verify_environment.py").write_text("print('ok')\n")
+        (project / "requirements.yaml").write_text('version: "stale"\n')
+        output = root / "prepared.tgz"
+        staged = 'version: "databricks_ai_v5"\ndependencies: []\n'
+
+        submitter.prepare_code_source_archive(
+            project, output, staged_files={submitter.REQUIREMENTS_YAML_NAME: staged}
+        )
+
+        with tarfile.open(output, "r:gz") as archive:
+            names = archive.getnames()
+            contents = archive.extractfile(
+                "wheelhouse-probe/requirements.yaml"
+            ).read().decode()
+        self.assertEqual(names.count("wheelhouse-probe/requirements.yaml"), 1)
+        self.assertEqual(contents, staged)
+
+    def test_validation_requires_colocated_requirements_yaml(self):
+        archive_path = self._valid_code_archive()  # verify_environment.py only
+
+        with self.assertRaisesRegex(ValueError, "must contain 'requirements.yaml'"):
+            submitter.validate_code_source_archive(
+                archive_path, required_members=(submitter.REQUIREMENTS_YAML_NAME,)
+            )
+
+    def test_validation_accepts_archive_with_colocated_requirements_yaml(self):
+        root = self._temporary_directory()
+        project = root / "wheelhouse-probe"
+        project.mkdir()
+        (project / "verify_environment.py").write_text("print('ok')\n")
+        (project / "requirements.yaml").write_text('version: "5"\n')
+        archive_path = root / "probe.tar.gz"
+        with tarfile.open(archive_path, "w:gz") as archive:
+            archive.add(project, arcname=project.name)
+
+        component = submitter.validate_code_source_archive(
+            archive_path, required_members=(submitter.REQUIREMENTS_YAML_NAME,)
+        )
+
+        self.assertEqual(component, "wheelhouse-probe")
+
     def test_payload_requires_a_gzip_tar_code_source_path(self):
         with self.assertRaisesRegex(ValueError, "must be a .tar.gz or .tgz"):
             submitter.build_payload(

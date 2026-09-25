@@ -104,10 +104,17 @@ assert values["jobs_environment_file"].startswith("/Volumes/"), (
     "jobs_environment_file must be a /Volumes path emitted by build_wheelhouse"
 )
 
+# The AI Runtime launcher installs workload dependencies from a requirements.yaml colocated
+# with the training script, not from the Jobs environments[].spec. Render it from the generated
+# jobs-environment.json and stage it into the code archive next to the script.
+environment_spec = submitter.load_environment_spec(values["jobs_environment_file"])
+requirements_yaml = submitter.render_requirements_yaml(environment_spec)
+
 code_source_archive, code_source_component, archive_created = (
     submitter.prepare_code_source_archive(
         values["code_source_path"],
         values["code_source_archive_path"],
+        staged_files={submitter.REQUIREMENTS_YAML_NAME: requirements_yaml},
     )
 )
 
@@ -122,6 +129,7 @@ client = WorkspaceClient()
     code_source_path=code_source_archive,
     experiment=values["experiment"],
     mlflow_experiment_directory=values["mlflow_experiment_directory"],
+    require_requirements_yaml=True,
 )
 assert validated_component == code_source_component, (
     "code archive component changed during validation: "
@@ -153,6 +161,10 @@ print(f"code source input:   {values['code_source_path']}")
 print(f"code source archive: {code_source_archive}")
 print(f"archive action:      {'created' if archive_created else 'validated'}")
 print(f"CODE_SOURCE_PATH:    <runtime>/{code_source_component}")
+print(
+    f"requirements.yaml:   <runtime>/{code_source_component}/{submitter.REQUIREMENTS_YAML_NAME}"
+    f" ({'staged' if archive_created else 'present in archive'})"
+)
 print(f"command:          {values['command_path']}")
 print(f"compute:          {values['accelerator_count']} x {values['accelerator_type']}")
 print(f"usage policy id:  {usage_policy_id}")
