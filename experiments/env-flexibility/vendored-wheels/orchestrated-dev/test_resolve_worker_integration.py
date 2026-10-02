@@ -18,8 +18,10 @@ from pathlib import Path
 
 
 HERE = Path(__file__).resolve().parent
+# The runnable modules live in the sibling minimal bundle; tests stay out of it.
+BUNDLE = HERE.parent / "orchestrated"
 SPEC = importlib.util.spec_from_file_location(
-    "air_wheelhouse_integration_resolver", HERE / "resolve_worker.py"
+    "air_wheelhouse_integration_resolver", BUNDLE / "resolve_worker.py"
 )
 resolver = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(resolver)

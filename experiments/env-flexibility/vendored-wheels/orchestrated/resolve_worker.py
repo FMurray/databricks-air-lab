@@ -265,13 +265,30 @@ def _environment_spec(target, wheelhouse, environment_lock, has_delta):
 
 
 def _environment_yaml(target, wheelhouse, environment_lock, has_delta):
-    spec = _environment_spec(target, wheelhouse, environment_lock, has_delta)
+    return _render_environment_yaml(
+        _environment_spec(target, wheelhouse, environment_lock, has_delta)
+    )
+
+
+def _render_environment_yaml(spec):
+    """Render a Jobs environment spec as the serverless ``environment.yaml`` it mirrors."""
     selector = "base_environment" if "base_environment" in spec else "environment_version"
     return (
         f"{selector}: {json.dumps(spec[selector])}\n"
         + ("dependencies: []\n" if not spec["dependencies"] else "dependencies:\n")
         + "".join(f"  - {json.dumps(item)}\n" for item in spec["dependencies"])
     )
+
+
+def _hashed_lock_text(packages, records_by_key):
+    lines = []
+    for name, version in sorted(packages.items()):
+        hashes = " ".join(
+            f"--hash=sha256:{item['sha256']}"
+            for item in records_by_key[(name, Version(version))]
+        )
+        lines.append(f"{name}=={version} {hashes}".rstrip())
+    return "\n".join(lines) + ("\n" if lines else "")
 
 
 def _failure(volume, request_id, stage, error, **details):
@@ -419,31 +436,12 @@ def build_wheelhouse(requirements_file, wheelhouse_volume, profile_dir, index_ur
     records_by_key = defaultdict(list)
     for record in records:
         records_by_key[(record["name"], Version(record["version"]))].append(record)
-    delta_lines = []
-    for name, version in sorted(delta.items()):
-        hashes = " ".join(
-            f"--hash=sha256:{item['sha256']}"
-            for item in records_by_key[(name, Version(version))]
-        )
-        delta_lines.append(f"{name}=={version} {hashes}".rstrip())
-    delta_lock.write_text("\n".join(delta_lines) + ("\n" if delta_lines else ""))
-    environment_lines = []
-    for name, version in sorted(packages_to_download.items()):
-        hashes = " ".join(
-            f"--hash=sha256:{item['sha256']}"
-            for item in records_by_key[(name, Version(version))]
-        )
-        environment_lines.append(f"{name}=={version} {hashes}".rstrip())
-    environment_lock.write_text(
-        "\n".join(environment_lines) + ("\n" if environment_lines else "")
-    )
-    environment_file.write_text(
-        _environment_yaml(target, wheelhouse, environment_lock, bool(delta))
-    )
-    _write_json(
-        jobs_environment_file,
-        _environment_spec(target, wheelhouse, environment_lock, bool(delta)),
-    )
+    delta_lock.write_text(_hashed_lock_text(delta, records_by_key))
+    environment_lock.write_text(_hashed_lock_text(packages_to_download, records_by_key))
+    # One spec feeds both outputs so environment.yaml and jobs-environment.json cannot diverge.
+    environment_spec = _environment_spec(target, wheelhouse, environment_lock, bool(delta))
+    environment_file.write_text(_render_environment_yaml(environment_spec))
+    _write_json(jobs_environment_file, environment_spec)
     shutil.copy2(requirements, build / "requirements.txt")
 
     manifest = {

@@ -116,3 +116,22 @@ is archived locally as run `ea23f3540e024720ad0a8ce1e15cda50` in experiment
 |---|---|
 | Jobs accepted the supported managed-base shape | returned run JSON persists `workspace-base-environments/databricks_ai_v5` and all three inline offline dependency entries |
 | The package environment constructed and activated | **BLOCKED** — capacity wait ended in `TIMEDOUT` before launcher/user code |
+
+## Probe update (2026-10-01): expectations come from the run itself
+
+Criteria 3 and 4 no longer use constants (`mlflow==3.16.0`, `pydantic==2.13.5`,
+`scikit-learn==1.9.1`, "one A10"). `verify_environment.py` reads the
+`mlflow.databricks.jobRunID` / `taskRunID` tags that AI Training sets on the launcher-owned MLflow
+run, fetches that run with `jobs/runs/get`, and derives:
+
+- **Packages:** every exact pin in the task's `environments[].spec.dependencies`, following
+  `-r <environment.lock>`, must be the installed version in the interpreter the launcher installed
+  into (`run_probe.sh` now execs `python3`).
+- **Accelerators:** the node must see `N x <model>` from `accelerator_type` (`GPU_<N>x<model>`),
+  and `NUM_NODES` must equal `accelerator_count / N`.
+
+If the run's Jobs record cannot be read while running as a task (`MLFLOW_RUN_ID` set), the probe
+could not establish what it exists to verify, so both checks report `FAIL` (verdict `NOT ACCEPTED`,
+non-zero exit) and the sentinel is not printed — a broken environment must not pass the Jobs task
+green. Only a local run with no `MLFLOW_RUN_ID` reports `BLOCKED` (nothing to verify against), which
+keeps the verdict at `ACCEPTED WITH CAVEATS`.
