@@ -7,10 +7,11 @@ models. AI Runtime task support can reach the REST API before it reaches an inst
 from __future__ import annotations
 
 import argparse
+import base64
 import contextlib
-import io
 import json
 import os
+import re
 import sys
 import tarfile
 import time
@@ -20,11 +21,43 @@ from typing import Any, Mapping
 from uuid import uuid4
 
 
-TERMINAL_LIFE_CYCLE_STATES = {"BLOCKED", "INTERNAL_ERROR", "SKIPPED", "TERMINATED"}
+# BLOCKED is not terminal: Jobs moves a blocked run back to PENDING.
+TERMINAL_LIFE_CYCLE_STATES = {"INTERNAL_ERROR", "SKIPPED", "TERMINATED"}
 MAX_USAGE_POLICIES_PAGE_SIZE = 1000
 CODE_ARCHIVE_SUFFIXES = (".tar.gz", ".tgz")
 CODE_ARCHIVE_EXCLUDED_NAMES = {".DS_Store", ".git", "__pycache__"}
 REQUIREMENTS_YAML_NAME = "requirements.yaml"
+HYPERPARAMETERS_YAML_NAME = "hyperparameters.yaml"
+# Under the caller's /Workspace/Users/<name>; mirrors the AIR CLI's .air/cli_launch layout.
+DEFAULT_LAUNCH_SUBDIRECTORY = ".air/jobs_launch"
+# Jobs parameter names allow letters, digits, '_', '-', and '.'.
+WORKLOAD_PARAMETER_NAME_PATTERN = re.compile(r"^[A-Za-z_][A-Za-z0-9_.-]*$")
+# Widgets of run_ai_runtime_job with their defaults; these are also the persisted launcher job's
+# parameters. Keep in sync with the notebook's widget cell (a test compares them). A named
+# workload parameter cannot reuse one of these names. The submission's idempotency token is not
+# here: it is always auto-generated per run (see build_payload). Only the standalone script exposes
+# an --idempotency-token override, for CI cross-invocation retry.
+LAUNCHER_PARAMETER_DEFAULTS = {
+    "jobs_environment_file": "",
+    "code_source_path": "",
+    "code_source_archive_path": "",
+    "command_path": "",
+    "experiment": "",
+    "mlflow_experiment_directory": "",
+    "mlflow_run": "",
+    "usage_policy_name": "",
+    "usage_policy_id": "",
+    "accelerator_type": "GPU_1xA10",
+    "accelerator_count": "1",
+    "timeout_seconds": "600",
+    "task_key": "training",
+    "wait": "true",
+    "poll_seconds": "10",
+    "workload_parameters": "",
+    "workload_parameter_names": "",
+    "launch_root": "",
+}
+LAUNCHER_PARAMETER_NAMES = tuple(LAUNCHER_PARAMETER_DEFAULTS)
 
 
 def _has_code_archive_suffix(path: str | Path) -> bool:
@@ -48,12 +81,7 @@ def _safe_archive_parts(name: str, *, field: str = "member") -> tuple[str, ...]:
     return parts
 
 
-def _archive_top_level_component(
-    archive: tarfile.TarFile,
-    source_label: str,
-    *,
-    required_members: tuple[str, ...] = (),
-) -> str:
+def _archive_top_level_component(archive: tarfile.TarFile, source_label: str) -> str:
     components: set[str] = set()
     root_files: list[str] = []
     content_members = 0
@@ -98,32 +126,14 @@ def _archive_top_level_component(
         raise ValueError(
             "code source archive contains no files below its top-level directory"
         )
-    component = next(iter(components))
-    if required_members:
-        names = {member.name.rstrip("/") for member in members}
-        for required in required_members:
-            parts = _safe_archive_parts(required, field="required member")
-            expected = "/".join((component, *parts))
-            if expected not in names:
-                raise ValueError(
-                    f"code source archive must contain {required!r} colocated with the "
-                    f"training script at {expected!r}; the AI Runtime launcher installs "
-                    "workload dependencies from that file. Package the source directory with "
-                    "the runner so it stages requirements.yaml, or add it to the archive"
-                )
-    return component
+    return next(iter(components))
 
 
-def validate_code_source_archive(
-    code_source_archive: str | Path,
-    *,
-    required_members: tuple[str, ...] = (),
-) -> str:
+def validate_code_source_archive(code_source_archive: str | Path) -> str:
     """Validate AIR's one-enclosing-directory contract and return that directory name.
 
     AIR extracts the archive and sets ``CODE_SOURCE_PATH`` to its single top-level component.
-    A tarball containing files directly at its root therefore cannot be launched. When
-    ``required_members`` is set, each named file must exist under that component.
+    A tarball containing files directly at its root therefore cannot be launched.
     """
     path = Path(code_source_archive)
     if not _has_code_archive_suffix(path):
@@ -136,19 +146,12 @@ def validate_code_source_archive(
 
     try:
         with tarfile.open(path, mode="r:gz") as archive:
-            return _archive_top_level_component(
-                archive, str(path), required_members=required_members
-            )
+            return _archive_top_level_component(archive, str(path))
     except (tarfile.TarError, OSError) as exc:
         raise ValueError(f"cannot read code source archive {path}: {exc}") from exc
 
 
-def validate_code_source_for_submission(
-    client: Any,
-    code_source_path: str | Path,
-    *,
-    required_members: tuple[str, ...] = (),
-) -> str:
+def validate_code_source_for_submission(client: Any, code_source_path: str | Path) -> str:
     """Validate a local, Workspace, or Volume archive before calling Jobs."""
     path_text = str(code_source_path)
     if not _has_code_archive_suffix(path_text):
@@ -160,7 +163,7 @@ def validate_code_source_for_submission(
 
     local_path = Path(path_text)
     if local_path.is_file():
-        return validate_code_source_archive(local_path, required_members=required_members)
+        return validate_code_source_archive(local_path)
 
     try:
         if path_text.startswith("/Workspace/"):
@@ -186,9 +189,7 @@ def validate_code_source_for_submission(
     try:
         with contextlib.closing(stream):
             with tarfile.open(fileobj=stream, mode="r:gz") as archive:
-                return _archive_top_level_component(
-                    archive, path_text, required_members=required_members
-                )
+                return _archive_top_level_component(archive, path_text)
     except (tarfile.TarError, OSError) as exc:
         raise ValueError(f"cannot read code source archive {path_text}: {exc}") from exc
 
@@ -271,86 +272,208 @@ def validate_submission_inputs(
     code_source_path: str | Path,
     experiment: str,
     mlflow_experiment_directory: str,
-    require_requirements_yaml: bool = False,
 ) -> tuple[str, str, str, str]:
-    """Run all remote-aware preflight checks required before a Jobs submission.
-
-    Set ``require_requirements_yaml`` to reject an archive that does not carry a
-    ``requirements.yaml`` colocated with the training script — the file the AI Runtime
-    launcher installs workload dependencies from for a native ``ai_runtime_task``.
-    """
-    required_members = (REQUIREMENTS_YAML_NAME,) if require_requirements_yaml else ()
-    component = validate_code_source_for_submission(
-        client, code_source_path, required_members=required_members
-    )
+    """Run all remote-aware preflight checks required before a Jobs submission."""
+    component = validate_code_source_for_submission(client, code_source_path)
     experiment_name, directory, full_path = validate_mlflow_experiment_parent(
         client, experiment, mlflow_experiment_directory
     )
     return component, experiment_name, directory, full_path
 
 
-def render_requirements_yaml(environment_spec: Mapping[str, Any]) -> str:
-    """Render an AIR ``requirements.yaml`` from a generated Jobs environment spec.
+def warn_on_colocated_requirements_yaml(client: Any, command_path: str) -> bool:
+    """Note a ``requirements.yaml`` next to ``command_path``; return whether one exists.
 
-    A native ``ai_runtime_task`` launcher installs workload dependencies from a
-    ``requirements.yaml`` colocated with the training script, not from the Jobs
-    ``environments[].spec``. This converts that spec into the CLI-style file: its base
-    selector becomes ``version`` and its dependency list carries over unchanged.
+    The AI Runtime launcher would install ``<command dir>/requirements.yaml`` before the
+    environment spec. In this workflow dependencies come only from the wheelhouse
+    ``environments[].spec``, and every submission runs the command from a staged copy (see
+    ``stage_launch_directory``), so a ``requirements.yaml`` beside the developer's original
+    script is never beside the running command and never installed. A developer who placed one
+    expecting the AIR CLI's behavior would otherwise be surprised, so warn.
     """
-    base_environment = str(environment_spec.get("base_environment") or "").strip()
-    environment_version = str(environment_spec.get("environment_version") or "").strip()
-    if bool(base_environment) == bool(environment_version):
-        raise ValueError(
-            "environment spec must set exactly one of base_environment or environment_version"
+    if not command_path.startswith("/Workspace/"):
+        return False
+    sibling = str(PurePosixPath(command_path).parent / REQUIREMENTS_YAML_NAME)
+    try:
+        client.api_client.do(
+            method="GET",
+            path="/api/2.0/workspace/get-status",
+            query={"path": sibling[len("/Workspace") :]},
         )
-    # base_environment is a fully qualified id (workspace-base-environments/databricks_ai_v5);
-    # requirements.yaml keys the AI base by its bare name, standard by its numeric version.
-    version = base_environment.rsplit("/", 1)[-1] if base_environment else environment_version
-    if not version:
-        raise ValueError("environment spec selector resolved to an empty version")
+    except Exception as exc:  # Absence is the expected case; this check never blocks submission.
+        if getattr(exc, "error_code", "") != "RESOURCE_DOES_NOT_EXIST":
+            print(f"WARNING: could not check for {sibling}: {type(exc).__name__}: {exc}")
+        return False
+    print(
+        f"WARNING: {sibling} exists but is not used. This workflow installs dependencies only "
+        "from the wheelhouse environment spec, and the command runs from a staged copy, so this "
+        "file is ignored. Remove it to avoid confusion."
+    )
+    return True
 
-    dependencies = environment_spec.get("dependencies", [])
-    if not isinstance(dependencies, list) or not all(
-        isinstance(dependency, str) for dependency in dependencies
+
+def parse_workload_parameter_names(names: str) -> list[str]:
+    """Parse the comma-separated job parameter names forwarded to the workload."""
+    parsed: list[str] = []
+    for raw_name in names.split(","):
+        name = raw_name.strip()
+        if not name:
+            continue
+        if not WORKLOAD_PARAMETER_NAME_PATTERN.fullmatch(name):
+            raise ValueError(
+                f"workload parameter name {name!r} must start with a letter or '_' and "
+                "contain only letters, digits, '_', '-', or '.'"
+            )
+        if name in LAUNCHER_PARAMETER_NAMES:
+            raise ValueError(
+                f"workload parameter name {name!r} is reserved for the launcher; rename it"
+            )
+        if name in parsed:
+            raise ValueError(f"workload parameter name {name!r} is listed twice")
+        parsed.append(name)
+    return parsed
+
+
+def parse_workload_parameters(
+    parameters_json: str = "",
+    named_values: Mapping[str, str] | None = None,
+) -> dict[str, Any]:
+    """Merge a JSON-object string with per-name string values into one parameter mapping.
+
+    The JSON object carries typed or nested values. ``named_values`` carries individual Jobs
+    parameters, which Jobs always delivers as strings. A name set in both places is rejected
+    rather than silently resolved.
+    """
+    parameters: dict[str, Any] = {}
+    text = parameters_json.strip()
+    if text:
+        try:
+            parsed = json.loads(text)
+        except json.JSONDecodeError as exc:
+            raise ValueError(f"workload_parameters must be a JSON object: {exc}") from exc
+        if not isinstance(parsed, dict):
+            raise ValueError(
+                f"workload_parameters must be a JSON object, not {type(parsed).__name__}"
+            )
+        parameters.update(parsed)
+    for name, value in (named_values or {}).items():
+        if name in parameters:
+            raise ValueError(
+                f"workload parameter {name!r} is set both in workload_parameters and as a "
+                "named parameter; set it in one place"
+            )
+        parameters[name] = value
+    return parameters
+
+
+def render_hyperparameters_yaml(parameters: Mapping[str, Any]) -> str:
+    """Render workload parameters as the ``hyperparameters.yaml`` AIR exposes to the command.
+
+    JSON is valid YAML, so ``yaml.safe_load`` and OmegaConf read this file unchanged, and this
+    module needs no PyYAML dependency. NaN and infinity have no portable YAML spelling.
+    """
+    try:
+        return json.dumps(dict(parameters), indent=2, sort_keys=True, allow_nan=False) + "\n"
+    except ValueError as exc:
+        raise ValueError(f"workload parameters must be finite JSON values: {exc}") from exc
+
+
+def _launch_path_component(value: str) -> str:
+    cleaned = re.sub(r"[^A-Za-z0-9._-]+", "-", value).strip(".-")
+    return cleaned[:64] or "run"
+
+
+def default_launch_root(client: Any) -> str:
+    """Return ``/Workspace/Users/<caller>/.air/jobs_launch`` for the authenticated identity."""
+    me = client.api_client.do(method="GET", path="/api/2.0/preview/scim/v2/Me")
+    user_name = str(me.get("userName") or "").strip()
+    if not user_name:
+        raise ValueError("cannot determine the caller's workspace user name; set launch_root")
+    return f"/Workspace/Users/{user_name}/{DEFAULT_LAUNCH_SUBDIRECTORY}"
+
+
+def stage_launch_directory(
+    client: Any,
+    *,
+    command_path: str,
+    experiment: str,
+    mlflow_run: str,
+    parameters: Mapping[str, Any] | None = None,
+    launch_root: str = "",
+) -> tuple[str, str | None]:
+    """Copy ``command_path`` into a fresh per-run launch directory; return the staged paths.
+
+    Every submission stages, mirroring the AIR CLI, which always uploads the command into a
+    per-run ``.air/cli_launch`` directory and never runs it in place. Running from a controlled
+    directory makes dependency handling uniform across entry points: a ``requirements.yaml`` or
+    ``env_vars.json`` sitting next to the developer's original script is never beside the running
+    command, so it is never installed, whether or not parameters are set. When ``parameters`` is
+    non-empty a ``hyperparameters.yaml`` is written alongside the command, and the launcher
+    exports ``HYPERPARAMETERS_PATH`` to it — the AIR parameter channel, since ``ai_runtime_task``
+    has no Jobs-parameter field (``dynamic_value_refs`` is unwired). Returns the staged command
+    path and the hyperparameters path, or ``None`` for the latter when no parameters were set.
+
+    Staging always writes, before the submit. Reusing a stable ``idempotency_token`` (only the
+    standalone script's ``--idempotency-token`` can) therefore still creates a fresh launch dir,
+    but Jobs returns the pre-existing run pointing at the earlier staged command, so the new files
+    go unused and a changed parameter or command does not take effect. Omit it (the default) to
+    apply changes.
+    """
+    if not command_path.startswith("/Workspace/"):
+        raise ValueError("command_path must be a /Workspace path to stage the launch directory")
+    root = launch_root.strip().rstrip("/") or default_launch_root(client)
+    if not root.startswith("/Workspace/") or any(
+        part in ("", ".", "..") for part in root.split("/")[1:]
     ):
-        raise ValueError("environment spec dependencies must be a list of strings")
+        raise ValueError(f"launch_root must be a canonical /Workspace directory: {root!r}")
+    parameters = dict(parameters or {})
+    # Render before any workspace write so a bad parameter value fails before staging.
+    hyperparameters_text = render_hyperparameters_yaml(parameters) if parameters else None
 
-    lines = [f"version: {json.dumps(version)}"]
-    if dependencies:
-        lines.append("dependencies:")
-        lines.extend(f"  - {json.dumps(dependency)}" for dependency in dependencies)
-    else:
-        lines.append("dependencies: []")
-    return "\n".join(lines) + "\n"
+    try:
+        stream = client.workspace.download(command_path[len("/Workspace") :])
+        with contextlib.closing(stream):
+            command_content = stream.read()
+    except Exception as exc:
+        raise ValueError(
+            f"command script does not exist or is not readable: {command_path}: {exc}"
+        ) from exc
 
+    directory = (
+        f"{root}/{_launch_path_component(experiment)}/"
+        f"{_launch_path_component(mlflow_run)}_{uuid4().hex[:16]}"
+    )
+    staged_command_path = f"{directory}/{PurePosixPath(command_path).name}"
+    staged: list[tuple[str, bytes]] = [(staged_command_path, command_content)]
+    hyperparameters_path: str | None = None
+    if hyperparameters_text is not None:
+        hyperparameters_path = f"{directory}/{HYPERPARAMETERS_YAML_NAME}"
+        staged.append((hyperparameters_path, hyperparameters_text.encode("utf-8")))
 
-def _normalize_staged_files(
-    component: str,
-    staged_files: Mapping[str, str] | None,
-) -> dict[str, bytes]:
-    """Map ``{relative-name: text}`` staged files to ``{component/parts: bytes}`` members."""
-    normalized: dict[str, bytes] = {}
-    for relative_name, content in (staged_files or {}).items():
-        if not isinstance(content, str):
-            raise ValueError(f"staged file content must be text: {relative_name!r}")
-        parts = _safe_archive_parts(relative_name, field="staged file")
-        arcname = "/".join((component, *parts))
-        normalized[arcname] = content.encode("utf-8")
-    return normalized
+    client.api_client.do(
+        method="POST",
+        path="/api/2.0/workspace/mkdirs",
+        body={"path": directory[len("/Workspace") :]},
+    )
+    for path, content in staged:
+        client.api_client.do(
+            method="POST",
+            path="/api/2.0/workspace/import",
+            body={
+                "path": path[len("/Workspace") :],
+                "format": "AUTO",
+                "content": base64.b64encode(content).decode("ascii"),
+                "overwrite": False,
+            },
+        )
+    return staged_command_path, hyperparameters_path
 
 
 def create_code_source_archive(
     code_source_directory: str | Path,
     output_archive: str | Path = "",
-    *,
-    staged_files: Mapping[str, str] | None = None,
 ) -> tuple[str, str]:
-    """Package a directory in AIR's required ``directory_name/...`` archive layout.
-
-    ``staged_files`` maps a relative path to text written into the archive under the
-    enclosing directory (for example ``requirements.yaml`` next to the training script).
-    A staged file replaces any same-named file already in the source directory.
-    """
+    """Package a directory in AIR's required ``directory_name/...`` archive layout."""
     source = Path(code_source_directory)
     if not source.is_dir():
         raise ValueError(f"code source directory does not exist: {source}")
@@ -372,7 +495,6 @@ def create_code_source_archive(
     if output_resolved == source_resolved or source_resolved in output_resolved.parents:
         raise ValueError("code source archive output must be outside the source directory")
 
-    staged = _normalize_staged_files(source.name, staged_files)
     temporary = output.with_name(f".{uuid4().hex}.{output.name}")
 
     def archive_filter(member: tarfile.TarInfo) -> tarfile.TarInfo | None:
@@ -383,22 +505,12 @@ def create_code_source_archive(
             return None
         if member.name.endswith((".pyc", ".pyo")):
             return None
-        if member.name in staged:  # a staged file replaces the source's copy
-            return None
         return member
 
     try:
         with tarfile.open(temporary, mode="w:gz") as archive:
             archive.add(source, arcname=source.name, recursive=True, filter=archive_filter)
-            for arcname, data in staged.items():
-                info = tarfile.TarInfo(name=arcname)
-                info.size = len(data)
-                info.mtime = int(time.time())
-                info.mode = 0o644
-                archive.addfile(info, io.BytesIO(data))
-        component = validate_code_source_archive(
-            temporary, required_members=tuple(staged_files or ())
-        )
+        component = validate_code_source_archive(temporary)
         os.replace(temporary, output)
     except Exception:
         try:
@@ -412,29 +524,17 @@ def create_code_source_archive(
 def prepare_code_source_archive(
     code_source_path: str | Path,
     output_archive: str | Path = "",
-    *,
-    staged_files: Mapping[str, str] | None = None,
 ) -> tuple[str, str, bool]:
-    """Validate an archive or package a source directory for notebook submission.
-
-    ``staged_files`` are written next to the training script when a directory is packaged.
-    An existing archive cannot be modified here, so those files must already be present in
-    it; otherwise this raises before submission.
-    """
+    """Validate an archive or package a source directory for notebook submission."""
     source = Path(code_source_path)
     if source.is_dir():
-        archive_path, component = create_code_source_archive(
-            source, output_archive, staged_files=staged_files
-        )
+        archive_path, component = create_code_source_archive(source, output_archive)
         return archive_path, component, True
     if str(output_archive).strip():
         raise ValueError(
             "code_source_archive_path is only used when code_source_path is a directory"
         )
-    component = validate_code_source_archive(
-        source, required_members=tuple(staged_files or ())
-    )
-    return str(source), component, False
+    return str(source), validate_code_source_archive(source), False
 
 
 def load_environment_spec(jobs_environment_file: str | Path) -> dict[str, Any]:
@@ -599,9 +699,23 @@ def build_payload(
             }
         ],
     }
-    if idempotency_token.strip():
-        payload["idempotency_token"] = idempotency_token.strip()
+    # The SDK re-sends a POST after a timeout or dropped connection. Jobs returns the existing
+    # run for a repeated token, so a per-invocation default keeps those retries from launching
+    # a second GPU run (the AIR CLI does the same). Pass a stable token to dedupe across reruns.
+    payload["idempotency_token"] = idempotency_token.strip() or str(uuid4())
     return payload
+
+
+def with_command_path(payload: Mapping[str, Any], command_path: str) -> dict[str, Any]:
+    """Return a copy of a built payload whose single deployment runs ``command_path``.
+
+    Build the payload first so every input is validated before ``stage_launch_directory``
+    writes to the workspace, then point it at the staged copy.
+    """
+    updated = json.loads(json.dumps(payload))
+    (deployment,) = updated["tasks"][0]["ai_runtime_task"]["deployments"]
+    deployment["command_path"] = command_path
+    return updated
 
 
 def _get_run(client: Any, run_id: int) -> dict[str, Any]:
@@ -787,28 +901,63 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--accelerator-count", type=int, default=1)
     parser.add_argument("--timeout-seconds", type=int, default=600)
     parser.add_argument("--task-key", default="training")
-    parser.add_argument("--idempotency-token", default="")
+    parser.add_argument(
+        "--idempotency-token",
+        default="",
+        help=(
+            "CI safe-retry key: a reused token returns the existing run instead of launching a "
+            "duplicate. Blank (the default) generates one per invocation. A reused token ignores "
+            "changed parameters/command (the staged dir is unused)"
+        ),
+    )
+    parser.add_argument(
+        "--workload-parameters",
+        default="",
+        help="JSON object written to the command's hyperparameters.yaml",
+    )
+    parser.add_argument(
+        "--param",
+        action="append",
+        default=[],
+        metavar="NAME=VALUE",
+        help="String workload parameter; repeatable, merged with --workload-parameters",
+    )
+    parser.add_argument(
+        "--launch-root",
+        default="",
+        help=(
+            "Workspace directory for the per-run launch dir each submission stages "
+            f"(default /Workspace/Users/<caller>/{DEFAULT_LAUNCH_SUBDIRECTORY})"
+        ),
+    )
     parser.add_argument("--poll-seconds", type=float, default=10)
     parser.add_argument("--profile", default="", help="Optional local Databricks profile")
     parser.add_argument("--no-wait", action="store_true")
     return parser
 
 
+def parse_param_arguments(params: list[str]) -> dict[str, str]:
+    """Parse repeated ``NAME=VALUE`` arguments into named workload parameters."""
+    named: dict[str, str] = {}
+    for param in params:
+        name, separator, value = param.partition("=")
+        if not separator or not name.strip() or "," in name:
+            raise ValueError(f"--param must be NAME=VALUE, got {param!r}")
+        name = parse_workload_parameter_names(name)[0]
+        if name in named:
+            raise ValueError(f"--param {name!r} is set twice")
+        named[name] = value
+    return named
+
+
 def main(argv: list[str] | None = None) -> int:
     args = _parser().parse_args(argv)
+    parameters = parse_workload_parameters(
+        args.workload_parameters, parse_param_arguments(args.param)
+    )
     from databricks.sdk import WorkspaceClient
 
     client = WorkspaceClient(profile=args.profile) if args.profile else WorkspaceClient()
-
-    # The AI Runtime launcher installs workload dependencies from a requirements.yaml
-    # colocated with the training script. This standalone path takes an already-built
-    # archive, so it cannot stage the file; show what it must contain and require it.
-    environment_spec = load_environment_spec(args.jobs_environment_file)
-    requirements_yaml = render_requirements_yaml(environment_spec)
-    print(
-        f"requirements.yaml the launcher expects at <CODE_SOURCE_PATH>/{REQUIREMENTS_YAML_NAME}:"
-    )
-    print(requirements_yaml.rstrip("\n"))
 
     component, experiment, experiment_directory, experiment_path = (
         validate_submission_inputs(
@@ -816,9 +965,10 @@ def main(argv: list[str] | None = None) -> int:
             code_source_path=args.code_source_path,
             experiment=args.experiment,
             mlflow_experiment_directory=args.mlflow_experiment_directory,
-            require_requirements_yaml=True,
         )
     )
+    # The command runs from a staged copy, so a requirements.yaml next to the original is ignored.
+    warn_on_colocated_requirements_yaml(client, args.command_path)
     usage_policy_id = resolve_usage_policy_id(
         client,
         usage_policy_name=args.usage_policy_name,
@@ -838,6 +988,19 @@ def main(argv: list[str] | None = None) -> int:
         task_key=args.task_key,
         idempotency_token=args.idempotency_token,
     )
+    # Staged after the payload is built, so an input error writes nothing to the workspace.
+    command_path, hyperparameters_path = stage_launch_directory(
+        client,
+        command_path=args.command_path,
+        experiment=experiment,
+        mlflow_run=args.mlflow_run,
+        parameters=parameters,
+        launch_root=args.launch_root,
+    )
+    payload = with_command_path(payload, command_path)
+    print(f"staged command: {command_path}")
+    if hyperparameters_path:
+        print(f"HYPERPARAMETERS_PATH: {hyperparameters_path} ({len(parameters)} parameters)")
     print(f"code archive root: {component}")
     print(f"MLflow experiment: {experiment_path}")
     if args.no_wait:
