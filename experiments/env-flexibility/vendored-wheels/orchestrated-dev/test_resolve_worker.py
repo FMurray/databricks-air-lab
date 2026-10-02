@@ -5,7 +5,9 @@ from pathlib import Path
 
 
 HERE = Path(__file__).resolve().parent
-SPEC = importlib.util.spec_from_file_location("air_wheelhouse_resolver", HERE / "resolve_worker.py")
+# The runnable modules live in the sibling minimal bundle; tests stay out of it.
+BUNDLE = HERE.parent / "orchestrated"
+SPEC = importlib.util.spec_from_file_location("air_wheelhouse_resolver", BUNDLE / "resolve_worker.py")
 resolver = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(resolver)
 
@@ -187,7 +189,7 @@ class ResolverLogicTest(unittest.TestCase):
                 self.assertEqual(selectors, 1)
 
     def test_checked_in_v5_profile_is_a_complete_exact_pin_set(self):
-        profile = HERE / "profiles" / "databricks_ai_v5"
+        profile = BUNDLE / "profiles" / "databricks_ai_v5"
         target = json.loads((profile / "target_env.json").read_text())
         pins = resolver._load_pins(profile / "constraints.txt")
 

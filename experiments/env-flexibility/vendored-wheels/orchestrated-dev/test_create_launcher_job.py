@@ -7,8 +7,10 @@ from pathlib import Path
 
 
 HERE = Path(__file__).resolve().parent
+# The runnable modules live in the sibling minimal bundle; tests stay out of it.
+BUNDLE = HERE.parent / "orchestrated"
 SPEC = importlib.util.spec_from_file_location(
-    "air_wheelhouse_launcher_job", HERE / "create_launcher_job.py"
+    "air_wheelhouse_launcher_job", BUNDLE / "create_launcher_job.py"
 )
 launcher = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(launcher)

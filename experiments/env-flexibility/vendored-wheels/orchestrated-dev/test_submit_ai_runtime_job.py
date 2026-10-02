@@ -11,8 +11,10 @@ from pathlib import Path
 
 
 HERE = Path(__file__).resolve().parent
+# The runnable modules live in the sibling minimal bundle; tests stay out of it.
+BUNDLE = HERE.parent / "orchestrated"
 SPEC = importlib.util.spec_from_file_location(
-    "air_wheelhouse_job_submitter", HERE / "submit_ai_runtime_job.py"
+    "air_wheelhouse_job_submitter", BUNDLE / "submit_ai_runtime_job.py"
 )
 submitter = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(submitter)
@@ -791,7 +793,7 @@ class SubmitAiRuntimeJobTest(unittest.TestCase):
         self.assertEqual(updated["idempotency_token"], payload["idempotency_token"])
 
     def test_launcher_defaults_match_notebook_widgets(self):
-        notebook = (HERE / "run_ai_runtime_job.py").read_text()
+        notebook = (BUNDLE / "run_ai_runtime_job.py").read_text()
         widget_cell = notebook.split("# COMMAND ----------")[1]
         widgets = dict(
             re.findall(

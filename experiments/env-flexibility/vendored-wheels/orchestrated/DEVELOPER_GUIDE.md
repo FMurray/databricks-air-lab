@@ -26,7 +26,9 @@ requirements.txt ──> build_wheelhouse ──> /Volumes/.../builds/<lock-id>/
    `submit_ai_runtime_job.py` from the same directory). Keep `profiles/` next to them.
 2. **A captured profile for your base environment.** `databricks_ai_v5` ships with one. For
    `databricks_ai_v4`, `databricks_ai_v6`, or `standard_v5` you must run `capture_profile` once on
-   that environment first — see [README "Capturing a profile"](README.md#capturing-a-profile-for-another-environment).
+   that environment first — it lives in the sibling `orchestrated-dev/` directory (not shipped in
+   this bundle); copy it in next to `profiles/` to author one. See
+   [README "Capturing a profile"](README.md#capturing-a-profile-for-another-environment).
 3. **A UC Volume** you can write to, for the wheelhouse output.
 4. **A serverless usage policy** your identity can use (Compute → Usage policies), for the GPU run.
 

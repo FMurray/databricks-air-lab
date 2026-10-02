@@ -295,10 +295,12 @@ The v5 baseline was captured on `fevm-forrest-2` on 2026-09-10 by AIR run `52417
 
 `build_wheelhouse` also lists `databricks_ai_v4`, `databricks_ai_v6`, and `standard_v5`, but each
 needs a one-time captured profile before it can be selected (the notebook fails fast with the list
-of available profiles otherwise). Run **`capture_profile`** on the target environment — attach a
-serverless notebook set to that environment version, or point its `target_python` widget at the
-environment's interpreter. It runs `pip freeze --all`, probes the interpreter's wheel tags, and
-writes a drop-in `profiles/<profile_id>/{constraints.txt, target_env.json}`; commit those.
+of available profiles otherwise). `capture_profile.py` is not part of this minimal bundle — it
+lives beside the tests in the sibling `orchestrated-dev/` directory. To author a profile, copy it
+in next to this `profiles/` directory and run **`capture_profile`** on the target environment —
+attach a serverless notebook set to that environment version, or point its `target_python` widget
+at the environment's interpreter. It runs `pip freeze --all`, probes the interpreter's wheel tags,
+and writes a drop-in `profiles/<profile_id>/{constraints.txt, target_env.json}`; commit those.
 
 `target_env.json` carries one optional field beyond the v5 schema: `base_environment`.
 
@@ -313,22 +315,25 @@ writes a drop-in `profiles/<profile_id>/{constraints.txt, target_env.json}`; com
 
 ## Local verification
 
+The tests live in the sibling `orchestrated-dev/` directory (kept out of this minimal bundle); each
+loads the module it checks from here via `BUNDLE = HERE.parent / "orchestrated"`.
+
 The integration test creates a private local wheel source. It covers the OpenAI/jiter conflict, a
 compatible baseline dependency that uv must retain, a hidden parent conflict that requires
 backtracking, hashed offline installation, and `pip check`. It does not contact PyPI.
 
 ```bash
 python3 -B -m unittest \
-  experiments/env-flexibility/vendored-wheels/orchestrated/test_resolve_worker.py \
-  experiments/env-flexibility/vendored-wheels/orchestrated/test_resolve_worker_integration.py
+  experiments/env-flexibility/vendored-wheels/orchestrated-dev/test_resolve_worker.py \
+  experiments/env-flexibility/vendored-wheels/orchestrated-dev/test_resolve_worker_integration.py
 ```
 
 The Jobs runner and launcher-job tests use fake clients, so they need no workspace:
 
 ```bash
 python3 -B -m unittest \
-  experiments/env-flexibility/vendored-wheels/orchestrated/test_submit_ai_runtime_job.py \
-  experiments/env-flexibility/vendored-wheels/orchestrated/test_create_launcher_job.py
+  experiments/env-flexibility/vendored-wheels/orchestrated-dev/test_submit_ai_runtime_job.py \
+  experiments/env-flexibility/vendored-wheels/orchestrated-dev/test_create_launcher_job.py
 ```
 
 Wheel tags establish Python ABI and platform compatibility. Packages coupled to external native
