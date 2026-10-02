@@ -295,12 +295,11 @@ The v5 baseline was captured on `fevm-forrest-2` on 2026-09-10 by AIR run `52417
 
 `build_wheelhouse` also lists `databricks_ai_v4`, `databricks_ai_v6`, and `standard_v5`, but each
 needs a one-time captured profile before it can be selected (the notebook fails fast with the list
-of available profiles otherwise). `capture_profile.py` is not part of this minimal bundle — it
-lives beside the tests in the sibling `orchestrated-dev/` directory. To author a profile, copy it
-in next to this `profiles/` directory and run **`capture_profile`** on the target environment —
-attach a serverless notebook set to that environment version, or point its `target_python` widget
-at the environment's interpreter. It runs `pip freeze --all`, probes the interpreter's wheel tags,
-and writes a drop-in `profiles/<profile_id>/{constraints.txt, target_env.json}`; commit those.
+of available profiles otherwise). Run **`capture_profile`** (in this directory, beside `profiles/`)
+on the target environment — attach a serverless notebook set to that environment version, or point
+its `target_python` widget at the environment's interpreter. It runs `pip freeze --all`, probes the
+interpreter's wheel tags, and writes a drop-in `profiles/<profile_id>/{constraints.txt,
+target_env.json}`; commit those.
 
 `target_env.json` carries one optional field beyond the v5 schema: `base_environment`.
 
