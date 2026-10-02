@@ -33,6 +33,60 @@ mlflow.log_metric("loss", loss, step=step)
 !!! warning "The 10M metric-step limit"
     Long runs that log every batch will hit it. Log every N steps.
 
+### What counts toward the limit
+
+The quota is **total metric steps per run**: every logged value, across every key. System metrics
+count the same as your own — `system/…` keys get no special treatment — and every node logs its own
+`system/node_N/…` set into the shared run. On an 8-GPU node that's roughly 50 values per sample
+(estimate), so system metrics alone use ~18k steps/hour per node at a 10s interval.
+
+The limit in effect is printed in the error; trust that over the docs (1M has been seen in the
+field):
+
+```
+BAD_REQUEST: Unable to add N metric(s) to run <run_id>. The maximum allowed total metric steps per
+run is <limit>.
+```
+
+Once it's hit, every metric write fails but **training keeps running** — MLflow charts freeze at
+that instant, which looks like a hung run. Grep node logs for `maximum allowed total metric steps`
+before debugging a "hang".
+
+### Staying under it
+
+Each `system/…` key gets one point every `sampling_interval × samples_before_logging` seconds.
+
+```yaml
+# AIR workload YAML
+env_variables:
+  MLFLOW_SYSTEM_METRICS_SAMPLING_INTERVAL: "60"   # seconds; default 10
+```
+
+```python
+# or in code, before start_run
+mlflow.set_system_metrics_sampling_interval(60)
+mlflow.set_system_metrics_samples_before_logging(1)  # samples averaged per logged point
+```
+
+Turn system metrics off with `MLFLOW_ENABLE_SYSTEM_METRICS_LOGGING=false`,
+`mlflow.disable_system_metrics_logging()`, or `mlflow.start_run(..., log_system_metrics=False)`.
+
+!!! note "Composer overrides these"
+    Composer's `MLFlowLogger` calls `set_system_metrics_sampling_interval(5)` and
+    `set_system_metrics_samples_before_logging(6)` in its constructor (one point per 30s), which
+    likely clobbers a YAML env var. Re-set after constructing the logger, or pass
+    `log_system_metrics=False`. Unverified hands-on.
+
+To go beyond the limit, open a support ticket.
+
+### "Failed to abort upload … Presigned URLs API is not enabled"
+
+Harmless. The Databricks SDK tries a presigned multipart upload, presigned URLs aren't available on
+serverless GPU, so it aborts (that also fails — hence the warning) and falls back to a single-shot
+Files API upload. Look for `Falling back to single-shot upload` right after it. Older SDKs
+(< 0.72.0) could fail the upload outright here; upgrade `databricks-sdk` if the upload errors.
+It has nothing to do with the metric limit.
+
 ## Notebook extra
 
 The GPU resources pane (right-side panel) gives per-GPU util/memory/temp at 10s polling with 2h
