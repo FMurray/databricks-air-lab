@@ -14,14 +14,25 @@ Known SKUs seen on this engagement:
   ENTERPRISE_MODEL_TRAINING_SERVERLESS_GPU_COMPUTE_PROVISIONED_CAPACITY  (reserved pool)
 
 Reserved vs on-demand (source of truth: go/airuntime-field-billing-faq, CONFIRMED status):
-  reserved  -> sku ..._PROVISIONED_CAPACITY, compute_type=RESERVED_COMPUTE,
-               usage_metadata.ai_runtime_pool_id set, NO identity_metadata (the attribution gap)
+  reserved  -> compute_type=RESERVED_COMPUTE (the SKU is derived from it: ..._PROVISIONED_CAPACITY,
+               plus a _C suffix for Azure-on-AWS; reserved usage before 2025-12-17 billed under the
+               plain MODEL_TRAINING SKU), usage_metadata.ai_runtime_pool_id set
   on-demand -> regional ENTERPRISE_MODEL_TRAINING_* sku, compute_type=ON_DEMAND_COMPUTE,
                usage_metadata.ai_runtime_workload_id set (CLI) / serverless_gpu key (notebooks)
-⚠️ Verified 2026-07-30 on the engagement account: the 2026-07-25 20-node reserved-pool sweep
-emitted ON_DEMAND_COMPUTE rows (751.3 DBUs) and ZERO reserved-SKU rows account-wide over 30d —
-consistent with pool usage not (yet) stamped as reserved in this PrPr account. Don't equate
-"ran on the pool" with "billed as reserved" until by_capacity_bucket shows reserved rows.
+Usage bills as reserved only once billing whitelists the pool's channel, and only inside the
+contract window (universe: ReservedAirChannelConfig + the airReservedChannels SAFE flag); before
+that, pool usage bills ON_DEMAND (what the 2026-07-25 20-node sweep showed on 2026-07-30).
+
+Reserved rows are per NODE, not per workload: the Serverless Platform builds node metering with no
+metering record (ServerlessComputeUsageLogger.getNodeUsage), and billing drops the per-pod reserved
+records that do carry the workload's usage policy (AiRuntimeLogPreProcessor.shouldDropWithInfo).
+So reserved rows have NULL usage_policy_id, no usage-policy tags, and a placeholder provisioner
+created_by instead of a user. Verified 2026-10-12 on the engagement account: usage_policy_id NULL
+on 100% of RESERVED_COMPUTE rows, while on-demand rows carry the policy's tags. Per-workload
+attribution on reserved capacity therefore comes from audit, not billing (reserved_job_appspace).
+Reservations are guaranteed capacities keyed by (workspace, accelerator): workloads that omit
+provisioned_capacity_id are auto-placed on the workspace's active reservation, so there is no
+single pool compute id to filter audit or the Jobs API by.
 
 Schema migration (relates to open-q #5): the newer `serverless_gpu` attribution schema has since
 landed. Verified 2026-09-02 on an internal serverless-GPU sandbox account,
@@ -101,8 +112,8 @@ def by_capacity_bucket(days: int = 30) -> str:
     """Reserved vs on-demand: is AIR spend landing on the reservation or ad hoc?
 
     Bucket per the field billing FAQ (SKU + compute_type); pool/workload ids shown so a
-    reserved row can be tied to its pool. Reserved rows have no identity_metadata — if the
-    'reserved' bucket is non-empty, per-user attribution inside it is expected to be NULL.
+    reserved row can be tied to its pool. Reserved rows are per node (module docstring), so
+    'principals' in the reserved bucket counts the placeholder provisioner, not real users.
     """
     return f"""
 SELECT
@@ -142,8 +153,8 @@ ORDER BY dbus DESC"""
 def attribution_coverage(days: int = 30) -> str:
     """How much AIR spend is attributable at all — the P0 evidence query.
 
-    Reserved pools reportedly emit aggregate records (open-q #5/#16); this measures
-    the identity/tag coverage gap rather than assuming it.
+    Reserved rows are per-node aggregates with no policy tags (module docstring, open-q #5/#16);
+    this measures the identity/tag coverage gap rather than assuming it.
     """
     return f"""
 SELECT
@@ -183,10 +194,10 @@ def reservation_utilization_daily(
 
     Directional only until dbu_per_gpu_hour is verified (see DBU_PER_GPU_HOUR note).
     reserved_gpus: nodes × GPUs-per-node (e.g. 20 × 8 = 160).
-    ⚠️ est_pct_of_reservation is computed from ALL AIR GPU DBUs, because on this account
-    pool usage currently lands stamped on_demand (see module docstring, verified 2026-07-30).
-    Once reserved-SKU rows appear, read reserved_dbus as the true reservation draw and
-    on_demand_dbus as overflow/spill.
+    ⚠️ est_pct_of_reservation is computed from ALL AIR GPU DBUs, because pool usage bills
+    on_demand until billing whitelists the reservation (module docstring). Once reserved rows
+    appear, read reserved_dbus as the true reservation draw and on_demand_dbus as other
+    accelerators / pre-window usage.
     """
     rate = float(dbu_per_gpu_hour)
     return f"""
@@ -270,224 +281,124 @@ LEFT JOIN attach a ON g.notebook_id = a.notebook_id
 ORDER BY (a.path IS NULL), g.notebook_id"""
 
 
-def _cluster_id(cluster_id: str) -> str:
-    # Interpolated into SQL (run() has no parameter binding), so allow id characters only.
-    if not re.fullmatch(r"[A-Za-z0-9_-]+", cluster_id or ""):
-        raise ValueError(f"bad cluster_id: {cluster_id!r}")
-    return cluster_id
+def _ident(value: str, pattern: str, what: str) -> str:
+    # Interpolated into SQL (run() has no parameter binding), so allow a fixed character set only.
+    if not re.fullmatch(pattern, value or ""):
+        raise ValueError(f"bad {what}: {value!r}")
+    return value
 
 
-def reserved_notebook_sessions(cluster_id: str, days: int = 30) -> str:
-    """Notebooks attached to a reserved GPU pool, with owner + attached hours (audit-only).
+def reserved_job_appspace(
+    workspace_id: int,
+    since: str,
+    accelerator: str = "GPU_8xH100",
+    tag_key: str = "SealUsecase",
+    billing_days: int = 90,
+) -> str:
+    """Jobs that ran on a reservation, with their usage policy and its tags (audit + billing).
 
-    Port of the field "Attribution for GPU Pools" spec, Milestone 0 (notebooks). Reserved-pool
-    billing rows carry no identity_metadata (module docstring), so this skips billing entirely:
-    it pairs attachNotebook/detachNotebook events for the pool's compute id into sessions,
-    clips them to the window, and takes the createNotebook user as owner.
+    Reserved billing rows carry no policy (module docstring), so the job → policy link comes from
+    audit: jobs create/reset/update/submitRun events whose request has an ai_runtime_task on the
+    reserved accelerator, in the reservation's workspace, at/after its billing-window start. The
+    policy's tags come from that policy's ON-DEMAND billing rows — there is no system table of
+    policies. Billing custom_tags mix policy, job and workspace tags, so only key=value pairs present
+    on EVERY row for the policy are kept: job tags vary by job and drop out; workspace tags
+    (e.g. ManagedBy, WorkspaceId) are constant and stay in policy_tags.
 
-    UNVERIFIED — not yet run against a reserved pool. Things to check when testing:
-      - audit request_params.clusterId actually equals the pool's compute id;
-      - duration_attached_hours is wall-clock attached time, NOT GPU-hours (no GPU-count
-        multiplier; idle attached time counts);
-      - an attach followed by another attach (no detach between) is dropped, and a session
-        ended without a detachNotebook event runs to the window end;
-      - all_attachment_events / notebook_creators scan full audit history (no event_date bound).
+    Read with care:
+      - billing_jobs = 1 → one job's own tags are also constant, so policy_tags may include them;
+      - NULL policy_tags → the policy has no on-demand usage in billing_days; get its tags from
+        GET /api/2.0/serverless-policies/{policy_id} instead;
+      - only jobs with a policy-bearing event since `since` appear (older jobs: move `since` back);
+      - the accelerator match assumes every job on that accelerator in the workspace lands on the
+        reservation (true when bursting is off and the reservation has no group ACL).
+
+    tag_key names the per-use-case policy tag surfaced as `appspace`. Verified 2026-10-12 on the
+    engagement workspace (returned policy tags for reserved jobs); not yet checked against the API.
     """
-    cid = _cluster_id(cluster_id)
+    from datetime import datetime
+
+    ws = int(workspace_id)
+    # Normalize to the full form the query was tested with ('YYYY-MM-DD HH:MM:SS').
+    ts = datetime.fromisoformat(
+        _ident(since, r"\d{4}-\d{2}-\d{2}( \d{2}:\d{2}(:\d{2})?)?", "since")
+    ).strftime("%Y-%m-%d %H:%M:%S")
+    acc = _ident(accelerator, r"[A-Za-z0-9_]+", "accelerator")
+    key = _ident(tag_key, r"[A-Za-z0-9_.:-]+", "tag_key")
     return f"""
-WITH bounds AS (
+WITH audit_jobs AS (
   SELECT
-    current_timestamp() - INTERVAL {_days(days)} DAYS AS window_start,
-    current_timestamp()                    AS window_end
-),
-
--- All attachment-state changes for the specified compute.
-all_attachment_events AS (
-  SELECT
-    a.workspace_id,
-    a.request_params['notebookId'] AS notebook_id,
-    a.request_params['path']       AS notebook_path,
-    a.request_params['clusterId']  AS cluster_id,
-    a.action_name,
-    a.event_time
-  FROM system.access.audit AS a
-  CROSS JOIN bounds AS b
-  WHERE a.service_name = 'notebook'
-    AND a.action_name IN ('attachNotebook', 'detachNotebook')
-    AND a.request_params['clusterId'] = '{cid}'
-    AND a.request_params['notebookId'] IS NOT NULL
-    AND a.event_time <= b.window_end
-),
-
--- Include events inside the window plus the last event before it.
--- The latter determines whether a notebook was already attached when
--- the window began.
-relevant_events AS (
-  SELECT e.*
-  FROM all_attachment_events AS e
-  CROSS JOIN bounds AS b
-  WHERE e.event_time >= b.window_start
-
-  UNION ALL
-
-  SELECT e.*
-  FROM all_attachment_events AS e
-  CROSS JOIN bounds AS b
-  WHERE e.event_time < b.window_start
-  QUALIFY ROW_NUMBER() OVER (
-    PARTITION BY e.workspace_id, e.notebook_id, e.cluster_id
-    ORDER BY e.event_time DESC
-  ) = 1
-),
-
-ordered_events AS (
-  SELECT
-    *,
-    LEAD(action_name) OVER (
-      PARTITION BY workspace_id, notebook_id, cluster_id
-      ORDER BY event_time
-    ) AS next_action,
-    LEAD(event_time) OVER (
-      PARTITION BY workspace_id, notebook_id, cluster_id
-      ORDER BY event_time
-    ) AS next_event_time
-  FROM relevant_events
-),
-
--- Construct one interval for each attachment.
-attachment_sessions AS (
-  SELECT
-    e.workspace_id,
-    e.notebook_id,
-    e.notebook_path,
-    GREATEST(e.event_time, b.window_start) AS session_start,
-    LEAST(
-      CASE
-        WHEN e.next_action = 'detachNotebook'
-          THEN e.next_event_time
-        ELSE b.window_end
-      END,
-      b.window_end
-    ) AS session_end
-  FROM ordered_events AS e
-  CROSS JOIN bounds AS b
-  WHERE e.action_name = 'attachNotebook'
-    AND (
-      e.next_action = 'detachNotebook'
-      OR e.next_action IS NULL
-    )
-    AND COALESCE(e.next_event_time, b.window_end) > b.window_start
-),
-
--- Treat the user who generated createNotebook as the creator/owner.
-notebook_creators AS (
-  SELECT
-    workspace_id,
-    request_params['notebookId'] AS notebook_id,
-    user_identity.email          AS owner
+    action_name,
+    COALESCE(request_params['job_id'],
+             get_json_object(response.result, '$.job_id'),
+             get_json_object(response.result, '$.run_id')) AS job_or_run_id,
+    user_identity.email AS actor,
+    COALESCE(request_params['usage_policy_id'],
+             request_params['budget_policy_id'],
+             get_json_object(request_params['new_settings'], '$.usage_policy_id'),
+             get_json_object(request_params['new_settings'], '$.budget_policy_id')) AS policy_id,
+    from_json(COALESCE(request_params['tags'],
+                       get_json_object(request_params['new_settings'], '$.tags')),
+              'map<string,string>') AS job_tags,
+    event_time
   FROM system.access.audit
-  WHERE service_name = 'notebook'
-    AND action_name = 'createNotebook'
-    AND request_params['notebookId'] IS NOT NULL
-  QUALIFY ROW_NUMBER() OVER (
-    PARTITION BY workspace_id, request_params['notebookId']
-    ORDER BY event_time
-  ) = 1
+  WHERE workspace_id = {ws}
+    AND service_name = 'jobs'
+    AND action_name IN ('create', 'reset', 'update', 'submitRun')
+    AND event_time >= TIMESTAMP '{ts} UTC'
+    AND to_json(request_params) LIKE '%ai_runtime_task%'
+    AND to_json(request_params) LIKE '%{acc}%'
+),
+-- Latest policy per job (partial `update` events often omit it).
+reserved_jobs AS (
+  SELECT * FROM audit_jobs
+  WHERE policy_id IS NOT NULL
+  QUALIFY ROW_NUMBER() OVER (PARTITION BY job_or_run_id ORDER BY event_time DESC) = 1
+),
+-- On-demand billing rows for those policies, the only SQL source of policy tags.
+policy_rows AS (
+  SELECT usage_metadata.usage_policy_id AS policy_id,
+         usage_metadata.job_id          AS job_id,
+         custom_tags
+  FROM system.billing.usage
+  WHERE usage_metadata.usage_policy_id IN (SELECT DISTINCT policy_id FROM reserved_jobs)
+    AND usage_date >= date_sub(current_date(), {_days(billing_days)})
+),
+policy_evidence AS (
+  SELECT policy_id,
+         COUNT(*)               AS billing_rows,
+         COUNT(DISTINCT job_id) AS billing_jobs
+  FROM policy_rows
+  GROUP BY 1
+),
+-- Keep only tag key=value pairs present on every row for the policy (policy + workspace tags).
+policy_tags AS (
+  SELECT t.policy_id,
+         map_from_entries(collect_list(struct(t.key, t.value))) AS policy_tags
+  FROM (
+    SELECT policy_id, key, value, COUNT(*) AS n
+    FROM policy_rows
+    LATERAL VIEW explode(custom_tags) e AS key, value
+    GROUP BY 1, 2, 3
+  ) t
+  JOIN policy_evidence ev USING (policy_id)
+  WHERE t.n = ev.billing_rows
+  GROUP BY t.policy_id
 )
-
 SELECT
-  s.notebook_id,
-  COALESCE(
-    c.owner,
-    'UNKNOWN - creation event unavailable'
-  ) AS owner,
-  ROUND(
-    SUM(
-      TIMESTAMPDIFF(SECOND, s.session_start, s.session_end)
-    ) / 3600.0,
-    2
-  ) AS duration_attached_hours
-FROM attachment_sessions AS s
-LEFT JOIN notebook_creators AS c
-  ON  c.workspace_id = s.workspace_id
-  AND c.notebook_id  = s.notebook_id
-WHERE s.session_end > s.session_start
-GROUP BY
-  s.notebook_id,
-  c.owner
-ORDER BY
-  duration_attached_hours DESC"""
-
-
-def reserved_job_runs(cluster_id: str, days: int = 30) -> list[dict]:
-    """Job runs that used a reserved GPU pool, with author + duration (Jobs API, not SQL).
-
-    Port of the same spec's Milestone 0 (jobs): page /api/2.2/jobs/runs/list with expanded
-    tasks and keep runs whose top-level or task cluster_instance.cluster_id is the pool's id.
-    Auth is ambient SDK config (like run()) instead of the spec's DATABRICKS_HOST/TOKEN.
-    Workspace-scoped: covers only the workspace the SDK resolves to.
-
-    UNVERIFIED — not yet run against a reserved pool. Check that reserved-pool runs populate
-    cluster_instance.cluster_id at all (CLI `air run` SUBMIT_RUN runs expose no compute block
-    on the run object — docs/fleet-ops/attribute-usage.md). duration_seconds is wall-clock
-    run time, not GPU-hours.
-    """
-    import time
-    from datetime import datetime, timedelta, timezone
-
-    from databricks.sdk import WorkspaceClient
-
-    target = _cluster_id(cluster_id)
-    api = WorkspaceClient().api_client
-    cutoff_ms = int((datetime.now(timezone.utc) - timedelta(days=_days(days))).timestamp() * 1000)
-    now_ms = int(time.time() * 1000)
-    params = {"start_time_from": cutoff_ms, "expand_tasks": "true", "limit": 25}
-
-    results = []
-    while True:
-        page = api.do("GET", "/api/2.2/jobs/runs/list", query=params)
-
-        for run in page.get("runs", []):
-            cluster_ids = {
-                task.get("cluster_instance", {}).get("cluster_id")
-                for task in run.get("tasks", [])
-            }
-            top_level_cluster = run.get("cluster_instance", {}).get("cluster_id")
-            if top_level_cluster:
-                cluster_ids.add(top_level_cluster)
-            cluster_ids.discard(None)
-
-            if target not in cluster_ids:
-                continue
-
-            # run_duration is the completed run's duration, including repairs.
-            # For an active run, calculate elapsed time.
-            if run.get("end_time", 0):
-                duration_ms = run.get("run_duration", run["end_time"] - run["start_time"])
-            else:
-                duration_ms = now_ms - run["start_time"]
-
-            results.append({
-                "job_id": run.get("job_id"),
-                "run_id": run["run_id"],
-                "run_name": run.get("run_name"),
-                "author": run.get("creator_user_name"),
-                "start_time": datetime.fromtimestamp(
-                    run["start_time"] / 1000, timezone.utc
-                ).isoformat(),
-                "duration_seconds": duration_ms / 1000,
-                "result": (
-                    run.get("status", {}).get("state")
-                    or run.get("state", {}).get("result_state")
-                ),
-            })
-
-        token = page.get("next_page_token")
-        if not token:
-            break
-        params["page_token"] = token
-
-    return results
+  r.job_or_run_id,
+  r.actor,
+  r.policy_id,
+  pt.policy_tags['{key}'] AS appspace,
+  pt.policy_tags,
+  r.job_tags,
+  ev.billing_rows,
+  ev.billing_jobs,
+  r.event_time AS last_policy_event
+FROM reserved_jobs r
+LEFT JOIN policy_tags     pt USING (policy_id)
+LEFT JOIN policy_evidence ev USING (policy_id)
+ORDER BY appspace, r.job_or_run_id"""
 
 
 # --- execution helpers (lazy deps) ---------------------------------------------------
@@ -540,24 +451,20 @@ if __name__ == "__main__":
         "notebooks": notebook_attribution,
         "notebook-paths": notebook_paths_from_audit,
     }
-    # Reserved-pool queries take the pool's compute id; reserved-jobs is a Jobs API call.
-    reserved = {"reserved-notebooks": reserved_notebook_sessions, "reserved-jobs": reserved_job_runs}
     ap = argparse.ArgumentParser(description="Run an AIR billing query")
-    ap.add_argument("query", choices=[*builders, *reserved])
+    ap.add_argument("query", choices=[*builders, "reserved-jobs"])
     ap.add_argument("--days", type=int, default=30)
-    ap.add_argument("--cluster-id", help="reserved GPU pool compute id (reserved-* queries)")
+    # reserved-jobs takes the reservation's workspace + billing-window start, not --days.
+    ap.add_argument("--workspace-id", type=int, help="reservation workspace id (reserved-jobs)")
+    ap.add_argument("--since", help="reservation window start, 'YYYY-MM-DD[ HH:MM]' UTC (reserved-jobs)")
+    ap.add_argument("--accelerator", default="GPU_8xH100", help="reserved accelerator (reserved-jobs)")
+    ap.add_argument("--tag-key", default="SealUsecase", help="per-use-case policy tag (reserved-jobs)")
     ap.add_argument("--sql-only", action="store_true", help="print SQL, don't execute")
     args = ap.parse_args()
-    if args.query in reserved and not args.cluster_id:
-        ap.error(f"{args.query} requires --cluster-id")
     if args.query == "reserved-jobs":
-        import pandas as pd
-
-        print(f"-- {workspace_host()}")
-        print(pd.DataFrame(reserved_job_runs(args.cluster_id, args.days)).to_string(index=False))
-        raise SystemExit
-    if args.query == "reserved-notebooks":
-        stmt = reserved_notebook_sessions(args.cluster_id, args.days)
+        if not (args.workspace_id and args.since):
+            ap.error("reserved-jobs requires --workspace-id and --since")
+        stmt = reserved_job_appspace(args.workspace_id, args.since, args.accelerator, args.tag_key)
     else:
         stmt = builders[args.query](args.days)
     if args.sql_only:
