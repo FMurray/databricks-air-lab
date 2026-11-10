@@ -379,11 +379,11 @@ ORDER BY 1
 -- COMMAND ----------
 
 -- MAGIC %md
--- MAGIC A3b. Runs per policy, and the event that set it
+-- MAGIC A3b. Runs per policy (which audit actions carry the policy is A3a)
 
 -- COMMAND ----------
 
-SELECT policy_id, policy_action,
+SELECT policy_id,
        COUNT(DISTINCT job_key)               AS jobs,
        COUNT(*)                              AS task_runs,
        ROUND(SUM(hold_s * gpus) / 3600.0, 1) AS gpu_hours
@@ -406,6 +406,37 @@ SELECT key_type, job_key,
        collect_set(policy_actor)             AS policy_event_actors
 FROM v_run_policy
 WHERE policy_id IS NULL
+GROUP BY ALL
+ORDER BY gpu_hours DESC
+
+-- COMMAND ----------
+
+-- MAGIC %md
+-- MAGIC A3d. Who ran it: GPU-hours per run-as identity and policy. Jobs: `run_as` from `system.lakeflow.jobs` as
+-- MAGIC of run start (the identity the run executes as). One-time runs: the submitRun caller. `policy_actor` is not
+-- MAGIC this: it's whoever made the audit event that set the policy (e.g. the last person to edit the job).
+
+-- COMMAND ----------
+
+WITH job_run_as AS (
+  SELECT r.run_id, j.run_as
+  FROM v_run_policy r
+  JOIN system.lakeflow.jobs j ON j.job_id = r.job_key
+  WHERE r.key_type = 'job'
+  -- latest job row at or before run start; else the earliest row after (jobs history starts later than audit)
+  QUALIFY ROW_NUMBER() OVER (PARTITION BY r.run_id
+                             ORDER BY IF(j.change_time <= r.run_start, j.change_time, NULL) DESC NULLS LAST,
+                                      j.change_time) = 1
+)
+SELECT COALESCE(ja.run_as, IF(r.key_type = 'run', r.policy_actor, NULL)) AS run_as,
+       CASE WHEN ja.run_as IS NOT NULL THEN 'job run_as'
+            WHEN r.key_type = 'run'    THEN 'submitRun caller' END    AS run_as_source,
+       r.policy_id,
+       COUNT(DISTINCT r.job_key)                                      AS jobs,
+       COUNT(*)                                                       AS task_runs,
+       ROUND(SUM(r.hold_s * r.gpus) / 3600.0, 1)                      AS gpu_hours
+FROM v_run_policy r
+LEFT JOIN job_run_as ja USING (run_id)
 GROUP BY ALL
 ORDER BY gpu_hours DESC
 
@@ -479,28 +510,25 @@ ORDER BY n_tags NULLS FIRST, p.policy_id
 -- COMMAND ----------
 
 CREATE OR REPLACE TEMP VIEW v_policy_dbus AS
-WITH agg AS (
-  SELECT date_trunc('MONTH', r.run_start) AS month,
-         r.policy_id,
-         COUNT(DISTINCT r.job_key)        AS jobs,
-         COUNT(*)                         AS task_runs,
-         SUM(IF(r.gpus_assumed, 1, 0))    AS runs_gpus_assumed,
-         SUM(IF(r.hold_s IS NULL, 1, 0))  AS runs_no_hold,
-         SUM(r.hold_s * r.gpus) / 3600.0  AS gpu_hours
-  FROM v_run_policy r
-  GROUP BY 1, 2
-)
-SELECT a.month, a.policy_id, a.jobs, a.task_runs, a.runs_gpus_assumed, a.runs_no_hold,
-       ROUND(a.gpu_hours, 1)                       AS gpu_hours,
-       ROUND(a.gpu_hours * p.dbus_per_gpu_hour, 2) AS dbus,
-       t.policy_tags
-FROM agg a
+SELECT
+  date_trunc('MONTH', r.run_start)                                     AS month,
+  r.policy_id,
+  COUNT(DISTINCT r.job_key)                                            AS jobs,
+  COUNT(*)                                                             AS task_runs,
+  SUM(IF(r.gpus_assumed, 1, 0))                                        AS runs_gpus_assumed,
+  SUM(IF(r.hold_s IS NULL, 1, 0))                                      AS runs_no_hold,
+  ROUND(SUM(r.hold_s * r.gpus) / 3600.0, 1)                            AS gpu_hours,
+  ROUND(SUM(r.hold_s * r.gpus) / 3600.0 * MAX(p.dbus_per_gpu_hour), 2) AS dbus,
+  any_value(t.policy_tags)                                             AS policy_tags  -- one tags row per policy; maps can't be grouped on
+FROM v_run_policy r
 CROSS JOIN v_params p
 LEFT JOIN v_policy_tags t USING (policy_id)
+GROUP BY 1, 2
 
 -- COMMAND ----------
 
-SELECT * FROM v_policy_dbus
+SELECT month, policy_id, jobs, task_runs, runs_gpus_assumed, runs_no_hold, gpu_hours, dbus, policy_tags
+FROM v_policy_dbus
 ORDER BY month DESC, dbus DESC
 
 -- COMMAND ----------
