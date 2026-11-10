@@ -2,13 +2,16 @@
 -- MAGIC %md
 -- MAGIC # Reserved GPU attribution: DBUs per usage policy
 -- MAGIC
--- MAGIC Attributes reserved serverless GPU (AIR guaranteed capacity) DBUs to the usage policy each job run was
--- MAGIC launched with. Teams map to policies through the policy's custom tags. Run the cells top to bottom in one
--- MAGIC session, in the reservation's workspace. Each block is a temp view, followed by a select over it.
+-- MAGIC Attributes reserved serverless GPU (AIR guaranteed capacity) DBUs to the usage policy each job run or
+-- MAGIC interactive notebook session was launched with. Teams map to policies through the policy's custom tags. Run the
+-- MAGIC cells top to bottom in one session, in the reservation's workspace. Each block is a temp view, followed by a
+-- MAGIC select over it.
 -- MAGIC
--- MAGIC Part A is the load-bearing chain (jobs only): job task -> reserved accelerator -> run -> policy -> tags -> DBUs.
--- MAGIC The "Minimum viable check" right after A2's `v_task_runs` runs the whole chain in two queries.
--- MAGIC Part B is context (the reserved bill) and can wait. Notebooks are not covered yet.
+-- MAGIC Part A is the load-bearing chain for jobs: job task -> reserved accelerator -> run -> policy (A1-A3).
+-- MAGIC The "Minimum viable check" right after A2's `v_task_runs` runs the jobs chain in two queries.
+-- MAGIC Part N does the same for notebooks: attach session -> reserved (by elimination) -> policy (N1-N3); its
+-- MAGIC sources and inferences are in its own header. A4-A5 then take tags and DBUs for jobs and notebooks together.
+-- MAGIC Part B is context (the reserved bill) and can wait.
 -- MAGIC
 -- MAGIC **No workspace filter.** System tables aren't scoped to the workspace you query them from: `system.billing.usage`
 -- MAGIC is account-wide, and `system.access.audit` covers the account's workspaces in the region. If the account has
@@ -55,7 +58,10 @@ SELECT
   8.844                               AS dbus_per_gpu_hour,    -- DBU rate per GPU-hour
   'execution'                         AS hold_basis,           -- 'execution' | 'setup_execution_cleanup' | 'span'
   90                                  AS policy_lookback_days, -- days of policy billing rows read for tags
-  160                                 AS reserved_gpus         -- nodes x GPUs per node (Part B only)
+  160                                 AS reserved_gpus,        -- nodes x GPUs per node (Part B only)
+  'idle_timeout'                      AS nb_hold_basis,        -- notebooks: 'idle_timeout' | 'activity' (N1)
+  60                                  AS nb_idle_timeout_min,  -- notebooks: AIR session idle timeout, minutes
+  8                                   AS nb_gpus               -- notebooks: GPUs per session (one node)
 
 -- COMMAND ----------
 
@@ -443,6 +449,363 @@ ORDER BY gpu_hours DESC
 -- COMMAND ----------
 
 -- MAGIC %md
+-- MAGIC # Part N: notebooks -> policy
+-- MAGIC Interactive notebooks attached to serverless GPU. Unlike jobs, no audit event names the accelerator or the
+-- MAGIC policy, so two links in this chain are inferred, and the checks after each block test them on first run.
+-- MAGIC Sources, per a code reading of the notebook webapp (not verified hands-on):
+-- MAGIC - `notebook.attachNotebook` request_params are only `notebookId`, `clusterId`, `path`. For an AIR attach,
+-- MAGIC   `clusterId` is the AIR session ID, shaped `MMDD-HHMMSS-xxxxxxxx-cnx`. Each attach gets its own session.
+-- MAGIC - The accelerator and usage policy are chosen in the notebook's Environment panel and stored on the notebook.
+-- MAGIC   Changing them logs `modifyNotebook` with no values, and a policy auto-selected at attach isn't audited.
+-- MAGIC - `notebook.runCommand` (verbose audit logs only) carries `clusterId` = the session, logged when a command ends.
+-- MAGIC - Detach doesn't release the GPUs. The session ends on idle timeout (ai-scheduler default 60 minutes since last
+-- MAGIC   activity) or when the same user attaches the notebook to other compute (the old session is terminated).
+-- MAGIC   Neither is audited.
+-- MAGIC
+-- MAGIC So: **sessions** come from attach events with an AIR session ID (N1). **Reserved** is by elimination (N2):
+-- MAGIC reserved billing rows carry no notebook ID, while on-demand GPU notebook usage bills per notebook, so a session
+-- MAGIC with no per-notebook GPU billing during it ran on the reservation, on the reserved accelerator (`nb_gpus`).
+-- MAGIC **Policy** (N3) is the notebook's stored policy as seen on the notebook's own billed usage (serverless CPU or
+-- MAGIC on-demand GPU rows carry `usage_policy_id` and `notebook_id`), nearest to the session start.
+-- MAGIC
+-- MAGIC ## N1. AIR notebook sessions from audit
+-- MAGIC `v_nb_audit`: the one notebook audit read. `runCommand` rows exist only with verbose audit logs on (N1a shows
+-- MAGIC whether they do); they can be numerous, so materialize this view if cells are slow (see Scan cost above).
+
+-- COMMAND ----------
+
+CREATE OR REPLACE TEMP VIEW v_nb_audit AS
+SELECT
+  a.workspace_id,
+  a.event_time,
+  a.action_name,
+  a.user_identity.email                                       AS actor,
+  a.request_params['notebookId']                              AS notebook_id,
+  a.request_params['clusterId']                               AS compute_id,
+  a.request_params['path']                                    AS path,
+  COALESCE(a.response.status_code, 200) < 400                 AS ok,
+  COALESCE(a.request_params['clusterId'] RLIKE '^[0-9]{4}-[0-9]{6}-[a-zA-Z0-9]{1,8}-cnx$', false) AS is_air_session
+FROM system.access.audit a
+WHERE a.event_date >= DATE '2026-07-27'  -- since minus 7 days (literal)
+  AND a.service_name = 'notebook'
+  AND a.action_name IN ('attachNotebook', 'detachNotebook', 'runCommand')
+
+-- COMMAND ----------
+
+-- MAGIC %md
+-- MAGIC N1a. Notebook events by compute ID shape. Expect AIR-session attaches if anyone used GPU notebooks; `runCommand`
+-- MAGIC rows on AIR sessions mean verbose audit is on (without them, N1's last activity is attach or detach only, and
+-- MAGIC hold time undercounts long-running cells).
+
+-- COMMAND ----------
+
+SELECT action_name,
+       CASE WHEN is_air_session         THEN 'AIR session (...-cnx)'
+            WHEN compute_id IS NULL     THEN 'no clusterId'
+            ELSE                             'other compute' END AS compute_kind,
+       ok,
+       COUNT(*)                    AS events,
+       COUNT(DISTINCT notebook_id) AS notebooks,
+       COUNT(DISTINCT compute_id)  AS computes,
+       MIN(event_time)             AS first_event,
+       MAX(event_time)             AS last_event
+FROM v_nb_audit
+GROUP BY ALL
+ORDER BY action_name, compute_kind, ok
+
+-- COMMAND ----------
+
+-- MAGIC %md
+-- MAGIC `v_nb_sessions`: one row per AIR session, i.e. per (notebook, user, session ID), starting at its first
+-- MAGIC successful attach. A re-attach to the same session continues it. Per user, because the attach target is kept
+-- MAGIC in per-user notebook storage (an inference from the code). Columns:
+-- MAGIC - `replaced_at`: the same user's next attach of the notebook to any other compute, which terminates the session.
+-- MAGIC - `last_activity`: the latest of attach, the user's detach, and the session's last `runCommand`.
+-- MAGIC - `hold_end`: per `nb_hold_basis`. 'idle_timeout' = last activity + `nb_idle_timeout_min` (what the code says
+-- MAGIC   holds the GPUs); 'activity' = last activity (lower bound). Both are capped at `replaced_at` and `until`.
+-- MAGIC   `idle_end` is always the idle-timeout end; N2 uses it as the session's widest extent.
+-- MAGIC
+-- MAGIC A cell still running at `until` has no `runCommand` yet, so its session is cut short.
+
+-- COMMAND ----------
+
+CREATE OR REPLACE TEMP VIEW v_nb_sessions AS
+WITH firsts AS (
+  SELECT workspace_id, notebook_id, actor, compute_id, is_air_session,
+         MIN(event_time)           AS attach_time,
+         max_by(path, event_time)  AS path,
+         COUNT(*)                  AS attaches
+  FROM v_nb_audit
+  WHERE action_name = 'attachNotebook' AND ok AND notebook_id IS NOT NULL AND compute_id IS NOT NULL
+  GROUP BY ALL
+),
+seq AS (
+  SELECT f.*,
+         LEAD(attach_time) OVER (PARTITION BY workspace_id, notebook_id, actor ORDER BY attach_time) AS replaced_at
+  FROM firsts f
+),
+air AS (
+  SELECT s.*, COALESCE(s.replaced_at, p.until) AS bound
+  FROM seq s
+  CROSS JOIN v_params p
+  WHERE s.is_air_session AND s.attach_time >= p.since AND s.attach_time < p.until
+),
+activity AS (
+  SELECT s.compute_id, s.notebook_id, s.actor,
+         MAX(IF(e.action_name = 'runCommand', e.event_time, NULL))     AS last_command,
+         COUNT(IF(e.action_name = 'runCommand', 1, NULL))              AS commands,
+         MAX(IF(e.action_name = 'detachNotebook', e.event_time, NULL)) AS last_detach
+  FROM air s
+  JOIN v_nb_audit e
+    ON e.workspace_id = s.workspace_id
+   AND e.notebook_id  = s.notebook_id
+   AND e.event_time  >= s.attach_time
+   AND e.event_time   < s.bound
+   AND ((e.action_name = 'runCommand'     AND e.compute_id = s.compute_id)
+     OR (e.action_name = 'detachNotebook' AND e.actor = s.actor))
+  GROUP BY ALL
+),
+ends AS (
+  SELECT s.*, a.commands, a.last_command, a.last_detach,
+         GREATEST(s.attach_time, COALESCE(a.last_command, s.attach_time), COALESCE(a.last_detach, s.attach_time))
+           AS last_activity
+  FROM air s
+  LEFT JOIN activity a USING (compute_id, notebook_id, actor)
+)
+SELECT
+  e.workspace_id, e.notebook_id, e.path, e.actor,
+  e.compute_id                                                                     AS session_id,
+  e.attach_time, e.attaches, e.replaced_at,
+  COALESCE(e.commands, 0)                                                          AS commands,
+  e.last_command, e.last_detach, e.last_activity,
+  LEAST(e.bound, e.last_activity)                                                  AS activity_end,
+  LEAST(e.bound, timestampadd(MINUTE, p.nb_idle_timeout_min, e.last_activity))     AS idle_end,
+  CASE p.nb_hold_basis
+    WHEN 'activity'     THEN LEAST(e.bound, e.last_activity)
+    WHEN 'idle_timeout' THEN LEAST(e.bound, timestampadd(MINUTE, p.nb_idle_timeout_min, e.last_activity))
+  END                                                                              AS hold_end
+FROM ends e
+CROSS JOIN v_params p
+
+-- COMMAND ----------
+
+-- MAGIC %md
+-- MAGIC ## N2. Reserved sessions, by elimination
+-- MAGIC `v_nb_gpu_billing`: non-reserved serverless GPU / AIR billing rows (both schemas, as in B2). On-demand GPU
+-- MAGIC notebook usage on the `serverless_gpu` schema carries `notebook_id`.
+-- MAGIC
+-- MAGIC `v_nb_reserved_sessions`: each N1 session with the on-demand GPU rows of its notebook that overlap it
+-- MAGIC (attach to `idle_end`). `nb_match`:
+-- MAGIC - 'on-demand GPU': billed per notebook, so not the reservation (another accelerator, or bursting).
+-- MAGIC - 'recent': no rows, but the session ended in the last 24 hours and billing may not have landed yet.
+-- MAGIC - 'reserved': no rows. Only these flow on.
+-- MAGIC
+-- MAGIC Elimination breaks if on-demand GPU notebook usage bills without `notebook_id` (the older `ai_runtime` schema):
+-- MAGIC those sessions would read as reserved. N2a's `od_rows_no_workload_key` must be 0 for the workspace.
+
+-- COMMAND ----------
+
+CREATE OR REPLACE TEMP VIEW v_nb_gpu_billing AS
+SELECT
+  u.workspace_id,
+  u.usage_metadata.notebook_id                    AS notebook_id,
+  u.usage_metadata.job_id                         AS job_id,
+  u.usage_metadata.ai_runtime_workload_id         AS workload_id,
+  u.usage_start_time,
+  u.usage_end_time,
+  u.usage_quantity,
+  u.product_features.ai_runtime.compute_type      AS compute_type,
+  u.product_features.serverless_gpu.workload_type AS sgc_workload_type
+FROM system.billing.usage u
+WHERE u.usage_date >= DATE '2026-07-27'  -- since minus 7 days (literal)
+  AND (u.product_features.ai_runtime IS NOT NULL OR u.product_features.serverless_gpu IS NOT NULL)
+  AND COALESCE(u.product_features.ai_runtime.compute_type, '') <> 'RESERVED_COMPUTE'
+
+-- COMMAND ----------
+
+CREATE OR REPLACE TEMP VIEW v_nb_reserved_sessions AS
+WITH od AS (
+  SELECT s.session_id, s.notebook_id, s.actor,
+         COUNT(b.usage_quantity) AS od_rows,
+         SUM(b.usage_quantity)   AS od_dbus
+  FROM v_nb_sessions s
+  LEFT JOIN v_nb_gpu_billing b
+    ON b.workspace_id      = s.workspace_id
+   AND b.notebook_id       = s.notebook_id
+   AND b.usage_end_time    > s.attach_time
+   AND b.usage_start_time  < s.idle_end
+  GROUP BY ALL
+)
+SELECT
+  s.*,
+  od.od_rows,
+  od.od_dbus,
+  CASE WHEN od.od_rows > 0                                      THEN 'on-demand GPU'
+       WHEN s.idle_end > current_timestamp() - INTERVAL 24 HOURS THEN 'recent'
+       ELSE                                                          'reserved' END AS nb_match,
+  p.nb_gpus                                                                         AS gpus,
+  TIMESTAMPDIFF(SECOND, s.attach_time, s.activity_end)                              AS activity_s,
+  TIMESTAMPDIFF(SECOND, s.attach_time, s.idle_end)                                  AS idle_timeout_s,
+  TIMESTAMPDIFF(SECOND, s.attach_time, s.hold_end)                                  AS hold_s
+FROM v_nb_sessions s
+JOIN od USING (session_id, notebook_id, actor)
+CROSS JOIN v_params p
+
+-- COMMAND ----------
+
+-- MAGIC %md
+-- MAGIC N2a. Sessions by match, with both hold measures. `sessions_with_commands` = 0 everywhere means verbose audit is
+-- MAGIC off (see N1a). `od_rows_no_workload_key` counts the workspace's on-demand GPU rows in the window with no
+-- MAGIC notebook, job or workload ID: if it's above 0, some on-demand notebook usage can't be seen, and 'reserved' may
+-- MAGIC include on-demand sessions.
+
+-- COMMAND ----------
+
+SELECT s.workspace_id, s.nb_match,
+       COUNT(DISTINCT s.notebook_id)                      AS notebooks,
+       COUNT(DISTINCT s.actor)                            AS users,
+       COUNT(*)                                           AS sessions,
+       SUM(IF(s.commands > 0, 1, 0))                      AS sessions_with_commands,
+       SUM(IF(s.replaced_at IS NOT NULL, 1, 0))           AS sessions_replaced,
+       ROUND(SUM(s.activity_s     * s.gpus) / 3600.0, 1)  AS activity_gpu_hours,
+       ROUND(SUM(s.idle_timeout_s * s.gpus) / 3600.0, 1)  AS idle_timeout_gpu_hours,
+       ROUND(percentile(s.idle_timeout_s, 0.5) / 3600.0, 2) AS p50_session_hours,
+       ROUND(percentile(s.idle_timeout_s, 0.95) / 3600.0, 2) AS p95_session_hours,
+       COALESCE(MAX(k.od_rows_no_workload_key), 0)        AS od_rows_no_workload_key
+FROM v_nb_reserved_sessions s
+LEFT JOIN (
+  SELECT b.workspace_id, COUNT(*) AS od_rows_no_workload_key
+  FROM v_nb_gpu_billing b
+  CROSS JOIN v_params p
+  WHERE b.notebook_id IS NULL AND b.job_id IS NULL AND b.workload_id IS NULL
+    AND b.usage_start_time >= p.since AND b.usage_start_time < p.until
+  GROUP BY 1
+) k USING (workspace_id)
+GROUP BY ALL
+ORDER BY s.workspace_id, sessions DESC
+
+-- COMMAND ----------
+
+-- MAGIC %md
+-- MAGIC ## N3. Policy per reserved session
+-- MAGIC `v_nb_policy_rows`: every billing row of those notebooks that carries a usage policy (any product), back to
+-- MAGIC `since` minus 90 days (literal). `principal` is the row's identity (AIR rows carry only created_by).
+-- MAGIC
+-- MAGIC `v_nb_session_policy`: each 'reserved' session takes one row's policy: the same user's rows first, then the
+-- MAGIC latest row at or before attach, else the earliest after. `policy_source` says which. NULL policy = the notebook
+-- MAGIC has no policy-bearing billing in the lookback: look the notebook up in the Environment panel instead.
+
+-- COMMAND ----------
+
+CREATE OR REPLACE TEMP VIEW v_nb_policy_rows AS
+SELECT
+  u.workspace_id,
+  u.usage_metadata.notebook_id     AS notebook_id,
+  u.usage_metadata.usage_policy_id AS policy_id,
+  COALESCE(u.identity_metadata.run_as, u.identity_metadata.owned_by, u.identity_metadata.created_by) AS principal,
+  u.usage_start_time,
+  u.billing_origin_product
+FROM system.billing.usage u
+WHERE u.usage_date >= DATE '2026-05-05'  -- since minus 90 days (literal)
+  AND u.usage_metadata.usage_policy_id IS NOT NULL
+  AND u.usage_metadata.notebook_id IN (SELECT DISTINCT notebook_id FROM v_nb_reserved_sessions WHERE nb_match = 'reserved')
+
+-- COMMAND ----------
+
+CREATE OR REPLACE TEMP VIEW v_nb_session_policy AS
+SELECT
+  s.*,
+  r.policy_id,
+  r.usage_start_time       AS policy_row_time,
+  r.billing_origin_product AS policy_row_product,
+  CASE WHEN r.policy_id IS NOT NULL THEN
+    concat(IF(r.principal = s.actor, 'same user', 'other user'), ', ',
+           IF(r.usage_start_time <= s.attach_time, 'before', 'after'), ' attach') END AS policy_source
+FROM v_nb_reserved_sessions s
+LEFT JOIN v_nb_policy_rows r
+  ON r.workspace_id = s.workspace_id
+ AND r.notebook_id  = s.notebook_id
+WHERE s.nb_match = 'reserved'
+QUALIFY ROW_NUMBER() OVER (
+  PARTITION BY s.session_id, s.notebook_id, s.actor
+  ORDER BY (r.principal = s.actor) DESC NULLS LAST,
+           IF(r.usage_start_time <= s.attach_time, r.usage_start_time, NULL) DESC NULLS LAST,
+           r.usage_start_time) = 1
+
+-- COMMAND ----------
+
+-- MAGIC %md
+-- MAGIC N3a. Reserved notebook GPU-hours by policy source (the inferred link: 'same user, before attach' is strongest)
+
+-- COMMAND ----------
+
+SELECT policy_source, policy_row_product,
+       COUNT(DISTINCT notebook_id)           AS notebooks,
+       COUNT(*)                              AS sessions,
+       ROUND(SUM(hold_s * gpus) / 3600.0, 1) AS gpu_hours
+FROM v_nb_session_policy
+GROUP BY ALL
+ORDER BY gpu_hours DESC
+
+-- COMMAND ----------
+
+-- MAGIC %md
+-- MAGIC N3b. Sessions whose notebook billed under a different policy before and after the attach (same user). The
+-- MAGIC policy may have been changed when the user switched to GPU, so N3 can pick the wrong one for these.
+
+-- COMMAND ----------
+
+WITH x AS (
+  SELECT s.session_id, s.notebook_id, s.path, s.actor, s.attach_time, s.hold_s, s.gpus, s.policy_id,
+         max_by(r.policy_id, IF(r.usage_start_time <= s.attach_time, r.usage_start_time, NULL)) AS policy_before,
+         min_by(r.policy_id, IF(r.usage_start_time >  s.attach_time, r.usage_start_time, NULL)) AS policy_after
+  FROM v_nb_session_policy s
+  JOIN v_nb_policy_rows r
+    ON r.workspace_id = s.workspace_id AND r.notebook_id = s.notebook_id AND r.principal = s.actor
+  GROUP BY ALL
+)
+SELECT notebook_id, path, actor, attach_time, policy_id AS chosen_policy, policy_before, policy_after,
+       ROUND(hold_s * gpus / 3600.0, 1) AS gpu_hours
+FROM x
+WHERE policy_before <> policy_after
+ORDER BY gpu_hours DESC
+
+-- COMMAND ----------
+
+-- MAGIC %md
+-- MAGIC N3c. Who ran it: reserved notebook GPU-hours per user and policy (`actor` = the attaching user)
+
+-- COMMAND ----------
+
+SELECT actor, policy_id,
+       COUNT(DISTINCT notebook_id)           AS notebooks,
+       COUNT(*)                              AS sessions,
+       ROUND(SUM(hold_s * gpus) / 3600.0, 1) AS gpu_hours
+FROM v_nb_session_policy
+GROUP BY ALL
+ORDER BY gpu_hours DESC
+
+-- COMMAND ----------
+
+-- MAGIC %md
+-- MAGIC # Part A (cont.): tags and DBUs, jobs and notebooks
+-- MAGIC `v_attributed`: one row per charged unit: a reserved task run (A3) or a reserved notebook session (N3).
+-- MAGIC A4 and A5 read from it.
+
+-- COMMAND ----------
+
+CREATE OR REPLACE TEMP VIEW v_attributed AS
+SELECT 'job' AS workload, key_type, job_key AS workload_key, CAST(run_id AS STRING) AS unit_id,
+       run_start AS start_time, policy_id, gpus, gpus_assumed, hold_s
+FROM v_run_policy
+UNION ALL
+SELECT 'notebook', 'notebook', notebook_id, session_id,
+       attach_time, policy_id, gpus, true, hold_s
+FROM v_nb_session_policy
+
+-- COMMAND ----------
+
+-- MAGIC %md
 -- MAGIC ## A4. Policy tags
 -- MAGIC Tags for each policy come from its own billing rows, which are non-reserved by definition, across all
 -- MAGIC workspaces. custom_tags mixes policy, job and workspace tags (per a code reading, policy tags win on key
@@ -460,7 +823,7 @@ SELECT
   u.custom_tags
 FROM system.billing.usage u
 CROSS JOIN v_params p
-WHERE u.usage_metadata.usage_policy_id IN (SELECT DISTINCT policy_id FROM v_run_policy)
+WHERE u.usage_metadata.usage_policy_id IN (SELECT DISTINCT policy_id FROM v_attributed)
   AND u.usage_date >= date_sub(current_date(), p.policy_lookback_days)
 
 -- COMMAND ----------
@@ -497,7 +860,7 @@ SELECT p.policy_id,
        t.billing_rows, t.billing_jobs, t.billing_workspaces,
        IF(t.policy_tags IS NULL, NULL, size(t.policy_tags)) AS n_tags,
        t.policy_tags
-FROM (SELECT DISTINCT policy_id FROM v_run_policy WHERE policy_id IS NOT NULL) p
+FROM (SELECT DISTINCT policy_id FROM v_attributed WHERE policy_id IS NOT NULL) p
 LEFT JOIN v_policy_tags t USING (policy_id)
 ORDER BY n_tags NULLS FIRST, p.policy_id
 
@@ -505,29 +868,35 @@ ORDER BY n_tags NULLS FIRST, p.policy_id
 
 -- MAGIC %md
 -- MAGIC ## A5. DBUs per policy per month
--- MAGIC Month of run start. `dbus` = GPU-hold-hours x `dbus_per_gpu_hour`. Runs with no policy are the NULL row.
+-- MAGIC Month of run start / attach. `dbus` = GPU-hold-hours x `dbus_per_gpu_hour`. Runs and sessions with no policy
+-- MAGIC are the NULL row. `runs_gpus_assumed` counts job runs only (every notebook session uses `nb_gpus`).
 
 -- COMMAND ----------
 
 CREATE OR REPLACE TEMP VIEW v_policy_dbus AS
 SELECT
-  date_trunc('MONTH', r.run_start)                                     AS month,
-  r.policy_id,
-  COUNT(DISTINCT r.job_key)                                            AS jobs,
-  COUNT(*)                                                             AS task_runs,
-  SUM(IF(r.gpus_assumed, 1, 0))                                        AS runs_gpus_assumed,
-  SUM(IF(r.hold_s IS NULL, 1, 0))                                      AS runs_no_hold,
-  ROUND(SUM(r.hold_s * r.gpus) / 3600.0, 1)                            AS gpu_hours,
-  ROUND(SUM(r.hold_s * r.gpus) / 3600.0 * MAX(p.dbus_per_gpu_hour), 2) AS dbus,
-  any_value(t.policy_tags)                                             AS policy_tags  -- one tags row per policy; maps can't be grouped on
-FROM v_run_policy r
+  date_trunc('MONTH', a.start_time)                                         AS month,
+  a.policy_id,
+  COUNT(DISTINCT IF(a.workload = 'job', a.workload_key, NULL))              AS jobs,
+  SUM(IF(a.workload = 'job', 1, 0))                                         AS task_runs,
+  COUNT(DISTINCT IF(a.workload = 'notebook', a.workload_key, NULL))         AS notebooks,
+  SUM(IF(a.workload = 'notebook', 1, 0))                                    AS nb_sessions,
+  SUM(IF(a.workload = 'job' AND a.gpus_assumed, 1, 0))                      AS runs_gpus_assumed,
+  SUM(IF(a.hold_s IS NULL, 1, 0))                                           AS runs_no_hold,
+  ROUND(SUM(IF(a.workload = 'job', a.hold_s * a.gpus, 0)) / 3600.0, 1)      AS job_gpu_hours,
+  ROUND(SUM(IF(a.workload = 'notebook', a.hold_s * a.gpus, 0)) / 3600.0, 1) AS nb_gpu_hours,
+  ROUND(SUM(a.hold_s * a.gpus) / 3600.0, 1)                                 AS gpu_hours,
+  ROUND(SUM(a.hold_s * a.gpus) / 3600.0 * MAX(p.dbus_per_gpu_hour), 2)      AS dbus,
+  any_value(t.policy_tags)                                                  AS policy_tags  -- one tags row per policy; maps can't be grouped on
+FROM v_attributed a
 CROSS JOIN v_params p
 LEFT JOIN v_policy_tags t USING (policy_id)
 GROUP BY 1, 2
 
 -- COMMAND ----------
 
-SELECT month, policy_id, jobs, task_runs, runs_gpus_assumed, runs_no_hold, gpu_hours, dbus, policy_tags
+SELECT month, policy_id, jobs, task_runs, notebooks, nb_sessions, runs_gpus_assumed, runs_no_hold,
+       job_gpu_hours, nb_gpu_hours, gpu_hours, dbus, policy_tags
 FROM v_policy_dbus
 ORDER BY month DESC, dbus DESC
 
@@ -556,21 +925,25 @@ GROUP BY 1
 -- COMMAND ----------
 
 -- MAGIC %md
--- MAGIC B1a. Bill vs job GPU-hold per day (job hours by run-start date, so long runs land on their first day)
+-- MAGIC B1a. Bill vs attributed GPU-hold per day (hours by run-start / attach date, so long runs land on their first
+-- MAGIC day)
 
 -- COMMAND ----------
 
 SELECT d.usage_date,
-       ROUND(d.reserved_dbus, 2)                       AS reserved_dbus,
-       ROUND(d.implied_gpu_hours, 1)                   AS implied_gpu_hours,
+       ROUND(d.reserved_dbus, 2)                                          AS reserved_dbus,
+       ROUND(d.implied_gpu_hours, 1)                                      AS implied_gpu_hours,
        d.reservation_gpu_hours,
-       ROUND(j.job_gpu_hours, 1)                       AS job_gpu_hours,
-       ROUND(j.job_gpu_hours * p.dbus_per_gpu_hour, 2) AS job_dbus
+       ROUND(j.job_gpu_hours, 1)                                          AS job_gpu_hours,
+       ROUND(j.nb_gpu_hours, 1)                                           AS nb_gpu_hours,
+       ROUND((j.job_gpu_hours + j.nb_gpu_hours) * p.dbus_per_gpu_hour, 2) AS attributed_dbus
 FROM v_reserved_daily d
 CROSS JOIN v_params p
 LEFT JOIN (
-  SELECT to_date(run_start) AS usage_date, SUM(hold_s * gpus) / 3600.0 AS job_gpu_hours
-  FROM v_run_policy GROUP BY 1
+  SELECT to_date(start_time) AS usage_date,
+         SUM(IF(workload = 'job',      hold_s * gpus, 0)) / 3600.0 AS job_gpu_hours,
+         SUM(IF(workload = 'notebook', hold_s * gpus, 0)) / 3600.0 AS nb_gpu_hours
+  FROM v_attributed GROUP BY 1
 ) j USING (usage_date)
 ORDER BY d.usage_date DESC
 
@@ -645,8 +1018,11 @@ ORDER BY bucket, policy_id, dbus DESC
 
 -- MAGIC %md
 -- MAGIC ## Not covered yet
--- MAGIC - Notebooks on the reservation. Notebook attach events carry neither the policy nor the accelerator. Per a code
--- MAGIC   reading, an attached idle session holds its GPUs.
+-- MAGIC - Notebooks are attributed by inference (Part N header): reserved by elimination, policy from the notebook's
+-- MAGIC   other billed usage, GPUs = `nb_gpus`. The direct record (AICM session-create activity log: accelerator,
+-- MAGIC   guaranteed capacity ID, notebook ID, usage policy) is internal, not in any system table.
+-- MAGIC - Notebook GPU-pool attaches (pool ID set in the Environment panel) and `@distributed` launches from a notebook
+-- MAGIC   aren't checked to produce an AIR session ID in `attachNotebook`.
 -- MAGIC - Tasks that get a GPU through `compute.hardware_accelerator` (e.g. a notebook task on GPU_8xH100) instead of
 -- MAGIC   ai_runtime_task aren't in A1.
 -- MAGIC - `update` requests that remove the policy via fields_to_remove are treated as "unchanged".

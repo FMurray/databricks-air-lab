@@ -2,9 +2,10 @@
 # MAGIC %md
 # MAGIC # Reserved GPU attribution: DBUs per usage policy (PySpark)
 # MAGIC
-# MAGIC PySpark version of `reserved_gpu_attribution.sql`: same chain, views and caveats (read that notebook's header
-# MAGIC for how the chain works and why). Each `v_*` SQL view is a DataFrame of the same name without the prefix, and
-# MAGIC each check (A1a, MVP-1, ...) is a `display` cell. Run top to bottom in the reservation's workspace.
+# MAGIC PySpark version of `reserved_gpu_attribution.sql`: same chain, views and caveats (read that notebook's header,
+# MAGIC and its Part N header for notebooks, for how the chain works and why). Each `v_*` SQL view is a DataFrame of the
+# MAGIC same name without the prefix, and each check (A1a, MVP-1, N1a, ...) is a `display` cell. Run top to bottom in
+# MAGIC the reservation's workspace.
 # MAGIC
 # MAGIC DataFrames are lazy like temp views: every `display` re-reads its sources. Set `SCRATCH_SCHEMA` to write the
 # MAGIC audit read to a table once and read it back.
@@ -31,7 +32,11 @@ HOLD_BASIS = "execution"                               # 'execution' | 'setup_ex
 DEFAULT_GPUS = 8                                       # GPUs assumed when accelerator_count isn't found (one node)
 POLICY_LOOKBACK_DAYS = 90                              # days of policy billing rows read for tags
 RESERVED_GPUS = 160                                    # nodes x GPUs per node (Part B only)
-WORKSPACE_ID = None                                    # system tables span workspaces; set to scope them to one
+NB_HOLD_BASIS = "idle_timeout"                         # notebooks: 'idle_timeout' | 'activity' (N1)
+NB_IDLE_TIMEOUT_MIN = 60                               # notebooks: AIR session idle timeout, minutes
+NB_GPUS = 8                                            # notebooks: GPUs per session (one node)
+NB_POLICY_LOOKBACK_DAYS = 90                           # notebooks: billing read for policy starts SINCE minus this
+WORKSPACE_ID = None                                   # system tables span workspaces; set to scope them to one
 SCRATCH_SCHEMA = None                                  # e.g. "main.scratch"; materializes the audit read
 
 TABLES = {
@@ -50,6 +55,8 @@ TABLES = {
 PHASES = ("setup", "execution", "cleanup")
 RESERVED = "RESERVED_COMPUTE"
 UNTIL_TS = F.lit(UNTIL) if UNTIL else F.current_timestamp()
+AIR_SESSION_ID = r"^[0-9]{4}-[0-9]{6}-[a-zA-Z0-9]{1,8}-cnx$"  # attachNotebook clusterId of an AIR session
+compute_type = F.col("product_features.ai_runtime.compute_type")
 
 
 def system(name, ws_scoped=True):
@@ -95,8 +102,11 @@ def n_if(cond, name):
     return F.sum(F.when(cond, 1).otherwise(0)).alias(name)
 
 
-def gpu_hours(seconds="hold_s", name="gpu_hours"):
-    return F.round(F.sum(F.col(seconds) * F.col("gpus")) / 3600, 1).alias(name)
+def gpu_hours(seconds="hold_s", name="gpu_hours", where=None):
+    gpu_s = F.col(seconds) * F.col("gpus")
+    if where is not None:
+        gpu_s = F.when(where, gpu_s).otherwise(0)
+    return F.round(F.sum(gpu_s) / 3600, 1).alias(name)
 
 
 def dbus(seconds="hold_s", name="dbus"):
@@ -376,6 +386,266 @@ display(
 # COMMAND ----------
 
 # MAGIC %md
+# MAGIC # Part N: notebooks -> policy
+# MAGIC Interactive notebooks on serverless GPU. No audit event names their accelerator or policy, so (as in the SQL
+# MAGIC notebook's Part N header): sessions come from attach events with an AIR session ID, reserved is by elimination
+# MAGIC (no per-notebook GPU billing during the session), and the policy is the notebook's own billed usage policy.
+# MAGIC
+# MAGIC ## N1. AIR notebook sessions from audit
+# MAGIC `nb_audit` is the one notebook audit read (`runCommand` rows need verbose audit logs; N1a shows whether
+# MAGIC they're there). Sessions are per (notebook, user, session ID), from the first successful attach. A session ends
+# MAGIC at last activity (attach, the user's detach, or its last `runCommand`) plus `NB_IDLE_TIMEOUT_MIN`, or when
+# MAGIC the same user attaches the notebook elsewhere (`replaced_at`), or at `UNTIL`.
+
+# COMMAND ----------
+
+nb_audit = materialize(
+    system("audit")
+    .where((F.col("event_date") >= F.lit((SINCE - timedelta(days=7)).date()))
+           & (F.col("service_name") == "notebook")
+           & F.col("action_name").isin("attachNotebook", "detachNotebook", "runCommand"))
+    .select(
+        "workspace_id",
+        "event_time",
+        "action_name",
+        F.col("user_identity.email").alias("actor"),
+        rp("notebookId").alias("notebook_id"),
+        rp("clusterId").alias("compute_id"),
+        rp("path").alias("path"),
+        (F.coalesce(F.col("response.status_code"), F.lit(200)) < 400).alias("ok"),
+        F.coalesce(rp("clusterId").rlike(AIR_SESSION_ID), F.lit(False)).alias("is_air_session"),
+    ),
+    "air_nb_audit",
+)
+
+# N1a. Notebook events by compute ID shape (runCommand rows on AIR sessions = verbose audit is on)
+display(
+    nb_audit.groupBy(
+        "action_name",
+        F.when(F.col("is_air_session"), "AIR session (...-cnx)")
+        .when(F.col("compute_id").isNull(), "no clusterId")
+        .otherwise("other compute").alias("compute_kind"),
+        "ok")
+    .agg(F.count("*").alias("events"), F.countDistinct("notebook_id").alias("notebooks"),
+         F.countDistinct("compute_id").alias("computes"),
+         F.min("event_time").alias("first_event"), F.max("event_time").alias("last_event"))
+    .orderBy("action_name", "compute_kind", "ok")
+)
+
+# COMMAND ----------
+
+first_attaches = (
+    nb_audit.where((F.col("action_name") == "attachNotebook") & F.col("ok")
+                   & F.col("notebook_id").isNotNull() & F.col("compute_id").isNotNull())
+    .groupBy("workspace_id", "notebook_id", "actor", "compute_id", "is_air_session")
+    .agg(F.min("event_time").alias("attach_time"),
+         F.max_by("path", "event_time").alias("path"),
+         F.count("*").alias("attaches"))
+    .withColumn("replaced_at", F.lead("attach_time").over(
+        Window.partitionBy("workspace_id", "notebook_id", "actor").orderBy("attach_time")))
+)
+air_sessions = (
+    first_attaches.where(F.col("is_air_session") & in_window("attach_time"))
+    .withColumn("bound", F.coalesce("replaced_at", UNTIL_TS))
+)
+
+s, e = (lambda c: F.col(f"s.{c}")), (lambda c: F.col(f"e.{c}"))
+is_cmd = e("action_name") == "runCommand"
+session_activity = (
+    air_sessions.alias("s")
+    .join(nb_audit.alias("e"),
+          (e("workspace_id") == s("workspace_id")) & (e("notebook_id") == s("notebook_id"))
+          & (e("event_time") >= s("attach_time")) & (e("event_time") < s("bound"))
+          & ((is_cmd & (e("compute_id") == s("compute_id")))
+             | ((e("action_name") == "detachNotebook") & (e("actor") == s("actor")))))
+    .groupBy("s.compute_id", "s.notebook_id", "s.actor")
+    .agg(F.max(F.when(is_cmd, e("event_time"))).alias("last_command"),
+         n_if(is_cmd, "commands"),
+         F.max(F.when(~is_cmd, e("event_time"))).alias("last_detach"))
+)
+
+NB_HOLD = {"idle_timeout": "idle_end", "activity": "activity_end"}
+nb_sessions = (
+    air_sessions.join(session_activity, ["compute_id", "notebook_id", "actor"], "left")
+    .withColumnRenamed("compute_id", "session_id")
+    .withColumn("commands", F.coalesce("commands", F.lit(0)))
+    .withColumn("last_activity", F.greatest("attach_time", F.coalesce("last_command", "attach_time"),
+                                            F.coalesce("last_detach", "attach_time")))
+    .withColumn("activity_end", F.least("bound", "last_activity"))
+    .withColumn("idle_end", F.least("bound", F.expr(f"timestampadd(MINUTE, {NB_IDLE_TIMEOUT_MIN}, last_activity)")))
+    .withColumn("hold_end", F.col(NB_HOLD[NB_HOLD_BASIS]))
+)
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ## N2. Reserved sessions, by elimination
+# MAGIC `nb_match`: 'on-demand GPU' = the notebook billed GPU usage overlapping the session (attach to `idle_end`);
+# MAGIC 'recent' = no rows yet but the session ended in the last 24 hours; 'reserved' = no rows (only these flow on).
+# MAGIC N2a's `od_rows_no_workload_key` must be 0: on-demand GPU rows with no notebook / job / workload ID would hide
+# MAGIC on-demand notebook sessions, which would then read as reserved.
+
+# COMMAND ----------
+
+nb_gpu_billing = (
+    system("usage")
+    .where((F.col("usage_date") >= F.lit((SINCE - timedelta(days=7)).date()))
+           & (F.col("product_features.ai_runtime").isNotNull() | F.col("product_features.serverless_gpu").isNotNull())
+           & (F.coalesce(compute_type, F.lit("")) != RESERVED))
+    .select("workspace_id",
+            F.col("usage_metadata.notebook_id").alias("notebook_id"),
+            F.col("usage_metadata.job_id").alias("job_id"),
+            F.col("usage_metadata.ai_runtime_workload_id").alias("workload_id"),
+            "usage_start_time", "usage_end_time", "usage_quantity")
+)
+
+b = lambda c: F.col(f"b.{c}")
+on_demand = (
+    nb_sessions.alias("s")
+    .join(nb_gpu_billing.alias("b"),
+          (b("workspace_id") == s("workspace_id")) & (b("notebook_id") == s("notebook_id"))
+          & (b("usage_end_time") > s("attach_time")) & (b("usage_start_time") < s("idle_end")), "left")
+    .groupBy("s.session_id", "s.notebook_id", "s.actor")
+    .agg(F.count(b("usage_quantity")).alias("od_rows"), F.sum(b("usage_quantity")).alias("od_dbus"))
+)
+seconds_to = lambda end: F.expr(f"timestampdiff(SECOND, attach_time, {end})")
+nb_reserved_sessions = (
+    nb_sessions.join(on_demand, ["session_id", "notebook_id", "actor"])
+    .withColumn("nb_match",
+                F.when(F.col("od_rows") > 0, "on-demand GPU")
+                .when(F.col("idle_end") > F.current_timestamp() - F.expr("INTERVAL 24 HOURS"), "recent")
+                .otherwise("reserved"))
+    .withColumn("gpus", F.lit(NB_GPUS))
+    .withColumn("activity_s", seconds_to("activity_end"))
+    .withColumn("idle_timeout_s", seconds_to("idle_end"))
+    .withColumn("hold_s", seconds_to("hold_end"))
+)
+
+# COMMAND ----------
+
+# N2a. Sessions by match, with both hold measures
+no_workload_key = (
+    nb_gpu_billing.where(F.col("notebook_id").isNull() & F.col("job_id").isNull() & F.col("workload_id").isNull()
+                         & in_window("usage_start_time"))
+    .groupBy("workspace_id").agg(F.count("*").alias("od_rows_no_workload_key"))
+)
+display(
+    nb_reserved_sessions.groupBy("workspace_id", "nb_match")
+    .agg(F.countDistinct("notebook_id").alias("notebooks"), F.countDistinct("actor").alias("users"),
+         F.count("*").alias("sessions"),
+         n_if(F.col("commands") > 0, "sessions_with_commands"),
+         n_if(F.col("replaced_at").isNotNull(), "sessions_replaced"),
+         gpu_hours("activity_s", "activity_gpu_hours"),
+         gpu_hours("idle_timeout_s", "idle_timeout_gpu_hours"),
+         F.expr("round(percentile(idle_timeout_s, 0.5) / 3600, 2)").alias("p50_session_hours"),
+         F.expr("round(percentile(idle_timeout_s, 0.95) / 3600, 2)").alias("p95_session_hours"))
+    .join(no_workload_key, "workspace_id", "left")
+    .fillna(0, ["od_rows_no_workload_key"])
+    .orderBy("workspace_id", F.desc("sessions"))
+)
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ## N3. Policy per reserved session
+# MAGIC Each 'reserved' session takes the policy of one of its notebook's policy-bearing billing rows (any product): the
+# MAGIC same user's first, then the latest at or before attach, else the earliest after. NULL policy = no such row in
+# MAGIC the lookback: check the notebook's Environment panel.
+
+# COMMAND ----------
+
+reserved_nb = nb_reserved_sessions.where(F.col("nb_match") == "reserved")
+nb_policy_rows = (
+    system("usage")
+    .where((F.col("usage_date") >= F.lit((SINCE - timedelta(days=NB_POLICY_LOOKBACK_DAYS)).date()))
+           & F.col("usage_metadata.usage_policy_id").isNotNull())
+    .select("workspace_id",
+            F.col("usage_metadata.notebook_id").alias("notebook_id"),
+            F.col("usage_metadata.usage_policy_id").alias("policy_id"),
+            F.coalesce("identity_metadata.run_as", "identity_metadata.owned_by",
+                       "identity_metadata.created_by").alias("principal"),
+            "usage_start_time", "billing_origin_product")
+    .join(reserved_nb.select("notebook_id").distinct(), "notebook_id", "left_semi")
+)
+
+r = lambda c: F.col(f"r.{c}")
+same_notebook = (r("workspace_id") == s("workspace_id")) & (r("notebook_id") == s("notebook_id"))
+nb_session_policy = (
+    latest(
+        reserved_nb.alias("s").join(nb_policy_rows.alias("r"), same_notebook, "left")
+        .select("s.*", "r.policy_id",
+                r("usage_start_time").alias("policy_row_time"),
+                r("billing_origin_product").alias("policy_row_product"),
+                (r("principal") == s("actor")).alias("_same_user"),
+                (r("usage_start_time") <= s("attach_time")).alias("_before")),
+        ["session_id", "notebook_id", "actor"],
+        F.desc_nulls_last("_same_user"),
+        F.desc_nulls_last(F.when(F.col("_before"), F.col("policy_row_time"))),
+        F.asc("policy_row_time"),
+    )
+    .withColumn("policy_source", F.when(F.col("policy_id").isNotNull(), F.concat(
+        F.when(F.col("_same_user"), "same user").otherwise("other user"), F.lit(", "),
+        F.when(F.col("_before"), "before").otherwise("after"), F.lit(" attach"))))
+    .drop("_same_user", "_before")
+)
+
+# N3a. Reserved notebook GPU-hours by policy source ('same user, before attach' is strongest)
+display(
+    nb_session_policy.groupBy("policy_source", "policy_row_product")
+    .agg(F.countDistinct("notebook_id").alias("notebooks"), F.count("*").alias("sessions"), gpu_hours())
+    .orderBy(F.desc("gpu_hours"))
+)
+
+# COMMAND ----------
+
+# N3b. Sessions whose notebook billed under a different policy before and after the attach (same user)
+display(
+    nb_session_policy.alias("s")
+    .join(nb_policy_rows.alias("r"), same_notebook & (r("principal") == s("actor")))
+    .groupBy("s.session_id", "s.notebook_id", "s.path", "s.actor", "s.attach_time", "s.hold_s", "s.gpus",
+             s("policy_id").alias("chosen_policy"))
+    .agg(F.max_by(r("policy_id"), F.when(r("usage_start_time") <= s("attach_time"), r("usage_start_time")))
+         .alias("policy_before"),
+         F.min_by(r("policy_id"), F.when(r("usage_start_time") > s("attach_time"), r("usage_start_time")))
+         .alias("policy_after"))
+    .where(F.col("policy_before") != F.col("policy_after"))
+    .select("notebook_id", "path", "actor", "attach_time", "chosen_policy", "policy_before", "policy_after",
+            F.round(F.col("hold_s") * F.col("gpus") / 3600, 1).alias("gpu_hours"))
+    .orderBy(F.desc("gpu_hours"))
+)
+
+# COMMAND ----------
+
+# N3c. Who ran it: reserved notebook GPU-hours per user and policy (actor = the attaching user)
+display(
+    nb_session_policy.groupBy("actor", "policy_id")
+    .agg(F.countDistinct("notebook_id").alias("notebooks"), F.count("*").alias("sessions"), gpu_hours())
+    .orderBy(F.desc("gpu_hours"))
+)
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC # Part A (cont.): tags and DBUs, jobs and notebooks
+# MAGIC `attributed`: one row per charged unit, a reserved task run (A3) or a reserved notebook session (N3).
+
+# COMMAND ----------
+
+attributed = (
+    run_policy.select(F.lit("job").alias("workload"), "key_type", F.col("job_key").alias("workload_key"),
+                      F.col("run_id").cast("string").alias("unit_id"), F.col("run_start").alias("start_time"),
+                      "policy_id", "gpus", "gpus_assumed", "hold_s")
+    .unionByName(nb_session_policy.select(
+        F.lit("notebook").alias("workload"), F.lit("notebook").alias("key_type"),
+        F.col("notebook_id").alias("workload_key"), F.col("session_id").alias("unit_id"),
+        F.col("attach_time").alias("start_time"), "policy_id", "gpus",
+        F.lit(True).alias("gpus_assumed"), "hold_s"))
+)
+is_job, is_nb = F.col("workload") == "job", F.col("workload") == "notebook"
+
+# COMMAND ----------
+
+# MAGIC %md
 # MAGIC ## A4. Policy tags
 # MAGIC From each policy's own billing rows, across all workspaces. Only key=value pairs present on every row for the
 # MAGIC policy are kept, so job tags drop out unless the policy has a single job (`billing_jobs` = 1).
@@ -387,7 +657,7 @@ policy_rows = (
     .where(F.col("usage_date") >= F.date_sub(F.current_date(), POLICY_LOOKBACK_DAYS))
     .select(F.col("usage_metadata.usage_policy_id").alias("policy_id"),
             F.col("usage_metadata.job_id").alias("job_id"), "workspace_id", "custom_tags")
-    .join(run_policy.select("policy_id").where(F.col("policy_id").isNotNull()).distinct(), "policy_id", "left_semi")
+    .join(attributed.select("policy_id").where(F.col("policy_id").isNotNull()).distinct(), "policy_id", "left_semi")
 )
 evidence = policy_rows.groupBy("policy_id").agg(
     F.count("*").alias("billing_rows"),
@@ -407,7 +677,7 @@ policy_tags = (
 
 # A4a. Tags per reserved policy (NULL billing_rows = no billing rows in the lookback)
 display(
-    run_policy.where(F.col("policy_id").isNotNull()).select("policy_id").distinct()
+    attributed.where(F.col("policy_id").isNotNull()).select("policy_id").distinct()
     .join(policy_tags, "policy_id", "left")
     .withColumn("n_tags", F.when(F.col("policy_tags").isNotNull(), F.size("policy_tags")))
     .orderBy(F.asc_nulls_first("n_tags"), "policy_id")
@@ -417,15 +687,18 @@ display(
 
 # MAGIC %md
 # MAGIC ## A5. DBUs per policy per month
-# MAGIC Month of run start. `dbus` = GPU-hold-hours x `DBUS_PER_GPU_HOUR`. Runs with no policy are the NULL row.
+# MAGIC Month of run start / attach. `dbus` = GPU-hold-hours x `DBUS_PER_GPU_HOUR`. Runs and sessions with no policy
+# MAGIC are the NULL row. `runs_gpus_assumed` counts job runs only (every notebook session uses `NB_GPUS`).
 
 # COMMAND ----------
 
 policy_dbus = (
-    run_policy.groupBy(F.date_trunc("MONTH", "run_start").alias("month"), "policy_id")
-    .agg(n_jobs(), n_task_runs(),
-         n_if(F.col("gpus_assumed"), "runs_gpus_assumed"),
+    attributed.groupBy(F.date_trunc("MONTH", "start_time").alias("month"), "policy_id")
+    .agg(F.countDistinct(F.when(is_job, F.col("workload_key"))).alias("jobs"), n_if(is_job, "task_runs"),
+         F.countDistinct(F.when(is_nb, F.col("workload_key"))).alias("notebooks"), n_if(is_nb, "nb_sessions"),
+         n_if(is_job & F.col("gpus_assumed"), "runs_gpus_assumed"),
          n_if(F.col("hold_s").isNull(), "runs_no_hold"),
+         gpu_hours(name="job_gpu_hours", where=is_job), gpu_hours(name="nb_gpu_hours", where=is_nb),
          gpu_hours(), dbus())
     .join(policy_tags.select("policy_id", "policy_tags"), "policy_id", "left")
 )
@@ -437,12 +710,11 @@ display(policy_dbus.orderBy(F.desc("month"), F.desc("dbus")))
 # MAGIC # Part B: context
 # MAGIC ## B1. Reserved bill per day
 # MAGIC `implied_gpu_hours` = billed DBUs / rate. `reservation_gpu_hours` = RESERVED_GPUS x 24.
-# MAGIC B1a puts it next to job GPU-hold by run-start date (long runs land on their first day).
+# MAGIC B1a puts it next to attributed GPU-hold by run-start / attach date (long runs land on their first day).
 
 # COMMAND ----------
 
 usage = system("usage")
-compute_type = F.col("product_features.ai_runtime.compute_type")
 
 reserved_daily = (
     usage.where((compute_type == RESERVED) & in_window("usage_start_time"))
@@ -452,11 +724,12 @@ reserved_daily = (
     .withColumn("reservation_gpu_hours", F.lit(RESERVED_GPUS * 24))
 )
 
-# B1a. Bill vs job GPU-hold per day
+# B1a. Bill vs attributed GPU-hold per day
 display(
     reserved_daily.join(
-        run_policy.groupBy(F.to_date("run_start").alias("usage_date"))
-        .agg(gpu_hours(name="job_gpu_hours"), dbus(name="job_dbus")),
+        attributed.groupBy(F.to_date("start_time").alias("usage_date"))
+        .agg(gpu_hours(name="job_gpu_hours", where=is_job), gpu_hours(name="nb_gpu_hours", where=is_nb),
+             dbus(name="attributed_dbus")),
         "usage_date", "left")
     .orderBy(F.desc("usage_date"))
 )
@@ -525,5 +798,6 @@ display(
 
 # MAGIC %md
 # MAGIC ## Not covered yet
-# MAGIC Same as `reserved_gpu_attribution.sql`: notebooks, `compute.hardware_accelerator` GPU tasks, policy removal via
-# MAGIC `fields_to_remove`, and console policy changes.
+# MAGIC Same as `reserved_gpu_attribution.sql`: notebooks are attributed by inference only (no system table records
+# MAGIC their accelerator or policy), notebook GPU-pool attaches and `@distributed` launches are unchecked,
+# MAGIC `compute.hardware_accelerator` GPU tasks, policy removal via `fields_to_remove`, and console policy changes.
