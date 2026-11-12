@@ -17,8 +17,12 @@ Distributed Checkpoint (DCP):
 - `dcp.async_save` does background uploads (needs a `cpu:gloo,cuda:nccl` process group).
 - Requires GPU env **v5+** / `serverless_gpu` 0.5.16+.
 
-!!! warning "Your data pipeline's position is NOT checkpointed"
-    Resume from an epoch boundary, or track sample offsets yourself.
+!!! warning "Model checkpoints don't include your data position — but the SDK can"
+    DCP saves weights and optimizer, not where each rank is in its data. Since `serverless_gpu`
+    0.5.21 (`databricks.air.data` on env v6+) the SDK `DataLoader` has `state_dict()` /
+    `load_state_dict()` for `UCVolumeDataset` streams — at **file** granularity, pinned to the same
+    `world_size × num_workers`. Resuming *inside* large files, multi-rank, needs more:
+    [Resume mid-epoch](resume-mid-epoch.md).
 
 Frameworks with built-in resume (HF Trainer, or e.g. TabICL's `--checkpoint_dir` auto-resume)
 slot into this directly — point them at the volume.

@@ -21,4 +21,5 @@ anything unverified is labeled as such.
 ## Survive things
 
 - [Checkpoint past the 7-day cap](checkpoint-past-the-7-day-cap.md) — the runtime ceiling and how to work within it
+- [Resume mid-epoch](resume-mid-epoch.md) — exact-next-sample resume on multi-node, built on the SDK's loader checkpointing *(local pre-flight; AIR run pending)*
 - [Debug a failed run](debug-a-failed-run.md) — symptom → actual cause, from failures we actually hit

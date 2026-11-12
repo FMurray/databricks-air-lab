@@ -19,6 +19,12 @@ customer engagement uses — multi-node is CLI-only).
 
 ## The sharp edge: `serverless_gpu` isn't in the torch venv on the CLI path
 
+!!! note "Renamed on GPU env v6+: `databricks.air.data`"
+    Per the SDK API reference and source (2026-11), env v6+ ships the same classes as
+    `databricks.air.data` (dist `databricks-sdk-air`); the code is identical to `serverless_gpu.data`.
+    Not yet verified on a v6 run here. Resolve either name (see
+    `experiments/dataloading/mid-epoch-resume/resumable_data.py:import_air_data`).
+
 `serverless_gpu` (v0.5.22, dist `databricks_serverless_gpu`) is preinstalled for **notebook**
 sessions, but on the CLI/torchrun path it lives **only in the base python**
 (`/databricks/python3/.../site-packages`), which has **no torch** — while torch lives in the

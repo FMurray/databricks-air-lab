@@ -56,6 +56,7 @@ nav:
           - Ship telemetry to Delta: cookbook/ship-telemetry-to-delta.md
       - Survive things:
           - Checkpoint past the 7-day cap: cookbook/checkpoint-past-the-7-day-cap.md
+          - Resume mid-epoch: cookbook/resume-mid-epoch.md
           - Debug a failed run: cookbook/debug-a-failed-run.md
   - Fleet ops:
       - fleet-ops/index.md

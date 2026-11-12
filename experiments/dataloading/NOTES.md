@@ -116,6 +116,10 @@ the customer's no-egress posture). The docs' `UCVolumeDataset` examples assume t
   `3f2d19b472bb49549eb7d01847ec6325`; archived to local store as run
   `ee6d0b194ae74459bbd9d1303072456b` (`experiments/mlflow.db`).
 
+## Follow-on: mid-epoch resume
+`mid-epoch-resume/` builds on the SDK's loader checkpointing (`DataLoader.state_dict()`, 0.5.21+)
+for exact-next-sample resume on multi-node; see `mid-epoch-resume/NOTES.md`.
+
 ## Still to verify
 - **8xH100 world≥2** for cross-RANK exact cover + `UCVOLUME_NWORKERS_OK` + `UCVOLUME_DATALOADER_COMPLETE`
   (needs approval — whole-node H100 spend). Override in `workloads/ucvolume-dataloader.example.yaml`.

@@ -1,0 +1,65 @@
+# Mid-epoch resume across a platform max_retries resubmit, multi-node.
+# Trainer + helpers: experiments/dataloading/mid-epoch-resume/ (train.py, resumable_data.py,
+# checkpointing.py). Walkthrough notebook: mid_epoch_resume_walkthrough.py in the same dir.
+# Success criteria + local pre-flight receipts: experiments/dataloading/mid-epoch-resume/NOTES.md.
+# Schema source of truth: `air -h config`.
+#
+# THE TEST (headline shape: 2x GPU_8xH100, world=16, num_workers=4 -> 64 data streams):
+#   Attempt 0 (cold): rank 0 stages 256 synthetic files (idempotent), trains, checkpoints every 200
+#     steps to the UC volume (DCP via UCVolumeWriter; model + optimizer + every rank's loader state
+#     in ONE save), then every rank hard-exits 137 at step 700 -- mid epoch 1, mid file, 100 steps
+#     past the last checkpoint.
+#   max_retries: 1 -> the platform resubmits the whole job in NEW containers.
+#   Attempt 1: same command. train.py finds the newest complete checkpoint (step 600), restores
+#     each rank's exact row position, retrains the lost 601-700, runs to 1200 (~2.3 epochs).
+#   Then node 0 runs verify_ledger.py: every complete epoch covers the dataset exactly once,
+#     no duplicates, no gaps, >= 2 attempts contributed -> LEDGER_EXACTLY_ONCE_OK.
+#
+# Step-downs (cheap API gate first -- A10 is single-node only, so this is NOT a multi-node receipt):
+#   --override compute.num_accelerators=1 compute.accelerator_type=GPU_1xA10
+experiment_name: air-lab-mid-epoch-resume
+
+environment:
+  version: "5"          # v5: serverless_gpu (>= 0.5.21 has loader checkpointing) in the base python,
+                        # torch in the databricks-ai venv -> PYTHONPATH bridge below. On GPU env v6
+                        # the SDK is databricks.air.data (train.py resolves either).
+  dependencies: []
+
+compute:
+  num_accelerators: 16  # 2 nodes x 8. Resume must use the SAME shape: the loader state is pinned to
+  accelerator_type: GPU_8xH100   # (world_size, num_workers). Check node 1: `air logs <id> --node 1`.
+
+code_source:
+  type: snapshot
+  snapshot:
+    root_path: ..
+    include_paths:
+      - experiments/dataloading/mid-epoch-resume/
+
+# ⚠ FILL IN the three /Volumes/<catalog>/<schema>/<volume>/mid-epoch-resume paths (a writable UC
+# volume; NEVER /tmp -- /tmp does not survive the resubmit). Use a fresh ckpt/ledger dir per test,
+# or the run will resume a previous test's checkpoint (that is the feature, not a bug).
+# --max-restarts=0 keeps torchrun's elastic restart out of it: the PLATFORM retry is under test.
+command: >-
+  PYTHONPATH=/databricks/python3/lib/python3.12/site-packages:$PYTHONPATH
+  /opt/databricks-environments/databricks-ai/bin/torchrun
+  --nnodes=$NUM_NODES --node_rank=$NODE_RANK
+  --master_addr=$MASTER_ADDR --master_port=$MASTER_PORT
+  --nproc_per_node=$LOCAL_WORLD_SIZE --max-restarts=0
+  $CODE_SOURCE_PATH/experiments/dataloading/mid-epoch-resume/train.py
+  --data-dir /Volumes/<catalog>/<schema>/<volume>/mid-epoch-resume/data
+  --ckpt-dir /Volumes/<catalog>/<schema>/<volume>/mid-epoch-resume/ckpt-run1
+  --ledger-dir /Volumes/<catalog>/<schema>/<volume>/mid-epoch-resume/ledger-run1
+  --make-data 256 --rows-per-file 512 --seq 128
+  --steps 1200 --batch-size 16 --num-workers 4 --ckpt-every-steps 200 --fail-at-step 700
+  && if [ "$NODE_RANK" = "0" ]; then
+  PYTHONPATH=/databricks/python3/lib/python3.12/site-packages:$PYTHONPATH
+  /opt/databricks-environments/databricks-ai/bin/python
+  $CODE_SOURCE_PATH/experiments/dataloading/mid-epoch-resume/verify_ledger.py
+  --ledger-dir /Volumes/<catalog>/<schema>/<volume>/mid-epoch-resume/ledger-run1
+  --data-dir /Volumes/<catalog>/<schema>/<volume>/mid-epoch-resume/data
+  --expect-resume; fi
+
+max_retries: 1          # THE knob under test: one resubmit after the forced fault.
+timeout_minutes: 30     # Tiny model; staging 256 x ~0.5 MB files dominates. Two attempts fit.
+mlflow_run_name: mid-epoch-resume

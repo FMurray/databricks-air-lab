@@ -14,6 +14,16 @@
 # MAGIC | 3 | **Recover automatically from the most recent valid checkpoint** — newest `.metadata` dir via `UCVolumeReader` | `RESILIENT_RESUME_OK` |
 # MAGIC | 4 | **Checkpoint the data pipeline** + **Make it deterministic** — checkpointed shuffle RNG + (epoch, offset) | `RESILIENT_PIPELINE_OK` |
 # MAGIC
+# MAGIC > ⚠️ **Known-broken (2026-11-09): proof 4 here is vacuous — do not cite `RESILIENT_PIPELINE_OK`
+# MAGIC > from this notebook.** It saves `(epoch, sample_offset)` but on resume rebuilds the loader from
+# MAGIC > the start of the epoch without skipping ahead (re-training the epoch's head), discards the
+# MAGIC > shuffle order it computes, keeps per-rank position in a shared non-tensor DCP entry (DCP stores
+# MAGIC > one rank's value), and its check compares the first batch of two fresh loaders (always equal).
+# MAGIC > The torchrun sibling `resilient_8xh100_notebook` was fixed (SDK `DataLoader.state_dict()` + row
+# MAGIC > cursor + per-rank gather + ledger proof); this `@distributed` variant was not ported because the
+# MAGIC > launch path is out of scope for the engagement. Rules + scripts:
+# MAGIC > `experiments/dataloading/mid-epoch-resume/`. Proofs 1–3 are unaffected.
+# MAGIC
 # MAGIC ### `@distributed` vs the torchrun sibling
 # MAGIC - **Launch:** decorate a `train` function with `@distributed(gpus=8)` and call
 # MAGIC   `train.distributed(**kwargs)` — the framework fans the function out one-process-per-GPU,
