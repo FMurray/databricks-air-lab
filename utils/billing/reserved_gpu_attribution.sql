@@ -4,7 +4,7 @@
 -- MAGIC
 -- MAGIC Attributes reserved serverless GPU (AIR guaranteed capacity) DBUs to the usage policy each job run or
 -- MAGIC interactive notebook session was launched with. Teams map to policies through the policy's custom tags. Run the
--- MAGIC cells top to bottom in one session, in the reservation's workspace. Each block is a temp view, followed by a
+-- MAGIC cells top to bottom in one session, in the reservation's workspace. Each block is a `v_*` table, followed by a
 -- MAGIC select over it.
 -- MAGIC
 -- MAGIC Part A is the load-bearing chain for jobs: job task -> reserved accelerator -> run -> policy (A1-A3).
@@ -38,19 +38,40 @@
 -- MAGIC   system-table pipeline fills it from cleanupSec, and run_duration_seconds counts cleanup twice.
 -- MAGIC
 -- MAGIC **Scan cost.** Audit and timeline filters are literals in the `WHERE` clause (not taken from `v_params`) so they
--- MAGIC prune files. Keep them in sync with `v_params`. Temp views aren't cached: every reference re-reads audit. On
--- MAGIC classic compute, `CACHE TABLE v_jobs_audit AS <same select>` reads it once; on serverless, write it to a
--- MAGIC scratch table instead.
+-- MAGIC prune files. Keep them in sync with `v_params`. Each stage is a table, so each system-table read happens once per
+-- MAGIC run, not once per reference.
+-- MAGIC
+-- MAGIC **Resuming.** To resume, run `A0 · scratch schema`, then continue from any cell whose input tables exist (`A0a`
+-- MAGIC lists them). Tables don't refresh: after changing `v_params` or any stage, rerun every cell below it. Run in a
+-- MAGIC fresh session: a session that ran the old temp-view version still has temp views with the same names, and they
+-- MAGIC take precedence over the tables.
 
 -- COMMAND ----------
 
 -- MAGIC %md
 -- MAGIC # Part A: jobs -> policy -> DBUs
 -- MAGIC ## A0. Parameters
+-- MAGIC Stage tables are created in the scratch schema set by `A0 · scratch schema`. `A0a` lists the `v_*` tables
+-- MAGIC already built.
+-- MAGIC `until = current_timestamp()` is frozen when `v_params` is built, not at each run. For a new `until`, rebuild
+-- MAGIC `v_params` and every cell below it.
 
 -- COMMAND ----------
 
-CREATE OR REPLACE TEMP VIEW v_params AS
+-- DBTITLE 1,A0 · scratch schema
+-- Dedicated schema: the v_* stage tables are dropped and rebuilt by CREATE OR REPLACE.
+USE CATALOG <catalog>;
+USE SCHEMA <schema>;
+
+-- COMMAND ----------
+
+-- DBTITLE 1,A0a. Stage tables present
+SHOW TABLES LIKE 'v_*'
+
+-- COMMAND ----------
+
+-- DBTITLE 1,A0 · v_params
+CREATE OR REPLACE TABLE v_params AS
 SELECT
   TIMESTAMP '2026-08-03 19:00:00 UTC' AS since,                -- runs starting at or after (UTC); reservation start
   current_timestamp()                 AS until,                -- runs starting before
@@ -81,7 +102,8 @@ SELECT
 
 -- COMMAND ----------
 
-CREATE OR REPLACE TEMP VIEW v_jobs_audit AS
+-- DBTITLE 1,A1 · v_jobs_audit
+CREATE OR REPLACE TABLE v_jobs_audit AS
 SELECT
   a.event_time,
   a.action_name,
@@ -105,7 +127,8 @@ WHERE a.event_date >= DATE '2026-02-01'  -- spec lookback (literal)
 
 -- COMMAND ----------
 
-CREATE OR REPLACE TEMP VIEW v_job_task_specs AS
+-- DBTITLE 1,A1 · v_job_task_specs
+CREATE OR REPLACE TABLE v_job_task_specs AS
 WITH ev_all AS (
   SELECT event_time, action_name, actor, key_type, job_key, tasks_json, mentions_accelerator
   FROM v_jobs_audit
@@ -141,6 +164,7 @@ WHERE ev.job_key IS NOT NULL
 
 -- COMMAND ----------
 
+-- DBTITLE 1,A1a. Specs by accelerator and GPU count
 SELECT key_type, is_reserved_accelerator, gpus,
        COUNT(DISTINCT job_key)           AS jobs,
        COUNT(DISTINCT job_key, task_key) AS tasks,
@@ -159,6 +183,7 @@ ORDER BY is_reserved_accelerator DESC, jobs DESC
 
 -- COMMAND ----------
 
+-- DBTITLE 1,A1b. Events that name the accelerator without parsed tasks
 SELECT action_name, key_type,
        COUNT(*)                AS events,
        COUNT(DISTINCT job_key) AS jobs,
@@ -178,7 +203,8 @@ GROUP BY ALL
 
 -- COMMAND ----------
 
-CREATE OR REPLACE TEMP VIEW v_task_runs AS
+-- DBTITLE 1,A2 · v_task_runs
+CREATE OR REPLACE TABLE v_task_runs AS
 SELECT
   t.job_id,
   t.job_run_id,
@@ -209,7 +235,8 @@ GROUP BY 1, 2, 3, 4
 
 -- COMMAND ----------
 
-CREATE OR REPLACE TEMP VIEW v_mvp AS
+-- DBTITLE 1,MVP-1 · v_mvp
+CREATE OR REPLACE TABLE v_mvp AS
 WITH runs AS (
   SELECT r.run_id, r.run_start, r.execution_s, s.key_type, s.job_key, COALESCE(s.gpus, 8) AS gpus
   FROM v_task_runs r
@@ -232,6 +259,7 @@ QUALIFY ROW_NUMBER() OVER (PARTITION BY r.run_id ORDER BY e.event_time DESC) = 1
 
 -- COMMAND ----------
 
+-- DBTITLE 1,MVP-1. Reserved GPU-hours and DBUs per policy
 SELECT policy_id,
        COUNT(DISTINCT job_key)                                               AS jobs,
        COUNT(*)                                                              AS task_runs,
@@ -249,6 +277,7 @@ ORDER BY gpu_hours DESC
 
 -- COMMAND ----------
 
+-- DBTITLE 1,MVP-2. Custom tags on policy billing rows
 SELECT m.policy_id,
        COUNT(u.usage_quantity)                   AS billing_rows_90d,
        max_by(u.custom_tags, u.usage_start_time) AS sample_tags
@@ -267,7 +296,8 @@ GROUP BY m.policy_id
 
 -- COMMAND ----------
 
-CREATE OR REPLACE TEMP VIEW v_reserved_runs AS
+-- DBTITLE 1,A2 · v_reserved_runs
+CREATE OR REPLACE TABLE v_reserved_runs AS
 WITH matched AS (
   SELECT r.*,
          s.key_type, s.job_key, s.ai_runtime_task, s.is_reserved_accelerator, s.gpus AS spec_gpus,
@@ -304,6 +334,7 @@ WHERE m.run_start >= p.since AND m.run_start < p.until
 
 -- COMMAND ----------
 
+-- DBTITLE 1,A2a. Task runs by spec match
 SELECT spec_match, key_type,
        COUNT(DISTINCT job_key)        AS jobs,
        COUNT(DISTINCT task_key)       AS task_keys,
@@ -321,6 +352,7 @@ ORDER BY task_runs DESC
 
 -- COMMAND ----------
 
+-- DBTITLE 1,A2b. GPU-hold measures by result state
 SELECT result_state,
        COUNT(*)                                   AS task_runs,
        SUM(IF(execution_s IS NULL, 1, 0))         AS runs_no_durations,
@@ -344,13 +376,15 @@ ORDER BY task_runs DESC
 
 -- COMMAND ----------
 
-CREATE OR REPLACE TEMP VIEW v_job_policy_events AS
+-- DBTITLE 1,A3 · v_job_policy_events
+CREATE OR REPLACE TABLE v_job_policy_events AS
 SELECT event_time, action_name, actor, key_type, job_key, policy_id
 FROM v_jobs_audit
 
 -- COMMAND ----------
 
-CREATE OR REPLACE TEMP VIEW v_run_policy AS
+-- DBTITLE 1,A3 · v_run_policy
+CREATE OR REPLACE TABLE v_run_policy AS
 SELECT r.*,
        e.policy_id,
        e.action_name AS policy_action,
@@ -373,6 +407,7 @@ QUALIFY ROW_NUMBER() OVER (PARTITION BY r.run_id ORDER BY e.event_time DESC, e.a
 
 -- COMMAND ----------
 
+-- DBTITLE 1,A3a. Which jobs actions log a policy
 SELECT e.action_name,
        COUNT(*)                  AS events,
        COUNT(e.policy_id)        AS events_with_policy,
@@ -389,6 +424,7 @@ ORDER BY 1
 
 -- COMMAND ----------
 
+-- DBTITLE 1,A3b. Runs per policy
 SELECT policy_id,
        COUNT(DISTINCT job_key)               AS jobs,
        COUNT(*)                              AS task_runs,
@@ -404,6 +440,7 @@ ORDER BY policy_id NULLS FIRST, gpu_hours DESC
 
 -- COMMAND ----------
 
+-- DBTITLE 1,A3c. Jobs with no explicit policy in audit
 SELECT key_type, job_key,
        COUNT(*)                              AS task_runs,
        ROUND(SUM(hold_s * gpus) / 3600.0, 1) AS gpu_hours,
@@ -424,6 +461,7 @@ ORDER BY gpu_hours DESC
 
 -- COMMAND ----------
 
+-- DBTITLE 1,A3d. Who ran it: GPU-hours per run-as identity and policy
 WITH job_run_as AS (
   SELECT r.run_id, j.run_as
   FROM v_run_policy r
@@ -470,11 +508,12 @@ ORDER BY gpu_hours DESC
 -- MAGIC
 -- MAGIC ## N1. AIR notebook sessions from audit
 -- MAGIC `v_nb_audit`: the one notebook audit read. `runCommand` rows exist only with verbose audit logs on (N1a shows
--- MAGIC whether they do); they can be numerous, so materialize this view if cells are slow (see Scan cost above).
+-- MAGIC whether they do); they can be numerous, so this is one of the slower tables to build.
 
 -- COMMAND ----------
 
-CREATE OR REPLACE TEMP VIEW v_nb_audit AS
+-- DBTITLE 1,N1 · v_nb_audit
+CREATE OR REPLACE TABLE v_nb_audit AS
 SELECT
   a.workspace_id,
   a.event_time,
@@ -499,6 +538,7 @@ WHERE a.event_date >= DATE '2026-07-27'  -- since minus 7 days (literal)
 
 -- COMMAND ----------
 
+-- DBTITLE 1,N1a. Notebook events by compute ID shape
 SELECT action_name,
        CASE WHEN is_air_session         THEN 'AIR session (...-cnx)'
             WHEN compute_id IS NULL     THEN 'no clusterId'
@@ -529,7 +569,8 @@ ORDER BY action_name, compute_kind, ok
 
 -- COMMAND ----------
 
-CREATE OR REPLACE TEMP VIEW v_nb_sessions AS
+-- DBTITLE 1,N1 · v_nb_sessions
+CREATE OR REPLACE TABLE v_nb_sessions AS
 WITH firsts AS (
   SELECT workspace_id, notebook_id, actor, compute_id, is_air_session,
          MIN(event_time)           AS attach_time,
@@ -605,7 +646,8 @@ CROSS JOIN v_params p
 
 -- COMMAND ----------
 
-CREATE OR REPLACE TEMP VIEW v_nb_gpu_billing AS
+-- DBTITLE 1,N2 · v_nb_gpu_billing
+CREATE OR REPLACE TABLE v_nb_gpu_billing AS
 SELECT
   u.workspace_id,
   u.usage_metadata.notebook_id                    AS notebook_id,
@@ -623,7 +665,8 @@ WHERE u.usage_date >= DATE '2026-07-27'  -- since minus 7 days (literal)
 
 -- COMMAND ----------
 
-CREATE OR REPLACE TEMP VIEW v_nb_reserved_sessions AS
+-- DBTITLE 1,N2 · v_nb_reserved_sessions
+CREATE OR REPLACE TABLE v_nb_reserved_sessions AS
 WITH od AS (
   SELECT s.session_id, s.notebook_id, s.actor,
          COUNT(b.usage_quantity) AS od_rows,
@@ -661,6 +704,7 @@ CROSS JOIN v_params p
 
 -- COMMAND ----------
 
+-- DBTITLE 1,N2a. Sessions by match
 SELECT s.workspace_id, s.nb_match,
        COUNT(DISTINCT s.notebook_id)                      AS notebooks,
        COUNT(DISTINCT s.actor)                            AS users,
@@ -697,7 +741,8 @@ ORDER BY s.workspace_id, sessions DESC
 
 -- COMMAND ----------
 
-CREATE OR REPLACE TEMP VIEW v_nb_policy_rows AS
+-- DBTITLE 1,N3 · v_nb_policy_rows
+CREATE OR REPLACE TABLE v_nb_policy_rows AS
 SELECT
   u.workspace_id,
   u.usage_metadata.notebook_id     AS notebook_id,
@@ -712,7 +757,8 @@ WHERE u.usage_date >= DATE '2026-05-05'  -- since minus 90 days (literal)
 
 -- COMMAND ----------
 
-CREATE OR REPLACE TEMP VIEW v_nb_session_policy AS
+-- DBTITLE 1,N3 · v_nb_session_policy
+CREATE OR REPLACE TABLE v_nb_session_policy AS
 SELECT
   s.*,
   r.policy_id,
@@ -739,6 +785,7 @@ QUALIFY ROW_NUMBER() OVER (
 
 -- COMMAND ----------
 
+-- DBTITLE 1,N3a. Reserved notebook GPU-hours by policy source
 SELECT policy_source, policy_row_product,
        COUNT(DISTINCT notebook_id)           AS notebooks,
        COUNT(*)                              AS sessions,
@@ -755,6 +802,7 @@ ORDER BY gpu_hours DESC
 
 -- COMMAND ----------
 
+-- DBTITLE 1,N3b. Sessions with a policy change around attach
 WITH x AS (
   SELECT s.session_id, s.notebook_id, s.path, s.actor, s.attach_time, s.hold_s, s.gpus, s.policy_id,
          max_by(r.policy_id, IF(r.usage_start_time <= s.attach_time, r.usage_start_time, NULL)) AS policy_before,
@@ -777,6 +825,7 @@ ORDER BY gpu_hours DESC
 
 -- COMMAND ----------
 
+-- DBTITLE 1,N3c. Who ran it: reserved notebook GPU-hours per user and policy
 SELECT actor, policy_id,
        COUNT(DISTINCT notebook_id)           AS notebooks,
        COUNT(*)                              AS sessions,
@@ -789,12 +838,13 @@ ORDER BY gpu_hours DESC
 
 -- MAGIC %md
 -- MAGIC # Part A (cont.): tags and DBUs, jobs and notebooks
--- MAGIC `v_attributed`: one row per charged unit: a reserved task run (A3) or a reserved notebook session (N3).
+-- MAGIC A4 · `v_attributed`: one row per charged unit: a reserved task run (A3) or a reserved notebook session (N3).
 -- MAGIC A4 and A5 read from it.
 
 -- COMMAND ----------
 
-CREATE OR REPLACE TEMP VIEW v_attributed AS
+-- DBTITLE 1,A4 · v_attributed
+CREATE OR REPLACE TABLE v_attributed AS
 SELECT 'job' AS workload, key_type, job_key AS workload_key, CAST(run_id AS STRING) AS unit_id,
        run_start AS start_time, policy_id, gpus, gpus_assumed, hold_s
 FROM v_run_policy
@@ -815,7 +865,8 @@ FROM v_nb_session_policy
 
 -- COMMAND ----------
 
-CREATE OR REPLACE TEMP VIEW v_policy_rows AS
+-- DBTITLE 1,A4 · v_policy_rows
+CREATE OR REPLACE TABLE v_policy_rows AS
 SELECT
   u.usage_metadata.usage_policy_id AS policy_id,
   u.usage_metadata.job_id          AS job_id,
@@ -828,7 +879,8 @@ WHERE u.usage_metadata.usage_policy_id IN (SELECT DISTINCT policy_id FROM v_attr
 
 -- COMMAND ----------
 
-CREATE OR REPLACE TEMP VIEW v_policy_tags AS
+-- DBTITLE 1,A4 · v_policy_tags
+CREATE OR REPLACE TABLE v_policy_tags AS
 WITH ev AS (
   SELECT policy_id,
          COUNT(*)                     AS billing_rows,
@@ -856,6 +908,7 @@ GROUP BY ev.policy_id, ev.billing_rows, ev.billing_jobs, ev.billing_workspaces
 
 -- COMMAND ----------
 
+-- DBTITLE 1,A4a. Tags per reserved policy
 SELECT p.policy_id,
        t.billing_rows, t.billing_jobs, t.billing_workspaces,
        IF(t.policy_tags IS NULL, NULL, size(t.policy_tags)) AS n_tags,
@@ -870,10 +923,12 @@ ORDER BY n_tags NULLS FIRST, p.policy_id
 -- MAGIC ## A5. DBUs per policy per month
 -- MAGIC Month of run start / attach. `dbus` = GPU-hold-hours x `dbus_per_gpu_hour`. Runs and sessions with no policy
 -- MAGIC are the NULL row. `runs_gpus_assumed` counts job runs only (every notebook session uses `nb_gpus`).
+-- MAGIC A5a. The select below prints `v_policy_dbus` by month and policy.
 
 -- COMMAND ----------
 
-CREATE OR REPLACE TEMP VIEW v_policy_dbus AS
+-- DBTITLE 1,A5 · v_policy_dbus
+CREATE OR REPLACE TABLE v_policy_dbus AS
 SELECT
   date_trunc('MONTH', a.start_time)                                         AS month,
   a.policy_id,
@@ -895,6 +950,7 @@ GROUP BY 1, 2
 
 -- COMMAND ----------
 
+-- DBTITLE 1,A5a. DBUs per policy per month
 SELECT month, policy_id, jobs, task_runs, notebooks, nb_sessions, runs_gpus_assumed, runs_no_hold,
        job_gpu_hours, nb_gpu_hours, gpu_hours, dbus, policy_tags
 FROM v_policy_dbus
@@ -909,7 +965,8 @@ ORDER BY month DESC, dbus DESC
 
 -- COMMAND ----------
 
-CREATE OR REPLACE TEMP VIEW v_reserved_daily AS
+-- DBTITLE 1,B1 · v_reserved_daily
+CREATE OR REPLACE TABLE v_reserved_daily AS
 SELECT
   u.usage_date,
   SUM(u.usage_quantity)                            AS reserved_dbus,
@@ -930,6 +987,7 @@ GROUP BY 1
 
 -- COMMAND ----------
 
+-- DBTITLE 1,B1a. Bill vs attributed GPU-hold per day
 SELECT d.usage_date,
        ROUND(d.reserved_dbus, 2)                                          AS reserved_dbus,
        ROUND(d.implied_gpu_hours, 1)                                      AS implied_gpu_hours,
@@ -957,6 +1015,7 @@ ORDER BY d.usage_date DESC
 
 -- COMMAND ----------
 
+-- DBTITLE 1,B2. 8xH100 billed per workload
 WITH gpu_rows AS (
   SELECT u.usage_date, u.usage_start_time, u.usage_end_time, u.usage_quantity, u.sku_name,
          u.billing_origin_product,
@@ -999,6 +1058,7 @@ ORDER BY g.usage_date
 
 -- COMMAND ----------
 
+-- DBTITLE 1,B3. Billed DBUs per usage policy, all products
 SELECT
   CASE WHEN u.product_features.ai_runtime.compute_type = 'RESERVED_COMPUTE' THEN 'reserved node uptime (no policy)'
        WHEN u.usage_metadata.usage_policy_id IS NOT NULL                  THEN 'policy'
