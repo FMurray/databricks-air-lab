@@ -27,7 +27,7 @@ SINCE = datetime(2026, 8, 3, 19, tzinfo=timezone.utc)  # runs starting at or aft
 UNTIL = None                                           # runs starting before; None = now
 SPEC_LOOKBACK_START = date(2026, 2, 1)                 # audit read starts here (see A1)
 ACCELERATOR = "GPU_8xH100"                             # reserved accelerator type
-DBUS_PER_GPU_HOUR = 8.844                              # DBU rate per GPU-hour
+DBUS_PER_GPU_HOUR = None                               # REQUIRED: your DBU rate per GPU-hour (not committed)
 HOLD_BASIS = "execution"                               # 'execution' | 'setup_execution_cleanup' | 'span'
 DEFAULT_GPUS = 8                                       # GPUs assumed when accelerator_count isn't found (one node)
 POLICY_LOOKBACK_DAYS = 90                              # days of policy billing rows read for tags
@@ -38,6 +38,8 @@ NB_GPUS = 8                                            # notebooks: GPUs per ses
 NB_POLICY_LOOKBACK_DAYS = 90                           # notebooks: billing read for policy starts SINCE minus this
 WORKSPACE_ID = None                                   # system tables span workspaces; set to scope them to one
 SCRATCH_SCHEMA = None                                  # e.g. "main.scratch"; materializes the audit read
+
+assert DBUS_PER_GPU_HOUR is not None, "Set DBUS_PER_GPU_HOUR to your DBU rate per GPU-hour (pricing isn't committed)"
 
 TABLES = {
     "audit": "system.access.audit",
@@ -738,8 +740,8 @@ display(
 
 # MAGIC %md
 # MAGIC ## B2. 8xH100 billed per workload
-# MAGIC Non-reserved serverless GPU / AIR rows whose per-workload hourly burn rate is at least 60 DBU/hour (one 8xH100
-# MAGIC node is about 70.8; A10 and 1xH100 are far below). Covers both billing schemas. No lower date bound; rows
+# MAGIC Non-reserved serverless GPU / AIR rows whose per-workload hourly burn rate is at least 85% of one 8-GPU node
+# MAGIC at `DBUS_PER_GPU_HOUR` (A10 and 1xH100 are far below). Covers both billing schemas. No lower date bound; rows
 # MAGIC before `SINCE` are labeled.
 
 # COMMAND ----------
@@ -763,7 +765,7 @@ burn_rate = gpu_rows.groupBy("workload_key", "hour").agg(
      ).alias("dbu_per_hour"))
 
 display(
-    gpu_rows.join(burn_rate.where(F.col("dbu_per_hour") >= 60), ["workload_key", "hour"])
+    gpu_rows.join(burn_rate.where(F.col("dbu_per_hour") >= 0.85 * 8 * DBUS_PER_GPU_HOUR), ["workload_key", "hour"])
     .withColumn("period", F.when(F.col("usage_start_time") < F.lit(SINCE), "before since").otherwise("in window"))
     .groupBy("usage_date", "period", "billing_origin_product", "compute_type", "sgc_workload_type", "sku_name")
     .agg(F.countDistinct("workload_key").alias("workloads"),
