@@ -741,6 +741,62 @@ ORDER BY s.workspace_id, sessions DESC
 -- COMMAND ----------
 
 -- MAGIC %md
+-- MAGIC ### N2b. Session IDs shared across notebooks or users
+-- MAGIC N1 makes one session per (notebook, user, session ID), assuming each attach gets its own session. A session ID
+-- MAGIC listed here is counted more than once, and each row charges `nb_gpus` again. No rows = the assumption holds.
+
+-- COMMAND ----------
+
+-- DBTITLE 1,N2b. Session IDs shared across notebooks or users
+SELECT session_id,
+       COUNT(*)                              AS session_rows,
+       COUNT(DISTINCT notebook_id)           AS notebooks,
+       COUNT(DISTINCT actor)                 AS users,
+       collect_set(nb_match)                 AS matches,
+       MIN(attach_time)                      AS first_attach,
+       ROUND(SUM(hold_s * gpus) / 3600.0, 1) AS gpu_hours
+FROM v_nb_reserved_sessions
+GROUP BY 1
+HAVING COUNT(*) > 1
+ORDER BY gpu_hours DESC
+
+-- COMMAND ----------
+
+-- MAGIC %md
+-- MAGIC ### N2c. Peak GPUs held by reserved notebook sessions
+-- MAGIC Running total of `gpus` from attach to `hold_end` over the 'reserved' sessions, per workspace: the busiest days
+-- MAGIC first. Notebooks alone can't hold more than `reserved_gpus`, so `peak_nb_gpus` above it means N1/N2 overcount
+-- MAGIC hold time (or N2b double counts). Jobs share the same GPUs, so a peak below the cap doesn't prove the hold is right.
+
+-- COMMAND ----------
+
+-- DBTITLE 1,N2c. Peak GPUs held by reserved notebook sessions
+WITH ev AS (
+  SELECT workspace_id, attach_time AS t, gpus AS d FROM v_nb_reserved_sessions WHERE nb_match = 'reserved'
+  UNION ALL
+  SELECT workspace_id, hold_end, -gpus FROM v_nb_reserved_sessions WHERE nb_match = 'reserved'
+),
+run AS (
+  -- releases (negative d) sort before attaches at the same instant
+  SELECT workspace_id, t,
+         SUM(d) OVER (PARTITION BY workspace_id ORDER BY t, d ROWS UNBOUNDED PRECEDING) AS gpus_held
+  FROM ev
+)
+SELECT r.workspace_id,
+       to_date(r.t)                      AS day,
+       MAX(r.gpus_held)                  AS peak_nb_gpus,
+       max_by(r.t, r.gpus_held)          AS peak_at,
+       MAX(p.reserved_gpus)              AS reserved_gpus,
+       MAX(r.gpus_held) > MAX(p.reserved_gpus) AS over_cap
+FROM run r
+CROSS JOIN v_params p
+GROUP BY 1, 2
+ORDER BY peak_nb_gpus DESC
+LIMIT 30
+
+-- COMMAND ----------
+
+-- MAGIC %md
 -- MAGIC ## N3. Policy per reserved session
 -- MAGIC `v_nb_policy_rows`: every billing row of those notebooks that carries a usage policy (any product), back to
 -- MAGIC `since` minus 90 days (literal). `principal` is the row's identity (AIR rows carry only created_by).
@@ -846,6 +902,91 @@ SELECT actor, policy_id,
 FROM v_nb_session_policy
 GROUP BY ALL
 ORDER BY gpu_hours DESC
+
+-- COMMAND ----------
+
+-- MAGIC %md
+-- MAGIC ### N3d. Reserved sessions with no policy: why
+-- MAGIC For notebooks whose sessions got a NULL policy in N3, all their billing rows of any product in the N3 lookback.
+-- MAGIC - 'billed, never with a policy': the notebook ran without an explicit policy. NULL may be the right answer
+-- MAGIC   (check whether the workspace uses a default policy).
+-- MAGIC - 'no billing rows at all': no evidence either way, typically a notebook that only ever ran on the reservation.
+-- MAGIC   N3e shows whether the user's policy could fill these.
+-- MAGIC Reads `system.billing.usage`; the date literal matches N3's (`since` minus 90 days).
+
+-- COMMAND ----------
+
+-- DBTITLE 1,N3d. Reserved sessions with no policy: why
+WITH nulls AS (
+  SELECT workspace_id, notebook_id, COUNT(*) AS sessions, SUM(hold_s * gpus) / 3600.0 AS gpu_hours
+  FROM v_nb_session_policy
+  WHERE policy_id IS NULL
+  GROUP BY 1, 2
+),
+billed AS (
+  SELECT u.workspace_id, u.usage_metadata.notebook_id AS notebook_id,
+         COUNT(*)                              AS billing_rows,
+         collect_set(u.billing_origin_product) AS products
+  FROM system.billing.usage u
+  WHERE u.usage_date >= DATE '2026-05-05'  -- since minus 90 days (literal, as in N3)
+    AND u.usage_metadata.notebook_id IN (SELECT notebook_id FROM nulls)
+  GROUP BY 1, 2
+)
+SELECT IF(b.notebook_id IS NULL, 'no billing rows at all', 'billed, never with a policy') AS bucket,
+       COUNT(*)                                         AS notebooks,
+       SUM(n.sessions)                                  AS sessions,
+       ROUND(SUM(n.gpu_hours), 1)                       AS gpu_hours,
+       SUM(b.billing_rows)                              AS billing_rows,
+       array_distinct(flatten(collect_list(b.products))) AS products
+FROM nulls n
+LEFT JOIN billed b USING (workspace_id, notebook_id)
+GROUP BY 1
+
+-- COMMAND ----------
+
+-- MAGIC %md
+-- MAGIC ### N3e. Could the user's policy fill the NULLs?
+-- MAGIC For each user with NULL-policy sessions, the policies on their own billing rows (any product, N3 lookback),
+-- MAGIC bucketed by how many policies they have. If most `null_gpu_hours` belong to users with exactly one policy, that
+-- MAGIC policy is a reasonable fallback, labeled as such. `avg_top_share` = share of the user's policy DBUs on their
+-- MAGIC most-used policy. Counts only, no names.
+
+-- COMMAND ----------
+
+-- DBTITLE 1,N3e. Could the user's policy fill the NULLs?
+WITH nu AS (
+  SELECT actor, SUM(hold_s * gpus) / 3600.0 AS gpu_hours
+  FROM v_nb_session_policy
+  WHERE policy_id IS NULL
+  GROUP BY 1
+),
+up AS (
+  SELECT COALESCE(u.identity_metadata.run_as, u.identity_metadata.owned_by, u.identity_metadata.created_by) AS actor,
+         u.usage_metadata.usage_policy_id AS policy_id,
+         SUM(u.usage_quantity)            AS dbus
+  FROM system.billing.usage u
+  WHERE u.usage_date >= DATE '2026-05-05'  -- since minus 90 days (literal, as in N3)
+    AND u.usage_metadata.usage_policy_id IS NOT NULL
+    AND COALESCE(u.identity_metadata.run_as, u.identity_metadata.owned_by, u.identity_metadata.created_by)
+        IN (SELECT actor FROM nu)
+  GROUP BY 1, 2
+),
+per_user AS (
+  SELECT nu.actor,
+         MAX(nu.gpu_hours)             AS gpu_hours,
+         COUNT(up.policy_id)           AS policies,
+         MAX(up.dbus) / SUM(up.dbus)   AS top_share
+  FROM nu
+  LEFT JOIN up ON up.actor = nu.actor
+  GROUP BY 1
+)
+SELECT CASE WHEN policies = 0 THEN '0' WHEN policies = 1 THEN '1' ELSE '2+' END AS user_policies,
+       COUNT(*)                   AS users,
+       ROUND(SUM(gpu_hours), 1)   AS null_gpu_hours,
+       ROUND(AVG(top_share), 2)   AS avg_top_share
+FROM per_user
+GROUP BY 1
+ORDER BY 1
 
 -- COMMAND ----------
 
