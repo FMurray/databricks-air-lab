@@ -593,6 +593,64 @@ WHERE action_name = 'runCommand' AND is_air_session
 -- COMMAND ----------
 
 -- MAGIC %md
+-- MAGIC ### N1c. Command and detach events on AIR notebooks, by compute ID shape
+-- MAGIC For notebooks that had at least one AIR attach: their `runCommand` and `detachNotebook` events, grouped by the
+-- MAGIC shape of `clusterId` (digits shown as 9, letters as x). If N1b is all 0, this shows whether commands on these
+-- MAGIC notebooks are logged with a different compute ID, with none, or not at all. No `runCommand` rows anywhere in
+-- MAGIC N1a means verbose audit logging is off, and N1 has only attaches to go on.
+
+-- COMMAND ----------
+
+-- DBTITLE 1,N1c. Command and detach events on AIR notebooks, by compute ID shape
+WITH air_nb AS (
+  SELECT DISTINCT workspace_id, notebook_id
+  FROM v_nb_audit
+  WHERE action_name = 'attachNotebook' AND is_air_session
+)
+SELECT e.action_name,
+       CASE WHEN e.compute_id IS NULL THEN '<no clusterId>'
+            ELSE regexp_replace(regexp_replace(e.compute_id, '[0-9]', '9'), '[a-zA-Z]', 'x') END AS compute_shape,
+       e.is_air_session,
+       COUNT(*)                      AS events,
+       COUNT(e.exec_s)               AS with_exec_time,
+       COUNT(DISTINCT e.notebook_id) AS notebooks,
+       MIN(e.event_time)             AS first_event,
+       MAX(e.event_time)             AS last_event
+FROM v_nb_audit e
+JOIN air_nb USING (workspace_id, notebook_id)
+WHERE e.action_name IN ('runCommand', 'detachNotebook')
+GROUP BY ALL
+ORDER BY events DESC
+LIMIT 30
+
+-- COMMAND ----------
+
+-- MAGIC %md
+-- MAGIC ### N1d. Audit events that name an AIR session ID (last 3 days)
+-- MAGIC Every audit event, any service, with an AIR session ID (`...-cnx`) in any request param. Finds where session
+-- MAGIC activity is logged if not in `notebook.runCommand`: another action, another service, or another param name.
+-- MAGIC `param_keys` lists the params those events carry. Reads 3 days of `system.access.audit` without a service
+-- MAGIC filter, so it's slower than the other checks; widen the window only if it comes back empty.
+
+-- COMMAND ----------
+
+-- DBTITLE 1,N1d. Audit events that name an AIR session ID (last 3 days)
+SELECT a.service_name,
+       a.action_name,
+       COUNT(*)                                                                       AS events,
+       COUNT(DISTINCT a.user_identity.email)                                          AS users,
+       array_sort(array_distinct(flatten(collect_list(map_keys(a.request_params))))) AS param_keys,
+       MIN(a.event_time)                                                              AS first_event,
+       MAX(a.event_time)                                                              AS last_event
+FROM system.access.audit a
+WHERE a.event_date >= date_sub(current_date(), 3)
+  AND exists(map_values(a.request_params), v -> v RLIKE '[0-9]{4}-[0-9]{6}-[a-zA-Z0-9]{1,8}-cnx')
+GROUP BY ALL
+ORDER BY events DESC
+
+-- COMMAND ----------
+
+-- MAGIC %md
 -- MAGIC ### N1 · v_nb_sessions
 -- MAGIC `v_nb_sessions`: one row per (hold, notebook, user). A **hold** is a stretch of one AIR session with no idle gap
 -- MAGIC longer than `nb_idle_timeout_min`, built from successful attaches (a point) and commands (end minus
