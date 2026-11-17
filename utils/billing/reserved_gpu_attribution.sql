@@ -160,7 +160,7 @@ WHERE ev.job_key IS NOT NULL
 -- COMMAND ----------
 
 -- MAGIC %md
--- MAGIC A1a. Specs by accelerator and GPU count
+-- MAGIC ### A1a. Specs by accelerator and GPU count
 
 -- COMMAND ----------
 
@@ -179,7 +179,8 @@ ORDER BY is_reserved_accelerator DESC, jobs DESC
 -- COMMAND ----------
 
 -- MAGIC %md
--- MAGIC A1b. Events that name the accelerator but have no parsed tasks (truncated or differently shaped request_params)
+-- MAGIC ### A1b. Events that name the accelerator without parsed tasks
+-- MAGIC Truncated or differently shaped request_params.
 
 -- COMMAND ----------
 
@@ -231,7 +232,8 @@ GROUP BY 1, 2, 3, 4
 -- MAGIC the spec isn't matched as of run start, a `reset` that clears the policy isn't seen, and hold time is
 -- MAGIC execution only.
 -- MAGIC
--- MAGIC MVP-1. Reserved GPU-hours and DBUs per policy (NULL row = no policy found in audit)
+-- MAGIC ### MVP-1. Reserved GPU-hours and DBUs per policy
+-- MAGIC NULL row = no policy found in audit.
 
 -- COMMAND ----------
 
@@ -273,7 +275,8 @@ ORDER BY gpu_hours DESC
 -- COMMAND ----------
 
 -- MAGIC %md
--- MAGIC MVP-2. Custom tags on those policies' own billing rows (last 90 days)
+-- MAGIC ### MVP-2. Custom tags on policy billing rows
+-- MAGIC On those policies' own billing rows, last 90 days.
 
 -- COMMAND ----------
 
@@ -330,7 +333,7 @@ WHERE m.run_start >= p.since AND m.run_start < p.until
 -- COMMAND ----------
 
 -- MAGIC %md
--- MAGIC A2a. Task runs by spec match
+-- MAGIC ### A2a. Task runs by spec match
 
 -- COMMAND ----------
 
@@ -348,7 +351,8 @@ ORDER BY task_runs DESC
 -- COMMAND ----------
 
 -- MAGIC %md
--- MAGIC A2b. GPU-hold measures side by side, by result state
+-- MAGIC ### A2b. GPU-hold measures by result state
+-- MAGIC The three hold measures side by side.
 
 -- COMMAND ----------
 
@@ -402,8 +406,8 @@ QUALIFY ROW_NUMBER() OVER (PARTITION BY r.run_id ORDER BY e.event_time DESC, e.a
 -- COMMAND ----------
 
 -- MAGIC %md
--- MAGIC A3a. Which jobs actions log a policy, for the jobs in A1 (the audit docs list create / submitRun params
--- MAGIC without a policy field)
+-- MAGIC ### A3a. Which jobs actions log a policy
+-- MAGIC For the jobs in A1. The audit docs list create / submitRun params without a policy field.
 
 -- COMMAND ----------
 
@@ -420,7 +424,8 @@ ORDER BY 1
 -- COMMAND ----------
 
 -- MAGIC %md
--- MAGIC A3b. Runs per policy (which audit actions carry the policy is A3a)
+-- MAGIC ### A3b. Runs per policy
+-- MAGIC Which audit actions carry the policy is A3a.
 
 -- COMMAND ----------
 
@@ -436,7 +441,8 @@ ORDER BY policy_id NULLS FIRST, gpu_hours DESC
 -- COMMAND ----------
 
 -- MAGIC %md
--- MAGIC A3c. Jobs with no explicit policy in audit (look up `effective_usage_policy_id` with `databricks jobs get <job_id>`)
+-- MAGIC ### A3c. Jobs with no explicit policy in audit
+-- MAGIC Look up `effective_usage_policy_id` with `databricks jobs get <job_id>`.
 
 -- COMMAND ----------
 
@@ -455,7 +461,8 @@ ORDER BY gpu_hours DESC
 -- COMMAND ----------
 
 -- MAGIC %md
--- MAGIC A3d. Who ran it: GPU-hours per run-as identity and policy. Jobs: `run_as` from `system.lakeflow.jobs` as
+-- MAGIC ### A3d. Who ran it: GPU-hours per run-as identity and policy
+-- MAGIC Jobs: `run_as` from `system.lakeflow.jobs` as
 -- MAGIC of run start (the identity the run executes as). One-time runs: the submitRun caller. `policy_actor` is not
 -- MAGIC this: it's whoever made the audit event that set the policy (e.g. the last person to edit the job).
 
@@ -532,7 +539,8 @@ WHERE a.event_date >= DATE '2026-07-27'  -- since minus 7 days (literal)
 -- COMMAND ----------
 
 -- MAGIC %md
--- MAGIC N1a. Notebook events by compute ID shape. Expect AIR-session attaches if anyone used GPU notebooks; `runCommand`
+-- MAGIC ### N1a. Notebook events by compute ID shape
+-- MAGIC Expect AIR-session attaches if anyone used GPU notebooks; `runCommand`
 -- MAGIC rows on AIR sessions mean verbose audit is on (without them, N1's last activity is attach or detach only, and
 -- MAGIC hold time undercounts long-running cells).
 
@@ -556,6 +564,7 @@ ORDER BY action_name, compute_kind, ok
 -- COMMAND ----------
 
 -- MAGIC %md
+-- MAGIC ### N1 · v_nb_sessions
 -- MAGIC `v_nb_sessions`: one row per AIR session, i.e. per (notebook, user, session ID), starting at its first
 -- MAGIC successful attach. A re-attach to the same session continues it. Per user, because the attach target is kept
 -- MAGIC in per-user notebook storage (an inference from the code). Columns:
@@ -697,7 +706,8 @@ CROSS JOIN v_params p
 -- COMMAND ----------
 
 -- MAGIC %md
--- MAGIC N2a. Sessions by match, with both hold measures. `sessions_with_commands` = 0 everywhere means verbose audit is
+-- MAGIC ### N2a. Sessions by match
+-- MAGIC With both hold measures. `sessions_with_commands` = 0 everywhere means verbose audit is
 -- MAGIC off (see N1a). `od_rows_no_workload_key` counts the workspace's on-demand GPU rows in the window with no
 -- MAGIC notebook, job or workload ID: if it's above 0, some on-demand notebook usage can't be seen, and 'reserved' may
 -- MAGIC include on-demand sessions.
@@ -781,7 +791,8 @@ QUALIFY ROW_NUMBER() OVER (
 -- COMMAND ----------
 
 -- MAGIC %md
--- MAGIC N3a. Reserved notebook GPU-hours by policy source (the inferred link: 'same user, before attach' is strongest)
+-- MAGIC ### N3a. Reserved notebook GPU-hours by policy source
+-- MAGIC The inferred link: 'same user, before attach' is strongest.
 
 -- COMMAND ----------
 
@@ -797,7 +808,8 @@ ORDER BY gpu_hours DESC
 -- COMMAND ----------
 
 -- MAGIC %md
--- MAGIC N3b. Sessions whose notebook billed under a different policy before and after the attach (same user). The
+-- MAGIC ### N3b. Sessions with a policy change around attach
+-- MAGIC Sessions whose notebook billed under a different policy before and after the attach (same user). The
 -- MAGIC policy may have been changed when the user switched to GPU, so N3 can pick the wrong one for these.
 
 -- COMMAND ----------
@@ -821,7 +833,8 @@ ORDER BY gpu_hours DESC
 -- COMMAND ----------
 
 -- MAGIC %md
--- MAGIC N3c. Who ran it: reserved notebook GPU-hours per user and policy (`actor` = the attaching user)
+-- MAGIC ### N3c. Who ran it: reserved notebook GPU-hours per user and policy
+-- MAGIC `actor` = the attaching user.
 
 -- COMMAND ----------
 
@@ -838,7 +851,8 @@ ORDER BY gpu_hours DESC
 
 -- MAGIC %md
 -- MAGIC # Part A (cont.): tags and DBUs, jobs and notebooks
--- MAGIC A4 · `v_attributed`: one row per charged unit: a reserved task run (A3) or a reserved notebook session (N3).
+-- MAGIC ## A4 · v_attributed
+-- MAGIC `v_attributed`: one row per charged unit: a reserved task run (A3) or a reserved notebook session (N3).
 -- MAGIC A4 and A5 read from it.
 
 -- COMMAND ----------
@@ -904,7 +918,8 @@ GROUP BY ev.policy_id, ev.billing_rows, ev.billing_jobs, ev.billing_workspaces
 -- COMMAND ----------
 
 -- MAGIC %md
--- MAGIC A4a. Tags per reserved policy (NULL billing_rows = no billing rows in the lookback)
+-- MAGIC ### A4a. Tags per reserved policy
+-- MAGIC NULL billing_rows = no billing rows in the lookback.
 
 -- COMMAND ----------
 
@@ -923,7 +938,8 @@ ORDER BY n_tags NULLS FIRST, p.policy_id
 -- MAGIC ## A5. DBUs per policy per month
 -- MAGIC Month of run start / attach. `dbus` = GPU-hold-hours x `dbus_per_gpu_hour`. Runs and sessions with no policy
 -- MAGIC are the NULL row. `runs_gpus_assumed` counts job runs only (every notebook session uses `nb_gpus`).
--- MAGIC A5a. The select below prints `v_policy_dbus` by month and policy.
+-- MAGIC ### A5a. DBUs per policy per month
+-- MAGIC The select below prints `v_policy_dbus` by month and policy.
 
 -- COMMAND ----------
 
@@ -982,8 +998,8 @@ GROUP BY 1
 -- COMMAND ----------
 
 -- MAGIC %md
--- MAGIC B1a. Bill vs attributed GPU-hold per day (hours by run-start / attach date, so long runs land on their first
--- MAGIC day)
+-- MAGIC ### B1a. Bill vs attributed GPU-hold per day
+-- MAGIC Hours by run-start / attach date, so long runs land on their first day.
 
 -- COMMAND ----------
 
