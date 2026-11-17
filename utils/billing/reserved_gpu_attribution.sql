@@ -505,8 +505,10 @@ ORDER BY gpu_hours DESC
 -- MAGIC   `clusterId` is the AIR session ID, shaped `MMDD-HHMMSS-xxxxxxxx-cnx`.
 -- MAGIC - The accelerator and usage policy are chosen in the notebook's Environment panel and stored on the notebook.
 -- MAGIC   Changing them logs `modifyNotebook` with no values, and a policy auto-selected at attach isn't audited.
--- MAGIC - `notebook.runCommand` (verbose audit logs only) carries `clusterId` = the session and is logged when a command
--- MAGIC   ends. Per the verbose-audit docs its params include `executionTime`, so the command's start is recoverable.
+-- MAGIC - `notebook.submitCommand` (standard audit, per the docs: `notebookId`, `commandId`, `clusterId`,
+-- MAGIC   `commandLanguage`) is logged when a cell is submitted. It has no duration, so a long cell looks like a gap.
+-- MAGIC - `notebook.runCommand` (verbose audit logs only) is logged when a command ends, with `executionTime`, so the
+-- MAGIC   command's start is recoverable. On a first customer workspace it didn't appear for AIR sessions at all.
 -- MAGIC - The GPUs are released on idle timeout (ai-scheduler default 60 minutes since last activity) or when the same
 -- MAGIC   user attaches the notebook to other compute. Neither is audited.
 -- MAGIC
@@ -522,36 +524,43 @@ ORDER BY gpu_hours DESC
 -- MAGIC on-demand GPU rows carry `usage_policy_id` and `notebook_id`), nearest to the hold start.
 -- MAGIC
 -- MAGIC ## N1. AIR notebook holds from audit
--- MAGIC `v_nb_audit`: the one notebook audit read. `runCommand` rows exist only with verbose audit logs on (N1a shows
--- MAGIC whether they do); they can be numerous, so this is one of the slower tables to build.
+-- MAGIC `v_nb_audit`: the one notebook audit read. `compute_id` is `clusterId`, or else the first request param that
+-- MAGIC is an AIR session ID. `submitCommand` rows can be numerous, so this is one of the slower tables to build.
 
 -- COMMAND ----------
 
 -- DBTITLE 1,N1 · v_nb_audit
 CREATE OR REPLACE TABLE v_nb_audit AS
+WITH a AS (
+  SELECT a.*,
+         COALESCE(a.request_params['clusterId'],
+                  try_element_at(filter(map_values(a.request_params),
+                                        v -> v RLIKE '^[0-9]{4}-[0-9]{6}-[a-zA-Z0-9]{1,8}-cnx$'), 1)) AS compute_id
+  FROM system.access.audit a
+  WHERE a.event_date >= DATE '2026-07-27'  -- since minus 7 days (literal)
+    AND a.service_name = 'notebook'
+    AND a.action_name IN ('attachNotebook', 'detachNotebook', 'submitCommand', 'runCommand')
+)
 SELECT
-  a.workspace_id,
-  a.event_time,
-  a.action_name,
-  a.user_identity.email                                       AS actor,
-  a.request_params['notebookId']                              AS notebook_id,
-  a.request_params['clusterId']                               AS compute_id,
-  a.request_params['path']                                    AS path,
-  try_cast(a.request_params['executionTime'] AS DOUBLE)       AS exec_s,
-  COALESCE(a.response.status_code, 200) < 400                 AS ok,
-  COALESCE(a.request_params['clusterId'] RLIKE '^[0-9]{4}-[0-9]{6}-[a-zA-Z0-9]{1,8}-cnx$', false) AS is_air_session
-FROM system.access.audit a
-WHERE a.event_date >= DATE '2026-07-27'  -- since minus 7 days (literal)
-  AND a.service_name = 'notebook'
-  AND a.action_name IN ('attachNotebook', 'detachNotebook', 'runCommand')
+  workspace_id,
+  event_time,
+  action_name,
+  user_identity.email                                   AS actor,
+  request_params['notebookId']                          AS notebook_id,
+  compute_id,
+  request_params['path']                                AS path,
+  try_cast(request_params['executionTime'] AS DOUBLE)   AS exec_s,
+  COALESCE(response.status_code, 200) < 400             AS ok,
+  COALESCE(compute_id RLIKE '^[0-9]{4}-[0-9]{6}-[a-zA-Z0-9]{1,8}-cnx$', false) AS is_air_session
+FROM a
 
 -- COMMAND ----------
 
 -- MAGIC %md
 -- MAGIC ### N1a. Notebook events by compute ID shape
--- MAGIC Expect AIR-session attaches if anyone used GPU notebooks; `runCommand`
--- MAGIC rows on AIR sessions mean verbose audit is on (without them, holds are attach + idle timeout only, and
--- MAGIC long-running cells are undercounted).
+-- MAGIC Expect AIR-session attaches if anyone used GPU notebooks, and `submitCommand` rows on AIR sessions back to
+-- MAGIC `since` (check `first_event`). Without commands, holds are attach + idle timeout only. `runCommand` rows on AIR
+-- MAGIC sessions mean verbose audit is on and N1 can use command durations.
 
 -- COMMAND ----------
 
@@ -574,8 +583,8 @@ ORDER BY action_name, compute_kind, ok
 
 -- MAGIC %md
 -- MAGIC ### N1b. Command execution time on AIR sessions
--- MAGIC N1 takes a command's start as its end minus `executionTime` (seconds). `with_exec_time` well below `commands`
--- MAGIC means starts fall back to the end time. Check the units: if `max_exec_hours` is in the thousands, the field is
+-- MAGIC Verbose audit only. N1 takes a `runCommand`'s start as its end minus `executionTime` (seconds). All 0 means no
+-- MAGIC verbose commands on AIR sessions, and N1 relies on `submitCommand` (no durations; see N2d). Check the units: if `max_exec_hours` is in the thousands, the field is
 -- MAGIC milliseconds and N1 needs `/ 1000`.
 
 -- COMMAND ----------
@@ -594,7 +603,7 @@ WHERE action_name = 'runCommand' AND is_air_session
 
 -- MAGIC %md
 -- MAGIC ### N1c. Command and detach events on AIR notebooks, by compute ID shape
--- MAGIC For notebooks that had at least one AIR attach: their `runCommand` and `detachNotebook` events, grouped by the
+-- MAGIC For notebooks that had at least one AIR attach: their command and `detachNotebook` events, grouped by the
 -- MAGIC shape of `clusterId` (digits shown as 9, letters as x). If N1b is all 0, this shows whether commands on these
 -- MAGIC notebooks are logged with a different compute ID, with none, or not at all. No `runCommand` rows anywhere in
 -- MAGIC N1a means verbose audit logging is off, and N1 has only attaches to go on.
@@ -618,7 +627,7 @@ SELECT e.action_name,
        MAX(e.event_time)             AS last_event
 FROM v_nb_audit e
 JOIN air_nb USING (workspace_id, notebook_id)
-WHERE e.action_name IN ('runCommand', 'detachNotebook')
+WHERE e.action_name IN ('submitCommand', 'runCommand', 'detachNotebook')
 GROUP BY ALL
 ORDER BY events DESC
 LIMIT 30
@@ -653,19 +662,21 @@ ORDER BY events DESC
 -- MAGIC %md
 -- MAGIC ### N1 · v_nb_sessions
 -- MAGIC `v_nb_sessions`: one row per (hold, notebook, user). A **hold** is a stretch of one AIR session with no idle gap
--- MAGIC longer than `nb_idle_timeout_min`, built from successful attaches (a point) and commands (end minus
--- MAGIC `executionTime` to end). Only sessions first attached in the window count. Detach isn't activity: it doesn't
+-- MAGIC longer than `nb_idle_timeout_min`, built from successful attaches and `submitCommand`s (points) and verbose
+-- MAGIC `runCommand`s (end minus `executionTime` to end). Only sessions first attached in the window count.
+-- MAGIC Without `runCommand`, a cell that runs longer than the timeout looks like an idle gap and is cut short: this is
+-- MAGIC a lower bound for long cells. N2d shows how much a longer gap allowance changes the total. Detach isn't activity: it doesn't
 -- MAGIC release the GPUs or reset the idle timer. Columns:
 -- MAGIC - `island`: the hold's number within the session. `hold_start`: its first activity.
--- MAGIC - `share`: this notebook and user's part of the hold, by command execution time (equal split if the hold has
--- MAGIC   no timed commands). N2 charges `nb_gpus x share`, so a hold shared by several notebooks is counted once.
+-- MAGIC - `share`: this notebook and user's part of the hold, by command execution time, else by command count, else
+-- MAGIC   an equal split. N2 charges `nb_gpus x share`, so a hold shared by several notebooks is counted once.
 -- MAGIC - `ended_by_attach_at`: the first attach of any of the hold's (notebook, user) pairs to other compute after the
 -- MAGIC   hold's last activity, which ends the session.
 -- MAGIC - `hold_end`: per `nb_hold_basis`. 'idle_timeout' = last activity + `nb_idle_timeout_min`; 'activity' = last
 -- MAGIC   activity (lower bound). Both are capped at `ended_by_attach_at` and `until`. `idle_end` is always the
 -- MAGIC   idle-timeout end; N2 uses it as the hold's widest extent.
 -- MAGIC
--- MAGIC A cell still running at `until` has no `runCommand` yet, so its hold is cut short.
+-- MAGIC A cell still running at `until` is cut short there.
 
 -- COMMAND ----------
 
@@ -688,7 +699,7 @@ ev AS (
   JOIN sess s ON s.workspace_id = e.workspace_id AND s.session_id = e.compute_id
   CROSS JOIN v_params p
   WHERE e.notebook_id IS NOT NULL
-    AND ((e.action_name = 'attachNotebook' AND e.ok) OR e.action_name = 'runCommand')
+    AND ((e.action_name = 'attachNotebook' AND e.ok) OR e.action_name IN ('submitCommand', 'runCommand'))
     AND s.first_attach >= p.since
     AND e.event_time < p.until
 ),
@@ -711,7 +722,7 @@ isl AS (
   SELECT workspace_id, session_id, island,
          MIN(start_t)                              AS hold_start,
          MAX(end_t)                                AS last_activity,
-         SUM(IF(action_name = 'runCommand', 1, 0)) AS hold_commands,
+         SUM(IF(action_name IN ('submitCommand', 'runCommand'), 1, 0)) AS hold_commands,
          SUM(exec_s)                               AS hold_exec_s,
          COUNT(DISTINCT notebook_id, actor)        AS contributors
   FROM numbered
@@ -719,7 +730,7 @@ isl AS (
 ),
 contrib AS (
   SELECT workspace_id, session_id, island, notebook_id, actor,
-         SUM(IF(action_name = 'runCommand', 1, 0)) AS commands,
+         SUM(IF(action_name IN ('submitCommand', 'runCommand'), 1, 0)) AS commands,
          SUM(exec_s)                               AS exec_s
   FROM numbered
   GROUP BY ALL
@@ -746,7 +757,8 @@ paths AS (
 SELECT
   c.workspace_id, c.notebook_id, pa.path, c.actor, c.session_id, c.island,
   i.hold_start, i.contributors, c.commands, i.hold_commands, c.exec_s, i.hold_exec_s,
-  COALESCE(c.exec_s / NULLIF(i.hold_exec_s, 0), 1.0 / i.contributors)                  AS share,
+  COALESCE(c.exec_s / NULLIF(i.hold_exec_s, 0), c.commands / NULLIF(i.hold_commands, 0),
+           1.0 / i.contributors)                                                       AS share,
   i.last_activity, d.ended_by_attach_at,
   LEAST(p.until, COALESCE(d.ended_by_attach_at, p.until), i.last_activity)              AS activity_end,
   LEAST(p.until, COALESCE(d.ended_by_attach_at, p.until),
@@ -938,6 +950,98 @@ CROSS JOIN v_params p
 GROUP BY 1, 2
 ORDER BY peak_nb_gpus DESC
 LIMIT 30
+
+-- COMMAND ----------
+
+-- MAGIC %md
+-- MAGIC ### N2d. Reserved notebook GPU-hours by assumed longest cell
+-- MAGIC Without command durations, a gap between commands is either idle (GPUs released after the idle timeout) or a cell
+-- MAGIC still running. This rebuilds the holds of the sessions N2 found 'reserved', treating any gap up to `gap_min`
+-- MAGIC as one hold (a running cell), then adds the idle timeout after the last activity. `gap_min` = 60 is N1's
+-- MAGIC answer; the never-split row is attach to last activity, about the old model. Per session (one node), so shared
+-- MAGIC sessions count once; holds aren't cut at an attach elsewhere here.
+-- MAGIC
+-- MAGIC Read it with the cap: `days_over_cap` > 0 means notebooks alone held more than `reserved_gpus` at some point,
+-- MAGIC so that assumption is too generous. The largest `gap_min` with no days over the cap bounds the notebook total.
+
+-- COMMAND ----------
+
+-- DBTITLE 1,N2d. Reserved notebook GPU-hours by assumed longest cell
+WITH g AS (
+  SELECT explode(array(60, 120, 240, 480, 1440, 525600)) AS gap_min
+),
+res AS (
+  SELECT workspace_id, session_id
+  FROM v_nb_reserved_sessions
+  GROUP BY 1, 2
+  HAVING MIN(nb_match) = 'reserved' AND MAX(nb_match) = 'reserved'
+),
+ev AS (
+  SELECT e.workspace_id, e.compute_id AS session_id,
+         IF(e.action_name = 'runCommand',
+            timestamp_millis(unix_millis(e.event_time) - CAST(COALESCE(e.exec_s, 0) * 1000 AS BIGINT)),
+            e.event_time)          AS start_t,
+         e.event_time              AS end_t,
+         p.until,
+         p.nb_idle_timeout_min     AS idle_min
+  FROM v_nb_audit e
+  JOIN res r ON r.workspace_id = e.workspace_id AND r.session_id = e.compute_id
+  CROSS JOIN v_params p
+  WHERE e.notebook_id IS NOT NULL
+    AND ((e.action_name = 'attachNotebook' AND e.ok) OR e.action_name IN ('submitCommand', 'runCommand'))
+    AND e.event_time < p.until
+),
+ordered AS (
+  SELECT g.gap_min, ev.*,
+         MAX(ev.end_t) OVER (PARTITION BY g.gap_min, ev.workspace_id, ev.session_id ORDER BY ev.start_t, ev.end_t
+                             ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING) AS prev_end
+  FROM ev
+  CROSS JOIN g
+),
+numbered AS (
+  SELECT o.*,
+         SUM(IF(o.prev_end IS NULL OR o.start_t > timestampadd(MINUTE, o.gap_min, o.prev_end), 1, 0))
+           OVER (PARTITION BY o.gap_min, o.workspace_id, o.session_id ORDER BY o.start_t, o.end_t
+                 ROWS UNBOUNDED PRECEDING) AS island
+  FROM ordered o
+),
+holds AS (
+  SELECT gap_min, workspace_id, session_id, island,
+         MIN(start_t)                                                       AS hold_start,
+         LEAST(MAX(until), timestampadd(MINUTE, MAX(idle_min), MAX(end_t))) AS hold_end
+  FROM numbered
+  GROUP BY 1, 2, 3, 4
+),
+deltas AS (
+  SELECT gap_min, workspace_id, hold_start AS t, 1 AS d FROM holds
+  UNION ALL
+  SELECT gap_min, workspace_id, hold_end, -1 FROM holds
+),
+run AS (
+  SELECT gap_min, workspace_id, t,
+         SUM(d) OVER (PARTITION BY gap_min, workspace_id ORDER BY t, d ROWS UNBOUNDED PRECEDING) AS nodes_held
+  FROM deltas
+),
+peak AS (
+  SELECT r.gap_min, r.workspace_id,
+         MAX(r.nodes_held) * MAX(p.nb_gpus)                                                    AS peak_gpus,
+         COUNT(DISTINCT IF(r.nodes_held * p.nb_gpus > p.reserved_gpus, to_date(r.t), NULL))    AS days_over_cap
+  FROM run r
+  CROSS JOIN v_params p
+  GROUP BY 1, 2
+)
+SELECT h.workspace_id,
+       IF(h.gap_min = 525600, 'never split', CAST(h.gap_min AS STRING))                      AS gap_min,
+       COUNT(*)                                                                               AS holds,
+       ROUND(SUM(TIMESTAMPDIFF(SECOND, h.hold_start, h.hold_end)) * MAX(p.nb_gpus) / 3600.0, 1) AS gpu_hours,
+       MAX(k.peak_gpus)                                                                       AS peak_gpus,
+       MAX(k.days_over_cap)                                                                   AS days_over_cap,
+       MAX(p.reserved_gpus)                                                                   AS reserved_gpus
+FROM holds h
+JOIN peak k USING (gap_min, workspace_id)
+CROSS JOIN v_params p
+GROUP BY h.workspace_id, h.gap_min
+ORDER BY h.workspace_id, h.gap_min
 
 -- COMMAND ----------
 
