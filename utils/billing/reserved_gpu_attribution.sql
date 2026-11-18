@@ -1298,9 +1298,111 @@ ORDER BY 1
 -- COMMAND ----------
 
 -- MAGIC %md
+-- MAGIC ## N4. Policy from each user's permitted policies
+-- MAGIC Notebook policy selection, per the serverless usage policy docs: a user with one permitted policy gets it
+-- MAGIC automatically; a user with several picks one, and "if a user doesn't select a policy, the setting defaults to
+-- MAGIC whichever policy comes first alphabetically". Per the attach code, a notebook's stored policy is checked against
+-- MAGIC the user's permissions at attach and re-resolved if it isn't permitted. Policy isn't required, so a user with no
+-- MAGIC permitted policy runs with none.
+-- MAGIC
+-- MAGIC `v_user_policies` is an **input**: load your user-to-permitted-policy list into it, one row per (user, policy),
+-- MAGIC with groups expanded to users. A user with no permitted policy gets one row with `policy_id` NULL. If it's left
+-- MAGIC empty, every hold is 'user not in list' and N4 keeps N3's answer, so downstream results don't change.
+-- MAGIC
+-- MAGIC `v_nb_session_policy_resolved`: N3's rows with `resolution`, the rule that decided `resolved_policy_id`:
+-- MAGIC - 'billing evidence, permitted': N3's policy, which the user is allowed to use. Strongest.
+-- MAGIC - 'only permitted policy': the user's one policy (overrides N3 if N3 picked a policy the user can't use).
+-- MAGIC - 'no permitted policy': resolved as no policy (NULL is the answer, not a gap).
+-- MAGIC - 'several permitted, none evidenced': unresolved (NULL). `default_guess_policy_id` is the alphabetically
+-- MAGIC   first permitted policy by name, right only if the user never picked one. N4a shows what it would add.
+-- MAGIC - 'billing evidence, not permitted': N3's policy isn't on the list, and the user has several. Unresolved (NULL).
+-- MAGIC - 'user not in list': N3's answer kept.
+-- MAGIC
+-- MAGIC Permissions are as of the list, not history: a grant or group change during the window can make a rule wrong
+-- MAGIC for the earlier period. A4 and A5 use `resolved_policy_id`.
+
+-- COMMAND ----------
+
+-- DBTITLE 1,N4 · v_user_policies (input)
+-- Load the list, replacing the table, e.g.:
+--   CREATE OR REPLACE TABLE v_user_policies AS
+--   SELECT user_email, policy_id, policy_name FROM <your uploaded table>;
+-- This cell only creates an empty table if none exists, so it never overwrites a loaded list.
+CREATE TABLE IF NOT EXISTS v_user_policies (user_email STRING, policy_id STRING, policy_name STRING)
+
+-- COMMAND ----------
+
+-- DBTITLE 1,N4 · v_nb_session_policy_resolved
+CREATE OR REPLACE TABLE v_nb_session_policy_resolved AS
+WITH up AS (
+  SELECT DISTINCT lower(trim(user_email)) AS actor_key, NULLIF(trim(policy_id), '') AS policy_id, policy_name
+  FROM v_user_policies
+  WHERE user_email IS NOT NULL
+),
+per_user AS (
+  SELECT actor_key,
+         COUNT(DISTINCT policy_id)                                         AS permitted_policies,
+         MIN(policy_id)                                                    AS any_policy,
+         min_by(policy_id, IF(policy_id IS NULL, NULL, lower(COALESCE(policy_name, policy_id)))) AS first_by_name
+  FROM up
+  GROUP BY 1
+),
+r AS (
+  SELECT s.*,
+         u.permitted_policies,
+         u.any_policy,
+         u.first_by_name,
+         u.actor_key IS NOT NULL                       AS in_list,
+         ok.policy_id IS NOT NULL                      AS n3_policy_permitted
+  FROM v_nb_session_policy s
+  LEFT JOIN per_user u ON u.actor_key = lower(trim(s.actor))
+  LEFT JOIN (SELECT DISTINCT actor_key, policy_id FROM up WHERE policy_id IS NOT NULL) ok
+    ON ok.actor_key = lower(trim(s.actor)) AND ok.policy_id = s.policy_id
+)
+SELECT r.* EXCEPT (any_policy, first_by_name, in_list),
+       CASE WHEN NOT r.in_list                                THEN 'user not in list'
+            WHEN r.n3_policy_permitted                         THEN 'billing evidence, permitted'
+            WHEN r.permitted_policies = 1                      THEN 'only permitted policy'
+            WHEN r.permitted_policies = 0                      THEN 'no permitted policy'
+            WHEN r.policy_id IS NOT NULL                       THEN 'billing evidence, not permitted'
+            ELSE                                                    'several permitted, none evidenced' END AS resolution,
+       CASE WHEN NOT r.in_list                                THEN r.policy_id
+            WHEN r.n3_policy_permitted                         THEN r.policy_id
+            WHEN r.permitted_policies = 1                      THEN r.any_policy
+            ELSE NULL END                                                                                  AS resolved_policy_id,
+       IF(r.in_list AND r.permitted_policies > 1 AND r.policy_id IS NULL, r.first_by_name, NULL)          AS default_guess_policy_id
+FROM r
+
+-- COMMAND ----------
+
+-- MAGIC %md
+-- MAGIC ### N4a. Reserved notebook GPU-hours by resolution
+-- MAGIC How much each rule decides. `n3_was_null` = holds N3 left without a policy; `n3_overridden` = N3 had a policy
+-- MAGIC the user isn't permitted to use. `guess_gpu_hours` = what the alphabetical default would attribute if applied.
+
+-- COMMAND ----------
+
+-- DBTITLE 1,N4a. Reserved notebook GPU-hours by resolution
+SELECT resolution,
+       COUNT(DISTINCT actor)                                                   AS users,
+       COUNT(DISTINCT notebook_id)                                             AS notebooks,
+       COUNT(*)                                                                AS holds,
+       ROUND(SUM(hold_s * gpus) / 3600.0, 1)                                   AS gpu_hours,
+       ROUND(SUM(IF(policy_id IS NULL, hold_s * gpus, 0)) / 3600.0, 1)         AS n3_was_null_gpu_hours,
+       ROUND(SUM(IF(policy_id IS NOT NULL AND NOT n3_policy_permitted
+                    AND resolved_policy_id IS DISTINCT FROM policy_id, hold_s * gpus, 0)) / 3600.0, 1) AS n3_overridden_gpu_hours,
+       ROUND(SUM(IF(default_guess_policy_id IS NOT NULL, hold_s * gpus, 0)) / 3600.0, 1) AS guess_gpu_hours
+FROM v_nb_session_policy_resolved
+GROUP BY 1
+ORDER BY gpu_hours DESC
+
+-- COMMAND ----------
+
+-- MAGIC %md
 -- MAGIC # Part A (cont.): tags and DBUs, jobs and notebooks
 -- MAGIC ## A4 · v_attributed
--- MAGIC `v_attributed`: one row per charged unit: a reserved task run (A3) or a reserved notebook hold row (N3; unit_id = session#hold).
+-- MAGIC `v_attributed`: one row per charged unit: a reserved task run (A3) or a reserved notebook hold row (N4's
+-- MAGIC `resolved_policy_id`; unit_id = session#hold).
 -- MAGIC A4 and A5 read from it.
 
 -- COMMAND ----------
@@ -1312,8 +1414,8 @@ SELECT 'job' AS workload, key_type, job_key AS workload_key, CAST(run_id AS STRI
 FROM v_run_policy
 UNION ALL
 SELECT 'notebook', 'notebook', notebook_id, concat(session_id, '#', island),
-       hold_start, policy_id, gpus, true, hold_s
-FROM v_nb_session_policy
+       hold_start, resolved_policy_id, gpus, true, hold_s
+FROM v_nb_session_policy_resolved
 
 -- COMMAND ----------
 
