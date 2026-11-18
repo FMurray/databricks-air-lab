@@ -1,0 +1,2 @@
+# Local deploy/sync state the Databricks CLI writes next to the bundle.
+.databricks/

@@ -46,6 +46,9 @@ Plain `databricks bundle deploy -p <profile>` from this directory does the same 
 - **`bundle destroy` alone leaves the notebooks.** It deletes only the deploy state under
   `~/.bundle/air-lab-notebooks/`, because the notebooks live outside it. `manage.sh remove` deletes both.
 
+For a dashboard of AIR GPU-hours by capacity, accelerator, shape and policy (no notebook run needed), see
+`bundles/air-usage-dashboard/`: the same kind of bundle, plus a SQL warehouse ID.
+
 ## Adding notebooks
 
 Add a folder to `sync.paths` in `databricks.yml` (paths are relative to this directory, for

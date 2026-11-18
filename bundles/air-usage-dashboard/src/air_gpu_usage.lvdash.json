@@ -1,0 +1,2264 @@
+{
+  "datasets": [
+    {
+      "name": "gpu_usage",
+      "displayName": "AIR GPU-hours per day",
+      "queryLines": [
+        "-- AIR GPU-hours per day, by capacity (reserved / on-demand), accelerator, workload shape and usage policy.\n",
+        "--\n",
+        "-- The dataset behind bundles/air-usage-dashboard (build_dashboard.py copies this file into the dashboard JSON;\n",
+        "-- edit here, then rebuild). It also runs as is in the SQL editor, which prompts for the named parameters.\n",
+        "--\n",
+        "-- One row per (day, workspace, workload, capacity, accelerator, shape, policy, and how each was found).\n",
+        "-- It is a single-statement version of reserved_gpu_attribution.sql (Parts A and N), widened from reserved only to\n",
+        "-- every AIR workload. Read that notebook's header for the sources and inferences. In short:\n",
+        "--   * GPU-hours are GPU-hold time x GPUs, not billed DBUs / rate: reserved billing rows are per node, with no job,\n",
+        "--     notebook or policy, so the bill can't be split. No DBU rate is needed.\n",
+        "--   * Jobs: the accelerator and GPU count come from the ai_runtime_task spec in the jobs audit events, matched\n",
+        "--     to each task run (system.lakeflow.job_task_run_timeline) as of the run's start. Hold time follows the\n",
+        "--     hold_basis parameter: 'execution' (default), 'setup_execution_cleanup' or 'span'.\n",
+        "--   * Notebooks: AIR sessions from notebook audit events, cut into holds at idle gaps longer than the idle timeout\n",
+        "--     (the hold ends at last activity + timeout). The accelerator isn't logged anywhere for notebooks: reserved\n",
+        "--     holds are taken to be on the first reserved accelerator with nb_gpus GPUs, and on-demand holds are\n",
+        "--     'unknown (notebook)' with nb_gpus GPUs assumed. gpus_basis marks both.\n",
+        "--   * Capacity: a workload with on-demand AIR billing rows (same job run, or same notebook, overlapping in time) is\n",
+        "--     on-demand. One on an accelerator that isn't reserved is on-demand. Otherwise it's reserved, by\n",
+        "--     elimination, unless it ended in the last 24 hours, when billing may not have landed: 'pending billing'.\n",
+        "--   * Policy: from the on-demand billing rows when there are any (what was actually billed). Otherwise, for jobs,\n",
+        "--     the latest policy-setting jobs audit event before the run start, and, for notebooks, the notebook's\n",
+        "--     nearest policy-bearing billing row of any product. '(none found)' = neither. policy_source says which.\n",
+        "--   * A workload's GPU-hours are spread over the days it spans, by wall-clock overlap, and clipped to since.\n",
+        "--\n",
+        "-- Scan cost: reads system.access.audit (jobs and notebook events), system.billing.usage and the job task run\n",
+        "-- timeline, from since minus a lookback. Each dashboard refresh runs it, so keep since modest.\n",
+        "--\n",
+        "-- Parameters:\n",
+        "--   since                  DATE    first day shown\n",
+        "--   reserved_accelerators  STRING  comma-separated accelerator types with a reservation, e.g. GPU_8xH100\n",
+        "--   hold_basis             STRING  jobs: 'execution' | 'setup_execution_cleanup' | 'span'\n",
+        "--   nb_idle_timeout_min    INT     notebooks: AIR session idle timeout, minutes (60 by default)\n",
+        "--   nb_gpus                INT     notebooks: GPUs per session (one node)\n",
+        "--   spec_lookback_days     INT     days before since to read job specs from; jobs last edited earlier drop out\n",
+        "WITH\n",
+        "-- ---------------------------------------------------------------------------------------------------------------\n",
+        "-- Jobs\n",
+        "-- ---------------------------------------------------------------------------------------------------------------\n",
+        "jobs_audit AS (\n",
+        "  SELECT\n",
+        "    a.workspace_id,\n",
+        "    a.event_time,\n",
+        "    a.action_name,\n",
+        "    IF(a.action_name = 'submitRun', 'run', 'job') AS key_type,\n",
+        "    IF(a.action_name = 'submitRun',\n",
+        "       get_json_object(a.response.result, '$.run_id'),\n",
+        "       COALESCE(a.request_params['job_id'], get_json_object(a.response.result, '$.job_id'))) AS job_key,\n",
+        "    COALESCE(a.request_params['tasks'],\n",
+        "             get_json_object(a.request_params['new_settings'], '$.tasks'))               AS tasks_json,\n",
+        "    COALESCE(a.request_params['usage_policy_id'],\n",
+        "             a.request_params['budget_policy_id'],\n",
+        "             get_json_object(a.request_params['new_settings'], '$.usage_policy_id'),\n",
+        "             get_json_object(a.request_params['new_settings'], '$.budget_policy_id'))    AS policy_id\n",
+        "  FROM system.access.audit a\n",
+        "  WHERE a.event_date >= date_sub(:since, :spec_lookback_days)\n",
+        "    AND a.service_name = 'jobs'\n",
+        "    AND a.action_name IN ('create', 'reset', 'update', 'submitRun')\n",
+        "),\n",
+        "-- Jobs (or one-time runs) that ever had an AIR task; all their spec events are kept, so removing it is seen.\n",
+        "air_keys AS (\n",
+        "  SELECT DISTINCT workspace_id, key_type, job_key\n",
+        "  FROM jobs_audit\n",
+        "  WHERE tasks_json LIKE '%ai_runtime_task%' AND job_key IS NOT NULL\n",
+        "),\n",
+        "task_specs AS (\n",
+        "  SELECT\n",
+        "    e.workspace_id, e.event_time, e.action_name, e.key_type, e.job_key,\n",
+        "    t.task_key,\n",
+        "    t.ai_runtime_task,\n",
+        "    NULLIF(regexp_extract(t.ai_runtime_task, '\"accelerator_type\"\\\\s*:\\\\s*\"([A-Za-z0-9_]+)\"', 1), '') AS accelerator,\n",
+        "    try_cast(regexp_extract(t.ai_runtime_task, '\"accelerator_count\"\\\\s*:\\\\s*\"?(\\\\d+)', 1) AS INT)    AS spec_gpus\n",
+        "  FROM jobs_audit e\n",
+        "  JOIN air_keys k USING (workspace_id, key_type, job_key)\n",
+        "  LATERAL VIEW OUTER explode(\n",
+        "    from_json(e.tasks_json, 'array<struct<task_key:string,ai_runtime_task:string>>')) x AS t\n",
+        "),\n",
+        "task_runs AS (\n",
+        "  SELECT\n",
+        "    t.workspace_id, t.job_id, t.job_run_id, t.run_id, t.task_key,\n",
+        "    MIN(t.period_start_time)          AS run_start,\n",
+        "    MAX(t.period_end_time)            AS run_end,\n",
+        "    MAX(t.setup_duration_seconds)     AS setup_s,     -- run totals, repeated on every hourly slice\n",
+        "    MAX(t.execution_duration_seconds) AS execution_s,\n",
+        "    MAX(t.cleanup_duration_seconds)   AS cleanup_s\n",
+        "  FROM system.lakeflow.job_task_run_timeline t\n",
+        "  LEFT JOIN (SELECT DISTINCT workspace_id, job_key FROM air_keys WHERE key_type = 'job') kj\n",
+        "    ON kj.workspace_id = t.workspace_id AND kj.job_key = t.job_id\n",
+        "  LEFT JOIN (SELECT DISTINCT workspace_id, job_key FROM air_keys WHERE key_type = 'run') kr\n",
+        "    ON kr.workspace_id = t.workspace_id AND kr.job_key = t.job_run_id\n",
+        "  WHERE t.period_start_time >= CAST(date_sub(:since, 7) AS TIMESTAMP)  -- runs that started up to 7 days before since\n",
+        "    AND (kj.job_key IS NOT NULL OR kr.job_key IS NOT NULL)\n",
+        "  GROUP BY 1, 2, 3, 4, 5\n",
+        "),\n",
+        "-- Each task run takes its task's spec as of the run start (one-time runs: their submitRun).\n",
+        "task_runs_spec AS (\n",
+        "  SELECT r.*, s.key_type, s.job_key, s.ai_runtime_task, s.accelerator, s.spec_gpus\n",
+        "  FROM task_runs r\n",
+        "  JOIN task_specs s\n",
+        "    ON s.workspace_id = r.workspace_id\n",
+        "   AND s.task_key = r.task_key\n",
+        "   AND ((s.key_type = 'job' AND s.job_key = r.job_id AND s.event_time <= r.run_start)\n",
+        "     OR (s.key_type = 'run' AND s.job_key = r.job_run_id))\n",
+        "  QUALIFY ROW_NUMBER() OVER (PARTITION BY r.workspace_id, r.run_id ORDER BY s.event_time DESC, s.action_name) = 1\n",
+        "),\n",
+        "job_runs AS (\n",
+        "  SELECT * FROM task_runs_spec WHERE ai_runtime_task IS NOT NULL\n",
+        "),\n",
+        "-- Non-reserved AIR / serverless GPU billing rows (both billing schemas). Reserved rows are per node and carry no\n",
+        "-- workload, so they can't be matched to anything.\n",
+        "od_billing AS (\n",
+        "  SELECT\n",
+        "    u.workspace_id,\n",
+        "    u.usage_metadata.job_id          AS job_id,\n",
+        "    u.usage_metadata.job_run_id      AS job_run_id,\n",
+        "    u.usage_metadata.notebook_id     AS notebook_id,\n",
+        "    u.usage_metadata.usage_policy_id AS policy_id,\n",
+        "    u.usage_start_time,\n",
+        "    u.usage_end_time,\n",
+        "    u.usage_quantity\n",
+        "  FROM system.billing.usage u\n",
+        "  WHERE u.usage_date >= date_sub(:since, 7)\n",
+        "    AND (u.product_features.ai_runtime IS NOT NULL OR u.product_features.serverless_gpu IS NOT NULL)\n",
+        "    AND COALESCE(u.product_features.ai_runtime.compute_type, '') <> 'RESERVED_COMPUTE'\n",
+        "    AND u.sku_name NOT LIKE '%PROVISIONED_CAPACITY%'\n",
+        "),\n",
+        "job_od AS (\n",
+        "  SELECT r.workspace_id, r.run_id,\n",
+        "         COUNT(b.usage_quantity)          AS od_rows,\n",
+        "         max_by(b.policy_id, IF(b.policy_id IS NULL, NULL, b.usage_quantity)) AS od_policy_id\n",
+        "  FROM job_runs r\n",
+        "  JOIN od_billing b\n",
+        "    ON b.workspace_id = r.workspace_id\n",
+        "   AND b.job_id = r.job_id\n",
+        "   AND (b.job_run_id IS NULL OR b.job_run_id = r.job_run_id)\n",
+        "   AND b.usage_end_time > r.run_start\n",
+        "   AND b.usage_start_time < COALESCE(r.run_end, current_timestamp())\n",
+        "  GROUP BY 1, 2\n",
+        "),\n",
+        "-- Latest policy-setting audit event at or before the run start. create / reset / submitRun set the policy, including\n",
+        "-- setting none; an update with no policy field leaves it unchanged.\n",
+        "job_audit_policy AS (\n",
+        "  SELECT r.workspace_id, r.run_id, e.policy_id\n",
+        "  FROM job_runs r\n",
+        "  JOIN jobs_audit e\n",
+        "    ON e.workspace_id = r.workspace_id\n",
+        "   AND e.key_type = r.key_type\n",
+        "   AND e.job_key  = r.job_key\n",
+        "   AND (e.key_type = 'run' OR e.event_time <= r.run_start)\n",
+        "   AND (e.action_name IN ('create', 'reset', 'submitRun') OR e.policy_id IS NOT NULL)\n",
+        "  QUALIFY ROW_NUMBER() OVER (PARTITION BY r.workspace_id, r.run_id ORDER BY e.event_time DESC, e.action_name) = 1\n",
+        "),\n",
+        "job_units AS (\n",
+        "  SELECT\n",
+        "    'job'                                                              AS workload,\n",
+        "    r.workspace_id,\n",
+        "    CAST(r.run_id AS STRING)                                           AS unit_id,\n",
+        "    r.run_start                                                        AS start_t,\n",
+        "    COALESCE(r.run_end, current_timestamp())                           AS end_t,\n",
+        "    CASE :hold_basis\n",
+        "      WHEN 'execution'               THEN r.execution_s\n",
+        "      WHEN 'setup_execution_cleanup' THEN COALESCE(r.setup_s, 0) + COALESCE(r.execution_s, 0) + COALESCE(r.cleanup_s, 0)\n",
+        "      WHEN 'span'                    THEN TIMESTAMPDIFF(SECOND, r.run_start, COALESCE(r.run_end, current_timestamp()))\n",
+        "    END                                                                AS hold_s,\n",
+        "    COALESCE(r.accelerator, 'unknown')                                 AS accelerator,\n",
+        "    try_cast(regexp_extract(r.accelerator, '^GPU_(\\\\d+)x', 1) AS INT)  AS gpus_per_node,\n",
+        "    COALESCE(r.spec_gpus, try_cast(regexp_extract(r.accelerator, '^GPU_(\\\\d+)x', 1) AS INT), 8) AS gpus,\n",
+        "    IF(r.spec_gpus IS NOT NULL, 'job spec', 'assumed: one node')       AS gpus_basis,\n",
+        "    CASE WHEN COALESCE(o.od_rows, 0) > 0\n",
+        "           THEN 'on-demand'\n",
+        "         WHEN NOT COALESCE(array_contains(split(regexp_replace(:reserved_accelerators, '\\\\s', ''), ','), r.accelerator), false)\n",
+        "           THEN 'on-demand'\n",
+        "         WHEN COALESCE(r.run_end, current_timestamp()) > current_timestamp() - INTERVAL 24 HOURS\n",
+        "           THEN 'pending billing'\n",
+        "         ELSE 'reserved' END                                           AS capacity,\n",
+        "    CASE WHEN COALESCE(o.od_rows, 0) > 0\n",
+        "           THEN 'on-demand billing rows'\n",
+        "         WHEN NOT COALESCE(array_contains(split(regexp_replace(:reserved_accelerators, '\\\\s', ''), ','), r.accelerator), false)\n",
+        "           THEN 'accelerator not reserved'\n",
+        "         WHEN COALESCE(r.run_end, current_timestamp()) > current_timestamp() - INTERVAL 24 HOURS\n",
+        "           THEN 'ended < 24 h ago'\n",
+        "         ELSE 'no on-demand billing (elimination)' END                 AS capacity_basis,\n",
+        "    COALESCE(o.od_policy_id, p.policy_id)                              AS policy_id,\n",
+        "    CASE WHEN o.od_policy_id IS NOT NULL THEN 'billing'\n",
+        "         WHEN p.policy_id IS NOT NULL    THEN 'jobs audit'\n",
+        "         ELSE 'none found' END                                         AS policy_source\n",
+        "  FROM job_runs r\n",
+        "  LEFT JOIN job_od o           USING (workspace_id, run_id)\n",
+        "  LEFT JOIN job_audit_policy p USING (workspace_id, run_id)\n",
+        "),\n",
+        "-- ---------------------------------------------------------------------------------------------------------------\n",
+        "-- Notebooks\n",
+        "-- ---------------------------------------------------------------------------------------------------------------\n",
+        "nb_audit AS (\n",
+        "  SELECT\n",
+        "    a.workspace_id,\n",
+        "    a.event_time,\n",
+        "    a.action_name,\n",
+        "    a.user_identity.email                                 AS actor,\n",
+        "    a.request_params['notebookId']                        AS notebook_id,\n",
+        "    COALESCE(a.request_params['clusterId'],\n",
+        "             try_element_at(filter(map_values(a.request_params),\n",
+        "                                   v -> v RLIKE '^[0-9]{4}-[0-9]{6}-[a-zA-Z0-9]{1,8}-cnx$'), 1)) AS compute_id,\n",
+        "    try_cast(a.request_params['executionTime'] AS DOUBLE) AS exec_s,\n",
+        "    COALESCE(a.response.status_code, 200) < 400           AS ok\n",
+        "  FROM system.access.audit a\n",
+        "  WHERE a.event_date >= date_sub(:since, 7)\n",
+        "    AND a.service_name = 'notebook'\n",
+        "    AND a.action_name IN ('attachNotebook', 'submitCommand', 'runCommand')\n",
+        "),\n",
+        "nb_sessions AS (\n",
+        "  -- AIR session IDs are shaped MMDD-HHMMSS-xxxxxxxx-cnx\n",
+        "  SELECT workspace_id, compute_id AS session_id\n",
+        "  FROM nb_audit\n",
+        "  WHERE action_name = 'attachNotebook' AND ok AND notebook_id IS NOT NULL\n",
+        "    AND compute_id RLIKE '^[0-9]{4}-[0-9]{6}-[a-zA-Z0-9]{1,8}-cnx$'\n",
+        "  GROUP BY 1, 2\n",
+        "),\n",
+        "nb_ev AS (\n",
+        "  -- activity points: attaches and submitted commands; verbose runCommand spans end minus executionTime to end\n",
+        "  SELECT e.workspace_id, e.compute_id AS session_id, e.notebook_id, e.actor, e.action_name,\n",
+        "         IF(e.action_name = 'runCommand',\n",
+        "            timestamp_millis(unix_millis(e.event_time) - CAST(COALESCE(e.exec_s, 0) * 1000 AS BIGINT)),\n",
+        "            e.event_time)                                             AS start_t,\n",
+        "         e.event_time                                                 AS end_t,\n",
+        "         IF(e.action_name = 'runCommand', COALESCE(e.exec_s, 0), 0.0) AS exec_s\n",
+        "  FROM nb_audit e\n",
+        "  JOIN nb_sessions s ON s.workspace_id = e.workspace_id AND s.session_id = e.compute_id\n",
+        "  WHERE e.notebook_id IS NOT NULL\n",
+        "    AND ((e.action_name = 'attachNotebook' AND e.ok) OR e.action_name IN ('submitCommand', 'runCommand'))\n",
+        "),\n",
+        "nb_ordered AS (\n",
+        "  SELECT nb_ev.*,\n",
+        "         MAX(end_t) OVER (PARTITION BY workspace_id, session_id ORDER BY start_t, end_t, notebook_id, actor\n",
+        "                          ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING) AS prev_end\n",
+        "  FROM nb_ev\n",
+        "),\n",
+        "nb_numbered AS (\n",
+        "  -- a new hold starts when activity begins more than the idle timeout after everything before it ended\n",
+        "  SELECT o.*,\n",
+        "         SUM(IF(o.prev_end IS NULL OR o.start_t > timestampadd(MINUTE, :nb_idle_timeout_min, o.prev_end), 1, 0))\n",
+        "           OVER (PARTITION BY o.workspace_id, o.session_id ORDER BY o.start_t, o.end_t, o.notebook_id, o.actor\n",
+        "                 ROWS UNBOUNDED PRECEDING) AS island\n",
+        "  FROM nb_ordered o\n",
+        "),\n",
+        "nb_isl AS (\n",
+        "  SELECT workspace_id, session_id, island,\n",
+        "         MIN(start_t)                                                  AS hold_start,\n",
+        "         MAX(end_t)                                                    AS last_activity,\n",
+        "         SUM(IF(action_name IN ('submitCommand', 'runCommand'), 1, 0)) AS hold_commands,\n",
+        "         SUM(exec_s)                                                   AS hold_exec_s,\n",
+        "         COUNT(DISTINCT notebook_id, actor)                            AS contributors\n",
+        "  FROM nb_numbered\n",
+        "  GROUP BY 1, 2, 3\n",
+        "),\n",
+        "nb_contrib AS (\n",
+        "  SELECT workspace_id, session_id, island, notebook_id, actor,\n",
+        "         SUM(IF(action_name IN ('submitCommand', 'runCommand'), 1, 0)) AS commands,\n",
+        "         SUM(exec_s)                                                   AS exec_s\n",
+        "  FROM nb_numbered\n",
+        "  GROUP BY ALL\n",
+        "),\n",
+        "-- attaching one of the hold's notebooks (same user) to other compute ends the session\n",
+        "nb_ended AS (\n",
+        "  SELECT c.workspace_id, c.session_id, c.island, MIN(a.event_time) AS ended_by_attach_at\n",
+        "  FROM nb_contrib c\n",
+        "  JOIN nb_isl i USING (workspace_id, session_id, island)\n",
+        "  JOIN nb_audit a\n",
+        "    ON a.workspace_id = c.workspace_id\n",
+        "   AND a.notebook_id  = c.notebook_id\n",
+        "   AND a.actor        = c.actor\n",
+        "   AND a.action_name  = 'attachNotebook' AND a.ok\n",
+        "   AND a.compute_id  <> c.session_id\n",
+        "   AND a.event_time  >= i.last_activity\n",
+        "  GROUP BY 1, 2, 3\n",
+        "),\n",
+        "-- one row per (hold, notebook, user); share splits a shared hold so it counts once\n",
+        "nb_holds AS (\n",
+        "  SELECT\n",
+        "    c.workspace_id, c.session_id, c.island, c.notebook_id, c.actor,\n",
+        "    i.hold_start,\n",
+        "    LEAST(current_timestamp(), COALESCE(d.ended_by_attach_at, current_timestamp()),\n",
+        "          timestampadd(MINUTE, :nb_idle_timeout_min, i.last_activity))                 AS hold_end,\n",
+        "    COALESCE(c.exec_s / NULLIF(i.hold_exec_s, 0), c.commands / NULLIF(i.hold_commands, 0),\n",
+        "             1.0 / i.contributors)                                                     AS share\n",
+        "  FROM nb_contrib c\n",
+        "  JOIN nb_isl i USING (workspace_id, session_id, island)\n",
+        "  LEFT JOIN nb_ended d USING (workspace_id, session_id, island)\n",
+        "),\n",
+        "nb_od AS (\n",
+        "  SELECT h.workspace_id, h.session_id, h.island, h.notebook_id,\n",
+        "         COUNT(b.usage_quantity)                                               AS od_rows,\n",
+        "         max_by(b.policy_id, IF(b.policy_id IS NULL, NULL, b.usage_quantity)) AS od_policy_id\n",
+        "  FROM nb_holds h\n",
+        "  LEFT JOIN od_billing b\n",
+        "    ON b.workspace_id     = h.workspace_id\n",
+        "   AND b.notebook_id      = h.notebook_id\n",
+        "   AND b.usage_end_time   > h.hold_start\n",
+        "   AND b.usage_start_time < h.hold_end\n",
+        "  GROUP BY 1, 2, 3, 4\n",
+        "),\n",
+        "-- policy-bearing billing rows (any product) of these notebooks: the notebook's stored policy\n",
+        "nb_policy_rows AS (\n",
+        "  SELECT\n",
+        "    u.workspace_id,\n",
+        "    u.usage_metadata.notebook_id     AS notebook_id,\n",
+        "    u.usage_metadata.usage_policy_id AS policy_id,\n",
+        "    COALESCE(u.identity_metadata.run_as, u.identity_metadata.owned_by, u.identity_metadata.created_by) AS principal,\n",
+        "    u.usage_start_time\n",
+        "  FROM system.billing.usage u\n",
+        "  WHERE u.usage_date >= date_sub(:since, 90)\n",
+        "    AND u.usage_metadata.usage_policy_id IS NOT NULL\n",
+        "    AND u.usage_metadata.notebook_id IN (SELECT DISTINCT notebook_id FROM nb_holds)\n",
+        "),\n",
+        "-- same user's rows first, then the latest at or before the hold start, else the earliest after\n",
+        "nb_fallback_policy AS (\n",
+        "  SELECT h.workspace_id, h.session_id, h.island, h.notebook_id, h.actor, r.policy_id\n",
+        "  FROM nb_holds h\n",
+        "  LEFT JOIN nb_policy_rows r\n",
+        "    ON r.workspace_id = h.workspace_id AND r.notebook_id = h.notebook_id\n",
+        "  QUALIFY ROW_NUMBER() OVER (\n",
+        "    PARTITION BY h.workspace_id, h.session_id, h.island, h.notebook_id, h.actor\n",
+        "    ORDER BY (r.principal = h.actor) DESC NULLS LAST,\n",
+        "             IF(r.usage_start_time <= h.hold_start, r.usage_start_time, NULL) DESC NULLS LAST,\n",
+        "             r.usage_start_time) = 1\n",
+        "),\n",
+        "nb_units AS (\n",
+        "  SELECT\n",
+        "    'notebook'                                                         AS workload,\n",
+        "    h.workspace_id,\n",
+        "    concat(h.session_id, '#', h.island)                                AS unit_id,\n",
+        "    h.hold_start                                                       AS start_t,\n",
+        "    h.hold_end                                                         AS end_t,\n",
+        "    TIMESTAMPDIFF(SECOND, h.hold_start, h.hold_end)                    AS hold_s,\n",
+        "    IF(m.capacity = 'reserved',\n",
+        "       element_at(split(regexp_replace(:reserved_accelerators, '\\\\s', ''), ','), 1),\n",
+        "       'unknown (notebook)')                                           AS accelerator,\n",
+        "    CAST(:nb_gpus AS INT)                                              AS gpus_per_node,\n",
+        "    :nb_gpus * h.share                                                 AS gpus,\n",
+        "    'notebook: assumed nb_gpus'                                        AS gpus_basis,\n",
+        "    m.capacity,\n",
+        "    m.capacity_basis,\n",
+        "    COALESCE(o.od_policy_id, f.policy_id)                              AS policy_id,\n",
+        "    CASE WHEN o.od_policy_id IS NOT NULL THEN 'billing'\n",
+        "         WHEN f.policy_id IS NOT NULL    THEN 'notebook billing (other compute)'\n",
+        "         ELSE 'none found' END                                         AS policy_source\n",
+        "  FROM nb_holds h\n",
+        "  JOIN nb_od o USING (workspace_id, session_id, island, notebook_id)\n",
+        "  -- a hold is on-demand if any of its notebooks billed on-demand GPU during it\n",
+        "  JOIN (\n",
+        "    SELECT o2.workspace_id, o2.session_id, o2.island,\n",
+        "           CASE WHEN SUM(o2.od_rows) > 0 THEN 'on-demand'\n",
+        "                WHEN MAX(h2.hold_end) > current_timestamp() - INTERVAL 24 HOURS THEN 'pending billing'\n",
+        "                ELSE 'reserved' END AS capacity,\n",
+        "           CASE WHEN SUM(o2.od_rows) > 0 THEN 'on-demand billing rows'\n",
+        "                WHEN MAX(h2.hold_end) > current_timestamp() - INTERVAL 24 HOURS THEN 'ended < 24 h ago'\n",
+        "                ELSE 'no on-demand billing (elimination)' END AS capacity_basis\n",
+        "    FROM nb_od o2\n",
+        "    JOIN nb_holds h2 USING (workspace_id, session_id, island, notebook_id)\n",
+        "    GROUP BY 1, 2, 3\n",
+        "  ) m USING (workspace_id, session_id, island)\n",
+        "  LEFT JOIN nb_fallback_policy f USING (workspace_id, session_id, island, notebook_id, actor)\n",
+        "),\n",
+        "-- ---------------------------------------------------------------------------------------------------------------\n",
+        "-- Both, spread over the days each unit spans\n",
+        "-- ---------------------------------------------------------------------------------------------------------------\n",
+        "units AS (\n",
+        "  SELECT * FROM job_units\n",
+        "  UNION ALL\n",
+        "  SELECT * FROM nb_units\n",
+        "),\n",
+        "unit_days AS (\n",
+        "  SELECT\n",
+        "    u.*,\n",
+        "    d.day,\n",
+        "    GREATEST(TIMESTAMPDIFF(SECOND, u.start_t, u.end_t), 0) AS span_s,\n",
+        "    GREATEST(TIMESTAMPDIFF(SECOND,\n",
+        "               GREATEST(u.start_t, CAST(d.day AS TIMESTAMP)),\n",
+        "               LEAST(u.end_t, CAST(date_add(d.day, 1) AS TIMESTAMP))), 0) AS day_s\n",
+        "  FROM units u\n",
+        "  LATERAL VIEW explode(sequence(to_date(u.start_t), to_date(u.end_t))) d AS day\n",
+        "  WHERE u.hold_s > 0\n",
+        ")\n",
+        "SELECT\n",
+        "  day,\n",
+        "  CAST(workspace_id AS STRING)                                         AS workspace_id,\n",
+        "  workload,\n",
+        "  capacity,\n",
+        "  accelerator,\n",
+        "  CASE WHEN gpus_per_node IS NULL OR gpus_per_node = 0 THEN concat(CAST(ROUND(gpus) AS INT), ' GPUs')\n",
+        "       ELSE concat(CAST(CEIL(gpus / gpus_per_node) AS INT),\n",
+        "                   IF(CEIL(gpus / gpus_per_node) = 1, ' node x ', ' nodes x '),\n",
+        "                   gpus_per_node, ' GPU') END                          AS shape,\n",
+        "  IF(gpus_per_node IS NOT NULL AND gpus > gpus_per_node, 'multi-node', 'single node') AS node_class,\n",
+        "  COALESCE(policy_id, '(none found)')                                  AS policy_id,\n",
+        "  policy_source,\n",
+        "  capacity_basis,\n",
+        "  gpus_basis,\n",
+        "  ROUND(SUM(hold_s * gpus / 3600.0 * IF(span_s = 0, 1.0, day_s / span_s)), 3) AS gpu_hours,\n",
+        "  SUM(IF(to_date(start_t) = day, 1, 0))                               AS units_started\n",
+        "FROM unit_days\n",
+        "WHERE day >= :since\n",
+        "  AND (span_s = 0 OR day_s > 0)\n",
+        "GROUP BY ALL\n"
+      ],
+      "parameters": [
+        {
+          "displayName": "Since",
+          "keyword": "since",
+          "dataType": "DATE",
+          "defaultSelection": {
+            "values": {
+              "dataType": "DATE",
+              "values": [
+                {
+                  "value": "now-90d/d"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "displayName": "Reserved accelerators",
+          "keyword": "reserved_accelerators",
+          "dataType": "STRING",
+          "defaultSelection": {
+            "values": {
+              "dataType": "STRING",
+              "values": [
+                {
+                  "value": "GPU_8xH100"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "displayName": "Job hold basis",
+          "keyword": "hold_basis",
+          "dataType": "STRING",
+          "defaultSelection": {
+            "values": {
+              "dataType": "STRING",
+              "values": [
+                {
+                  "value": "execution"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "displayName": "Notebook idle timeout (min)",
+          "keyword": "nb_idle_timeout_min",
+          "dataType": "INTEGER",
+          "defaultSelection": {
+            "values": {
+              "dataType": "INTEGER",
+              "values": [
+                {
+                  "value": "60"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "displayName": "GPUs per notebook session",
+          "keyword": "nb_gpus",
+          "dataType": "INTEGER",
+          "defaultSelection": {
+            "values": {
+              "dataType": "INTEGER",
+              "values": [
+                {
+                  "value": "8"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "displayName": "Job spec lookback (days)",
+          "keyword": "spec_lookback_days",
+          "dataType": "INTEGER",
+          "defaultSelection": {
+            "values": {
+              "dataType": "INTEGER",
+              "values": [
+                {
+                  "value": "180"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "pages": [
+    {
+      "name": "usage",
+      "displayName": "Usage",
+      "layout": [
+        {
+          "widget": {
+            "name": "usage_param_since",
+            "queries": [
+              {
+                "name": "usage_param_since",
+                "query": {
+                  "datasetName": "gpu_usage",
+                  "disaggregated": false,
+                  "parameters": [
+                    {
+                      "name": "since",
+                      "keyword": "since"
+                    }
+                  ]
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "filter-date-picker",
+              "encodings": {
+                "fields": [
+                  {
+                    "parameterName": "since",
+                    "queryName": "usage_param_since"
+                  }
+                ]
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Since"
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 0,
+            "width": 1,
+            "height": 1
+          }
+        },
+        {
+          "widget": {
+            "name": "usage_param_reserved_accelerators",
+            "queries": [
+              {
+                "name": "usage_param_reserved_accelerators",
+                "query": {
+                  "datasetName": "gpu_usage",
+                  "disaggregated": false,
+                  "parameters": [
+                    {
+                      "name": "reserved_accelerators",
+                      "keyword": "reserved_accelerators"
+                    }
+                  ]
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "filter-text-entry",
+              "encodings": {
+                "fields": [
+                  {
+                    "parameterName": "reserved_accelerators",
+                    "queryName": "usage_param_reserved_accelerators"
+                  }
+                ]
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Reserved accelerators"
+              }
+            }
+          },
+          "position": {
+            "x": 1,
+            "y": 0,
+            "width": 1,
+            "height": 1
+          }
+        },
+        {
+          "widget": {
+            "name": "usage_filter_capacity",
+            "queries": [
+              {
+                "name": "usage_filter_capacity",
+                "query": {
+                  "datasetName": "gpu_usage",
+                  "fields": [
+                    {
+                      "name": "capacity",
+                      "expression": "`capacity`"
+                    },
+                    {
+                      "name": "capacity_associativity",
+                      "expression": "COUNT_IF(`associative_filter_predicate_group`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "filter-multi-select",
+              "encodings": {
+                "fields": [
+                  {
+                    "fieldName": "capacity",
+                    "displayName": "Capacity",
+                    "queryName": "usage_filter_capacity"
+                  }
+                ]
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Capacity"
+              }
+            }
+          },
+          "position": {
+            "x": 2,
+            "y": 0,
+            "width": 1,
+            "height": 1
+          }
+        },
+        {
+          "widget": {
+            "name": "usage_filter_accelerator",
+            "queries": [
+              {
+                "name": "usage_filter_accelerator",
+                "query": {
+                  "datasetName": "gpu_usage",
+                  "fields": [
+                    {
+                      "name": "accelerator",
+                      "expression": "`accelerator`"
+                    },
+                    {
+                      "name": "accelerator_associativity",
+                      "expression": "COUNT_IF(`associative_filter_predicate_group`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "filter-multi-select",
+              "encodings": {
+                "fields": [
+                  {
+                    "fieldName": "accelerator",
+                    "displayName": "Accelerator",
+                    "queryName": "usage_filter_accelerator"
+                  }
+                ]
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Accelerator"
+              }
+            }
+          },
+          "position": {
+            "x": 3,
+            "y": 0,
+            "width": 1,
+            "height": 1
+          }
+        },
+        {
+          "widget": {
+            "name": "usage_filter_shape",
+            "queries": [
+              {
+                "name": "usage_filter_shape",
+                "query": {
+                  "datasetName": "gpu_usage",
+                  "fields": [
+                    {
+                      "name": "shape",
+                      "expression": "`shape`"
+                    },
+                    {
+                      "name": "shape_associativity",
+                      "expression": "COUNT_IF(`associative_filter_predicate_group`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "filter-multi-select",
+              "encodings": {
+                "fields": [
+                  {
+                    "fieldName": "shape",
+                    "displayName": "Shape",
+                    "queryName": "usage_filter_shape"
+                  }
+                ]
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Shape"
+              }
+            }
+          },
+          "position": {
+            "x": 4,
+            "y": 0,
+            "width": 1,
+            "height": 1
+          }
+        },
+        {
+          "widget": {
+            "name": "usage_filter_workload",
+            "queries": [
+              {
+                "name": "usage_filter_workload",
+                "query": {
+                  "datasetName": "gpu_usage",
+                  "fields": [
+                    {
+                      "name": "workload",
+                      "expression": "`workload`"
+                    },
+                    {
+                      "name": "workload_associativity",
+                      "expression": "COUNT_IF(`associative_filter_predicate_group`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "filter-multi-select",
+              "encodings": {
+                "fields": [
+                  {
+                    "fieldName": "workload",
+                    "displayName": "Workload",
+                    "queryName": "usage_filter_workload"
+                  }
+                ]
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Workload"
+              }
+            }
+          },
+          "position": {
+            "x": 5,
+            "y": 0,
+            "width": 1,
+            "height": 1
+          }
+        },
+        {
+          "widget": {
+            "name": "usage_filter_policy_id",
+            "queries": [
+              {
+                "name": "usage_filter_policy_id",
+                "query": {
+                  "datasetName": "gpu_usage",
+                  "fields": [
+                    {
+                      "name": "policy_id",
+                      "expression": "`policy_id`"
+                    },
+                    {
+                      "name": "policy_id_associativity",
+                      "expression": "COUNT_IF(`associative_filter_predicate_group`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "filter-multi-select",
+              "encodings": {
+                "fields": [
+                  {
+                    "fieldName": "policy_id",
+                    "displayName": "Usage policy",
+                    "queryName": "usage_filter_policy_id"
+                  }
+                ]
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Usage policy"
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 1,
+            "width": 1,
+            "height": 1
+          }
+        },
+        {
+          "widget": {
+            "name": "usage_filter_workspace_id",
+            "queries": [
+              {
+                "name": "usage_filter_workspace_id",
+                "query": {
+                  "datasetName": "gpu_usage",
+                  "fields": [
+                    {
+                      "name": "workspace_id",
+                      "expression": "`workspace_id`"
+                    },
+                    {
+                      "name": "workspace_id_associativity",
+                      "expression": "COUNT_IF(`associative_filter_predicate_group`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "filter-multi-select",
+              "encodings": {
+                "fields": [
+                  {
+                    "fieldName": "workspace_id",
+                    "displayName": "Workspace",
+                    "queryName": "usage_filter_workspace_id"
+                  }
+                ]
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Workspace"
+              }
+            }
+          },
+          "position": {
+            "x": 1,
+            "y": 1,
+            "width": 1,
+            "height": 1
+          }
+        },
+        {
+          "widget": {
+            "name": "usage_intro",
+            "multilineTextboxSpec": {
+              "lines": [
+                "## AIR GPU-hours by capacity, accelerator, shape and usage policy\n",
+                "GPU-hours are **GPU-hold time x GPUs** from the jobs and notebook audit events and the job task run timeline, not\n",
+                "billed DBUs: reserved billing rows are per node and name no job, notebook or policy. A workload counts as\n",
+                "**on-demand** if it has on-demand billing rows (or isn't on a reserved accelerator), **reserved** by elimination,\n",
+                "and **pending billing** if it ended less than 24 hours ago. Notebooks' accelerator isn't logged: reserved notebook\n",
+                "holds are counted on the first reserved accelerator, on-demand ones as `unknown (notebook)`, both with the\n",
+                "`nb_gpus` parameter's GPU count. The **Attribution quality** page shows how each number was found.\n",
+                "Source: `utils/billing/air_gpu_usage.sql`; method: `utils/billing/reserved_gpu_attribution.sql`.\n"
+              ]
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 2,
+            "width": 6,
+            "height": 3
+          }
+        },
+        {
+          "widget": {
+            "name": "usage_total",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "gpu_usage",
+                  "fields": [
+                    {
+                      "name": "sum(gpu_hours)",
+                      "expression": "SUM(`gpu_hours`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "sum(gpu_hours)",
+                  "displayName": "GPU-hours"
+                }
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Total GPU-hours"
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 5,
+            "width": 2,
+            "height": 2
+          }
+        },
+        {
+          "widget": {
+            "name": "usage_reserved",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "gpu_usage",
+                  "fields": [
+                    {
+                      "name": "sum(gpu_hours)",
+                      "expression": "SUM(`gpu_hours`)"
+                    }
+                  ],
+                  "disaggregated": false,
+                  "filters": [
+                    {
+                      "expression": "`capacity` = 'reserved'"
+                    }
+                  ]
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "sum(gpu_hours)",
+                  "displayName": "GPU-hours"
+                }
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Reserved"
+              }
+            }
+          },
+          "position": {
+            "x": 2,
+            "y": 5,
+            "width": 2,
+            "height": 2
+          }
+        },
+        {
+          "widget": {
+            "name": "usage_on_demand",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "gpu_usage",
+                  "fields": [
+                    {
+                      "name": "sum(gpu_hours)",
+                      "expression": "SUM(`gpu_hours`)"
+                    }
+                  ],
+                  "disaggregated": false,
+                  "filters": [
+                    {
+                      "expression": "`capacity` = 'on-demand'"
+                    }
+                  ]
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "sum(gpu_hours)",
+                  "displayName": "GPU-hours"
+                }
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "On-demand"
+              }
+            }
+          },
+          "position": {
+            "x": 4,
+            "y": 5,
+            "width": 2,
+            "height": 2
+          }
+        },
+        {
+          "widget": {
+            "name": "usage_by_capacity",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "gpu_usage",
+                  "fields": [
+                    {
+                      "name": "day",
+                      "expression": "`day`"
+                    },
+                    {
+                      "name": "capacity",
+                      "expression": "`capacity`"
+                    },
+                    {
+                      "name": "sum(gpu_hours)",
+                      "expression": "SUM(`gpu_hours`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "widgetType": "bar",
+              "encodings": {
+                "x": {
+                  "fieldName": "day",
+                  "displayName": "Day",
+                  "scale": {
+                    "type": "temporal"
+                  }
+                },
+                "y": {
+                  "fieldName": "sum(gpu_hours)",
+                  "displayName": "GPU-hours",
+                  "scale": {
+                    "type": "quantitative"
+                  }
+                },
+                "color": {
+                  "fieldName": "capacity",
+                  "displayName": "Capacity",
+                  "scale": {
+                    "type": "categorical"
+                  }
+                }
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "GPU-hours per day: reserved vs on-demand"
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 7,
+            "width": 6,
+            "height": 6
+          }
+        },
+        {
+          "widget": {
+            "name": "usage_by_accelerator",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "gpu_usage",
+                  "fields": [
+                    {
+                      "name": "day",
+                      "expression": "`day`"
+                    },
+                    {
+                      "name": "accelerator",
+                      "expression": "`accelerator`"
+                    },
+                    {
+                      "name": "sum(gpu_hours)",
+                      "expression": "SUM(`gpu_hours`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "widgetType": "bar",
+              "encodings": {
+                "x": {
+                  "fieldName": "day",
+                  "displayName": "Day",
+                  "scale": {
+                    "type": "temporal"
+                  }
+                },
+                "y": {
+                  "fieldName": "sum(gpu_hours)",
+                  "displayName": "GPU-hours",
+                  "scale": {
+                    "type": "quantitative"
+                  }
+                },
+                "color": {
+                  "fieldName": "accelerator",
+                  "displayName": "Accelerator",
+                  "scale": {
+                    "type": "categorical"
+                  }
+                }
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "GPU-hours per day by accelerator"
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 13,
+            "width": 3,
+            "height": 6
+          }
+        },
+        {
+          "widget": {
+            "name": "usage_by_shape",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "gpu_usage",
+                  "fields": [
+                    {
+                      "name": "day",
+                      "expression": "`day`"
+                    },
+                    {
+                      "name": "shape",
+                      "expression": "`shape`"
+                    },
+                    {
+                      "name": "sum(gpu_hours)",
+                      "expression": "SUM(`gpu_hours`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "widgetType": "bar",
+              "encodings": {
+                "x": {
+                  "fieldName": "day",
+                  "displayName": "Day",
+                  "scale": {
+                    "type": "temporal"
+                  }
+                },
+                "y": {
+                  "fieldName": "sum(gpu_hours)",
+                  "displayName": "GPU-hours",
+                  "scale": {
+                    "type": "quantitative"
+                  }
+                },
+                "color": {
+                  "fieldName": "shape",
+                  "displayName": "Shape",
+                  "scale": {
+                    "type": "categorical"
+                  }
+                }
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "GPU-hours per day by workload shape",
+                "showDescription": true,
+                "description": "Nodes x GPUs per node, from the job's accelerator_count."
+              }
+            }
+          },
+          "position": {
+            "x": 3,
+            "y": 13,
+            "width": 3,
+            "height": 6
+          }
+        },
+        {
+          "widget": {
+            "name": "usage_by_workload",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "gpu_usage",
+                  "fields": [
+                    {
+                      "name": "day",
+                      "expression": "`day`"
+                    },
+                    {
+                      "name": "workload",
+                      "expression": "`workload`"
+                    },
+                    {
+                      "name": "sum(gpu_hours)",
+                      "expression": "SUM(`gpu_hours`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "widgetType": "bar",
+              "encodings": {
+                "x": {
+                  "fieldName": "day",
+                  "displayName": "Day",
+                  "scale": {
+                    "type": "temporal"
+                  }
+                },
+                "y": {
+                  "fieldName": "sum(gpu_hours)",
+                  "displayName": "GPU-hours",
+                  "scale": {
+                    "type": "quantitative"
+                  }
+                },
+                "color": {
+                  "fieldName": "workload",
+                  "displayName": "Workload",
+                  "scale": {
+                    "type": "categorical"
+                  }
+                }
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "GPU-hours per day: jobs vs notebooks"
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 19,
+            "width": 3,
+            "height": 6
+          }
+        },
+        {
+          "widget": {
+            "name": "usage_by_policy_time",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "gpu_usage",
+                  "fields": [
+                    {
+                      "name": "day",
+                      "expression": "`day`"
+                    },
+                    {
+                      "name": "policy_id",
+                      "expression": "`policy_id`"
+                    },
+                    {
+                      "name": "sum(gpu_hours)",
+                      "expression": "SUM(`gpu_hours`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "widgetType": "bar",
+              "encodings": {
+                "x": {
+                  "fieldName": "day",
+                  "displayName": "Day",
+                  "scale": {
+                    "type": "temporal"
+                  }
+                },
+                "y": {
+                  "fieldName": "sum(gpu_hours)",
+                  "displayName": "GPU-hours",
+                  "scale": {
+                    "type": "quantitative"
+                  }
+                },
+                "color": {
+                  "fieldName": "policy_id",
+                  "displayName": "Usage policy",
+                  "scale": {
+                    "type": "categorical"
+                  }
+                }
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "GPU-hours per day by usage policy"
+              }
+            }
+          },
+          "position": {
+            "x": 3,
+            "y": 19,
+            "width": 3,
+            "height": 6
+          }
+        },
+        {
+          "widget": {
+            "name": "usage_by_policy",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "gpu_usage",
+                  "fields": [
+                    {
+                      "name": "policy_id",
+                      "expression": "`policy_id`"
+                    },
+                    {
+                      "name": "capacity",
+                      "expression": "`capacity`"
+                    },
+                    {
+                      "name": "sum(gpu_hours)",
+                      "expression": "SUM(`gpu_hours`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "widgetType": "bar",
+              "encodings": {
+                "x": {
+                  "fieldName": "policy_id",
+                  "displayName": "Usage policy",
+                  "scale": {
+                    "type": "categorical",
+                    "sort": {
+                      "by": "y-reversed"
+                    }
+                  }
+                },
+                "y": {
+                  "fieldName": "sum(gpu_hours)",
+                  "displayName": "GPU-hours",
+                  "scale": {
+                    "type": "quantitative"
+                  }
+                },
+                "color": {
+                  "fieldName": "capacity",
+                  "displayName": "Capacity",
+                  "scale": {
+                    "type": "categorical"
+                  }
+                }
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "GPU-hours by usage policy"
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 25,
+            "width": 6,
+            "height": 7
+          }
+        },
+        {
+          "widget": {
+            "name": "usage_policy_pivot",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "gpu_usage",
+                  "fields": [
+                    {
+                      "name": "policy_id",
+                      "expression": "`policy_id`"
+                    },
+                    {
+                      "name": "accelerator",
+                      "expression": "`accelerator`"
+                    },
+                    {
+                      "name": "shape",
+                      "expression": "`shape`"
+                    },
+                    {
+                      "name": "workload",
+                      "expression": "`workload`"
+                    },
+                    {
+                      "name": "capacity",
+                      "expression": "`capacity`"
+                    },
+                    {
+                      "name": "sum(gpu_hours)",
+                      "expression": "SUM(`gpu_hours`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "widgetType": "pivot",
+              "encodings": {
+                "rows": [
+                  {
+                    "fieldName": "policy_id",
+                    "displayName": "Usage policy"
+                  },
+                  {
+                    "fieldName": "accelerator",
+                    "displayName": "Accelerator"
+                  },
+                  {
+                    "fieldName": "shape",
+                    "displayName": "Shape"
+                  },
+                  {
+                    "fieldName": "workload",
+                    "displayName": "Workload"
+                  }
+                ],
+                "columns": [
+                  {
+                    "fieldName": "capacity",
+                    "displayName": "Capacity"
+                  }
+                ],
+                "cell": {
+                  "type": "multi-cell",
+                  "fields": [
+                    {
+                      "fieldName": "sum(gpu_hours)",
+                      "cellType": "text",
+                      "displayName": "GPU-hours"
+                    }
+                  ]
+                }
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "GPU-hours by usage policy, capacity, accelerator and shape"
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 32,
+            "width": 6,
+            "height": 10
+          }
+        }
+      ]
+    },
+    {
+      "name": "quality",
+      "displayName": "Attribution quality",
+      "layout": [
+        {
+          "widget": {
+            "name": "quality_param_since",
+            "queries": [
+              {
+                "name": "quality_param_since",
+                "query": {
+                  "datasetName": "gpu_usage",
+                  "disaggregated": false,
+                  "parameters": [
+                    {
+                      "name": "since",
+                      "keyword": "since"
+                    }
+                  ]
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "filter-date-picker",
+              "encodings": {
+                "fields": [
+                  {
+                    "parameterName": "since",
+                    "queryName": "quality_param_since"
+                  }
+                ]
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Since"
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 0,
+            "width": 1,
+            "height": 1
+          }
+        },
+        {
+          "widget": {
+            "name": "quality_param_reserved_accelerators",
+            "queries": [
+              {
+                "name": "quality_param_reserved_accelerators",
+                "query": {
+                  "datasetName": "gpu_usage",
+                  "disaggregated": false,
+                  "parameters": [
+                    {
+                      "name": "reserved_accelerators",
+                      "keyword": "reserved_accelerators"
+                    }
+                  ]
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "filter-text-entry",
+              "encodings": {
+                "fields": [
+                  {
+                    "parameterName": "reserved_accelerators",
+                    "queryName": "quality_param_reserved_accelerators"
+                  }
+                ]
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Reserved accelerators"
+              }
+            }
+          },
+          "position": {
+            "x": 1,
+            "y": 0,
+            "width": 1,
+            "height": 1
+          }
+        },
+        {
+          "widget": {
+            "name": "quality_filter_capacity",
+            "queries": [
+              {
+                "name": "quality_filter_capacity",
+                "query": {
+                  "datasetName": "gpu_usage",
+                  "fields": [
+                    {
+                      "name": "capacity",
+                      "expression": "`capacity`"
+                    },
+                    {
+                      "name": "capacity_associativity",
+                      "expression": "COUNT_IF(`associative_filter_predicate_group`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "filter-multi-select",
+              "encodings": {
+                "fields": [
+                  {
+                    "fieldName": "capacity",
+                    "displayName": "Capacity",
+                    "queryName": "quality_filter_capacity"
+                  }
+                ]
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Capacity"
+              }
+            }
+          },
+          "position": {
+            "x": 2,
+            "y": 0,
+            "width": 1,
+            "height": 1
+          }
+        },
+        {
+          "widget": {
+            "name": "quality_filter_accelerator",
+            "queries": [
+              {
+                "name": "quality_filter_accelerator",
+                "query": {
+                  "datasetName": "gpu_usage",
+                  "fields": [
+                    {
+                      "name": "accelerator",
+                      "expression": "`accelerator`"
+                    },
+                    {
+                      "name": "accelerator_associativity",
+                      "expression": "COUNT_IF(`associative_filter_predicate_group`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "filter-multi-select",
+              "encodings": {
+                "fields": [
+                  {
+                    "fieldName": "accelerator",
+                    "displayName": "Accelerator",
+                    "queryName": "quality_filter_accelerator"
+                  }
+                ]
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Accelerator"
+              }
+            }
+          },
+          "position": {
+            "x": 3,
+            "y": 0,
+            "width": 1,
+            "height": 1
+          }
+        },
+        {
+          "widget": {
+            "name": "quality_filter_shape",
+            "queries": [
+              {
+                "name": "quality_filter_shape",
+                "query": {
+                  "datasetName": "gpu_usage",
+                  "fields": [
+                    {
+                      "name": "shape",
+                      "expression": "`shape`"
+                    },
+                    {
+                      "name": "shape_associativity",
+                      "expression": "COUNT_IF(`associative_filter_predicate_group`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "filter-multi-select",
+              "encodings": {
+                "fields": [
+                  {
+                    "fieldName": "shape",
+                    "displayName": "Shape",
+                    "queryName": "quality_filter_shape"
+                  }
+                ]
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Shape"
+              }
+            }
+          },
+          "position": {
+            "x": 4,
+            "y": 0,
+            "width": 1,
+            "height": 1
+          }
+        },
+        {
+          "widget": {
+            "name": "quality_filter_workload",
+            "queries": [
+              {
+                "name": "quality_filter_workload",
+                "query": {
+                  "datasetName": "gpu_usage",
+                  "fields": [
+                    {
+                      "name": "workload",
+                      "expression": "`workload`"
+                    },
+                    {
+                      "name": "workload_associativity",
+                      "expression": "COUNT_IF(`associative_filter_predicate_group`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "filter-multi-select",
+              "encodings": {
+                "fields": [
+                  {
+                    "fieldName": "workload",
+                    "displayName": "Workload",
+                    "queryName": "quality_filter_workload"
+                  }
+                ]
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Workload"
+              }
+            }
+          },
+          "position": {
+            "x": 5,
+            "y": 0,
+            "width": 1,
+            "height": 1
+          }
+        },
+        {
+          "widget": {
+            "name": "quality_filter_policy_id",
+            "queries": [
+              {
+                "name": "quality_filter_policy_id",
+                "query": {
+                  "datasetName": "gpu_usage",
+                  "fields": [
+                    {
+                      "name": "policy_id",
+                      "expression": "`policy_id`"
+                    },
+                    {
+                      "name": "policy_id_associativity",
+                      "expression": "COUNT_IF(`associative_filter_predicate_group`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "filter-multi-select",
+              "encodings": {
+                "fields": [
+                  {
+                    "fieldName": "policy_id",
+                    "displayName": "Usage policy",
+                    "queryName": "quality_filter_policy_id"
+                  }
+                ]
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Usage policy"
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 1,
+            "width": 1,
+            "height": 1
+          }
+        },
+        {
+          "widget": {
+            "name": "quality_filter_workspace_id",
+            "queries": [
+              {
+                "name": "quality_filter_workspace_id",
+                "query": {
+                  "datasetName": "gpu_usage",
+                  "fields": [
+                    {
+                      "name": "workspace_id",
+                      "expression": "`workspace_id`"
+                    },
+                    {
+                      "name": "workspace_id_associativity",
+                      "expression": "COUNT_IF(`associative_filter_predicate_group`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "filter-multi-select",
+              "encodings": {
+                "fields": [
+                  {
+                    "fieldName": "workspace_id",
+                    "displayName": "Workspace",
+                    "queryName": "quality_filter_workspace_id"
+                  }
+                ]
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Workspace"
+              }
+            }
+          },
+          "position": {
+            "x": 1,
+            "y": 1,
+            "width": 1,
+            "height": 1
+          }
+        },
+        {
+          "widget": {
+            "name": "quality_intro",
+            "multilineTextboxSpec": {
+              "lines": [
+                "## How each GPU-hour was attributed\n",
+                "- **Policy source**: `billing` = the on-demand billing rows (what was billed); `jobs audit` = the latest\n",
+                "  policy-setting jobs event before the run; `notebook billing (other compute)` = the notebook's stored policy, seen\n",
+                "  on its other billed usage; `none found` = neither (look up the job's effective policy with\n",
+                "  `databricks jobs get <job_id>`).\n",
+                "- **Capacity basis**: reserved is always by elimination: no on-demand billing row matched the workload.\n",
+                "- **GPUs basis**: `job spec` = accelerator_count from the task; `assumed: one node` = no count found;\n",
+                "  notebooks always use the `nb_gpus` parameter.\n"
+              ]
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 2,
+            "width": 6,
+            "height": 3
+          }
+        },
+        {
+          "widget": {
+            "name": "quality_policy_source",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "gpu_usage",
+                  "fields": [
+                    {
+                      "name": "policy_source",
+                      "expression": "`policy_source`"
+                    },
+                    {
+                      "name": "capacity",
+                      "expression": "`capacity`"
+                    },
+                    {
+                      "name": "sum(gpu_hours)",
+                      "expression": "SUM(`gpu_hours`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "widgetType": "bar",
+              "encodings": {
+                "x": {
+                  "fieldName": "policy_source",
+                  "displayName": "Policy source",
+                  "scale": {
+                    "type": "categorical",
+                    "sort": {
+                      "by": "y-reversed"
+                    }
+                  }
+                },
+                "y": {
+                  "fieldName": "sum(gpu_hours)",
+                  "displayName": "GPU-hours",
+                  "scale": {
+                    "type": "quantitative"
+                  }
+                },
+                "color": {
+                  "fieldName": "capacity",
+                  "displayName": "Capacity",
+                  "scale": {
+                    "type": "categorical"
+                  }
+                }
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "GPU-hours by policy source"
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 5,
+            "width": 3,
+            "height": 6
+          }
+        },
+        {
+          "widget": {
+            "name": "quality_capacity_basis",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "gpu_usage",
+                  "fields": [
+                    {
+                      "name": "capacity_basis",
+                      "expression": "`capacity_basis`"
+                    },
+                    {
+                      "name": "workload",
+                      "expression": "`workload`"
+                    },
+                    {
+                      "name": "sum(gpu_hours)",
+                      "expression": "SUM(`gpu_hours`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "widgetType": "bar",
+              "encodings": {
+                "x": {
+                  "fieldName": "capacity_basis",
+                  "displayName": "Capacity basis",
+                  "scale": {
+                    "type": "categorical",
+                    "sort": {
+                      "by": "y-reversed"
+                    }
+                  }
+                },
+                "y": {
+                  "fieldName": "sum(gpu_hours)",
+                  "displayName": "GPU-hours",
+                  "scale": {
+                    "type": "quantitative"
+                  }
+                },
+                "color": {
+                  "fieldName": "workload",
+                  "displayName": "Workload",
+                  "scale": {
+                    "type": "categorical"
+                  }
+                }
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "GPU-hours by capacity basis"
+              }
+            }
+          },
+          "position": {
+            "x": 3,
+            "y": 5,
+            "width": 3,
+            "height": 6
+          }
+        },
+        {
+          "widget": {
+            "name": "quality_gpus_basis",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "gpu_usage",
+                  "fields": [
+                    {
+                      "name": "gpus_basis",
+                      "expression": "`gpus_basis`"
+                    },
+                    {
+                      "name": "capacity",
+                      "expression": "`capacity`"
+                    },
+                    {
+                      "name": "sum(gpu_hours)",
+                      "expression": "SUM(`gpu_hours`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "widgetType": "bar",
+              "encodings": {
+                "x": {
+                  "fieldName": "gpus_basis",
+                  "displayName": "GPUs basis",
+                  "scale": {
+                    "type": "categorical",
+                    "sort": {
+                      "by": "y-reversed"
+                    }
+                  }
+                },
+                "y": {
+                  "fieldName": "sum(gpu_hours)",
+                  "displayName": "GPU-hours",
+                  "scale": {
+                    "type": "quantitative"
+                  }
+                },
+                "color": {
+                  "fieldName": "capacity",
+                  "displayName": "Capacity",
+                  "scale": {
+                    "type": "categorical"
+                  }
+                }
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "GPU-hours by GPU-count basis"
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 11,
+            "width": 3,
+            "height": 6
+          }
+        },
+        {
+          "widget": {
+            "name": "quality_policy_source_time",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "gpu_usage",
+                  "fields": [
+                    {
+                      "name": "day",
+                      "expression": "`day`"
+                    },
+                    {
+                      "name": "policy_source",
+                      "expression": "`policy_source`"
+                    },
+                    {
+                      "name": "sum(gpu_hours)",
+                      "expression": "SUM(`gpu_hours`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "widgetType": "bar",
+              "encodings": {
+                "x": {
+                  "fieldName": "day",
+                  "displayName": "Day",
+                  "scale": {
+                    "type": "temporal"
+                  }
+                },
+                "y": {
+                  "fieldName": "sum(gpu_hours)",
+                  "displayName": "GPU-hours",
+                  "scale": {
+                    "type": "quantitative"
+                  }
+                },
+                "color": {
+                  "fieldName": "policy_source",
+                  "displayName": "Policy source",
+                  "scale": {
+                    "type": "categorical"
+                  }
+                }
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "GPU-hours per day by policy source"
+              }
+            }
+          },
+          "position": {
+            "x": 3,
+            "y": 11,
+            "width": 3,
+            "height": 6
+          }
+        },
+        {
+          "widget": {
+            "name": "quality_pivot",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "gpu_usage",
+                  "fields": [
+                    {
+                      "name": "workload",
+                      "expression": "`workload`"
+                    },
+                    {
+                      "name": "capacity_basis",
+                      "expression": "`capacity_basis`"
+                    },
+                    {
+                      "name": "workspace_id",
+                      "expression": "`workspace_id`"
+                    },
+                    {
+                      "name": "policy_source",
+                      "expression": "`policy_source`"
+                    },
+                    {
+                      "name": "sum(gpu_hours)",
+                      "expression": "SUM(`gpu_hours`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "widgetType": "pivot",
+              "encodings": {
+                "rows": [
+                  {
+                    "fieldName": "workload",
+                    "displayName": "Workload"
+                  },
+                  {
+                    "fieldName": "capacity_basis",
+                    "displayName": "Capacity basis"
+                  },
+                  {
+                    "fieldName": "workspace_id",
+                    "displayName": "Workspace"
+                  }
+                ],
+                "columns": [
+                  {
+                    "fieldName": "policy_source",
+                    "displayName": "Policy source"
+                  }
+                ],
+                "cell": {
+                  "type": "multi-cell",
+                  "fields": [
+                    {
+                      "fieldName": "sum(gpu_hours)",
+                      "cellType": "text",
+                      "displayName": "GPU-hours"
+                    }
+                  ]
+                }
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "GPU-hours by workload, capacity basis, workspace and policy source"
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 17,
+            "width": 6,
+            "height": 7
+          }
+        }
+      ]
+    }
+  ]
+}
