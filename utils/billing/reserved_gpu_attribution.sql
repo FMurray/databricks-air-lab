@@ -1046,6 +1046,64 @@ ORDER BY h.workspace_id, h.gap_min
 -- COMMAND ----------
 
 -- MAGIC %md
+-- MAGIC ### N2e. Long gaps: re-attached or not?
+-- MAGIC Per the scheduler code (not verified hands-on), the idle clock runs from command *completion*, so a running
+-- MAGIC cell keeps the session alive. After 60 idle minutes the session is terminated and its GPUs released, so running
+-- MAGIC another cell needs a new attach. That attach can return the same session ID: the attach key is notebook, policy and
+-- MAGIC accelerator, and it is kept for weeks. So for each gap between activity on a 'reserved' session, look at what
+-- MAGIC came next:
+-- MAGIC - `attachNotebook`: the session had ended and was re-attached. Splitting the hold here (N1) is right.
+-- MAGIC - `submitCommand` with no attach before it: the session was still alive, which over a gap longer than the
+-- MAGIC   timeout means a cell was running. N1 undercounts these by `extra_gpu_hours_if_running`.
+-- MAGIC
+-- MAGIC That the webapp logs an attach before a cell submitted to an ended session is an inference from the code, not
+-- MAGIC verified. Sample a few of the long-gap sessions to confirm.
+
+-- COMMAND ----------
+
+-- DBTITLE 1,N2e. Long gaps: re-attached or not?
+WITH res AS (
+  SELECT workspace_id, session_id
+  FROM v_nb_reserved_sessions
+  GROUP BY 1, 2
+  HAVING MIN(nb_match) = 'reserved' AND MAX(nb_match) = 'reserved'
+),
+ev AS (
+  SELECT e.workspace_id, e.compute_id AS session_id, e.action_name, e.event_time
+  FROM v_nb_audit e
+  JOIN res r ON r.workspace_id = e.workspace_id AND r.session_id = e.compute_id
+  CROSS JOIN v_params p
+  WHERE e.notebook_id IS NOT NULL
+    AND ((e.action_name = 'attachNotebook' AND e.ok) OR e.action_name IN ('submitCommand', 'runCommand'))
+    AND e.event_time < p.until
+),
+seq AS (
+  -- attach sorts before submit at the same instant
+  SELECT ev.*,
+         LAG(event_time) OVER (PARTITION BY workspace_id, session_id ORDER BY event_time, action_name) AS prev_t
+  FROM ev
+),
+gaps AS (
+  SELECT s.*, TIMESTAMPDIFF(SECOND, s.prev_t, s.event_time) / 60.0 AS gap_min
+  FROM seq s
+  WHERE s.prev_t IS NOT NULL
+)
+SELECT CASE WHEN g.gap_min <= p.nb_idle_timeout_min THEN '1. within timeout'
+            WHEN g.gap_min <= 240                   THEN '2. timeout to 4 h'
+            WHEN g.gap_min <= 1440                  THEN '3. 4 to 24 h'
+            ELSE                                         '4. over 24 h' END                 AS gap_bucket,
+       g.action_name                                                                        AS next_event,
+       COUNT(*)                                                                             AS gaps,
+       COUNT(DISTINCT g.session_id)                                                         AS sessions,
+       ROUND(SUM(GREATEST(g.gap_min - p.nb_idle_timeout_min, 0)) / 60.0 * MAX(p.nb_gpus), 1) AS extra_gpu_hours_if_running
+FROM gaps g
+CROSS JOIN v_params p
+GROUP BY ALL
+ORDER BY gap_bucket, next_event
+
+-- COMMAND ----------
+
+-- MAGIC %md
 -- MAGIC ## N3. Policy per reserved hold
 -- MAGIC `v_nb_policy_rows`: every billing row of those notebooks that carries a usage policy (any product), back to
 -- MAGIC `since` minus 90 days (literal). `principal` is the row's identity (AIR rows carry only created_by).
