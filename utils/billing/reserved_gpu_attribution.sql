@@ -1298,44 +1298,194 @@ ORDER BY 1
 -- COMMAND ----------
 
 -- MAGIC %md
--- MAGIC ## N4. Policy from each user's permitted policies
+-- MAGIC ## N4. Policy from each user's use cases
 -- MAGIC Notebook policy selection, per the serverless usage policy docs: a user with one permitted policy gets it
 -- MAGIC automatically; a user with several picks one, and "if a user doesn't select a policy, the setting defaults to
 -- MAGIC whichever policy comes first alphabetically". Per the attach code, a notebook's stored policy is checked against
--- MAGIC the user's permissions at attach and re-resolved if it isn't permitted. Policy isn't required, so a user with no
--- MAGIC permitted policy runs with none.
+-- MAGIC the user's permissions at attach and re-resolved if it isn't permitted.
 -- MAGIC
--- MAGIC `v_user_policies` is an **input**: load your user-to-permitted-policy list into it, one row per (user, policy),
--- MAGIC with groups expanded to users. A user with no permitted policy gets one row with `policy_id` NULL. If it's left
--- MAGIC empty, every hold is 'user not in list' and N4 keeps N3's answer, so downstream results don't change.
+-- MAGIC The permitted policies come from a **use-case sheet** (input): one row per use case, `use_case_name` plus
+-- MAGIC `team_member_standard_identifier_list` (the members' user IDs, as they appear in `actor`). A use case is tied to
+-- MAGIC its policy by a custom tag on the policy, so N4 finds each use case's policy from the tags on that policy's
+-- MAGIC billed usage, then treats a user's use cases' policies as their permitted policies.
 -- MAGIC
--- MAGIC `v_nb_session_policy_resolved`: N3's rows with `resolution`, the rule that decided `resolved_policy_id`:
--- MAGIC - 'billing evidence, permitted': N3's policy, which the user is allowed to use. Strongest.
--- MAGIC - 'only permitted policy': the user's one policy (overrides N3 if N3 picked a policy the user can't use).
--- MAGIC - 'no permitted policy': resolved as no policy (NULL is the answer, not a gap).
--- MAGIC - 'several permitted, none evidenced': unresolved (NULL). `default_guess_policy_id` is the alphabetically
--- MAGIC   first permitted policy by name, right only if the user never picked one. N4a shows what it would add.
--- MAGIC - 'billing evidence, not permitted': N3's policy isn't on the list, and the user has several. Unresolved (NULL).
--- MAGIC - 'user not in list': N3's answer kept.
--- MAGIC
--- MAGIC Permissions are as of the list, not history: a grant or group change during the window can make a rule wrong
--- MAGIC for the earlier period. A4 and A5 use `resolved_policy_id`.
+-- MAGIC Load the sheet: save it as CSV, upload it to a volume (or create a table from it in Catalog Explorer), and fill
+-- MAGIC in the `N4 · v_use_case_members_raw` cell. If it's left empty, every hold is 'user not in list' and N4 keeps N3's
+-- MAGIC answer, so downstream results don't change.
 
 -- COMMAND ----------
 
--- DBTITLE 1,N4 · v_user_policies (input)
--- Load the list, replacing the table, e.g.:
---   CREATE OR REPLACE TABLE v_user_policies AS
---   SELECT user_email, policy_id, policy_name FROM <your uploaded table>;
--- This cell only creates an empty table if none exists, so it never overwrites a loaded list.
-CREATE TABLE IF NOT EXISTS v_user_policies (user_email STRING, policy_id STRING, policy_name STRING)
+-- DBTITLE 1,N4 · v_use_case_members_raw (input)
+-- Load the use-case sheet, replacing the table, e.g. from a CSV in a volume:
+--   CREATE OR REPLACE TABLE v_use_case_members_raw AS
+--   SELECT use_case_name, team_member_standard_identifier_list
+--   FROM read_files('/Volumes/<catalog>/<schema>/<volume>/use_cases.csv', format => 'csv', header => true);
+-- or from a table created by upload:
+--   CREATE OR REPLACE TABLE v_use_case_members_raw AS
+--   SELECT use_case_name, team_member_standard_identifier_list FROM <uploaded table>;
+-- This cell only creates an empty table if none exists, so it never overwrites a loaded sheet.
+CREATE TABLE IF NOT EXISTS v_use_case_members_raw (use_case_name STRING, team_member_standard_identifier_list STRING)
+
+-- COMMAND ----------
+
+-- MAGIC %md
+-- MAGIC ### N4 · v_policy_use_cases
+-- MAGIC Use case -> policy. A policy's tags are the key=value pairs on every one of its billing rows in the lookback
+-- MAGIC (as in A4; any policy, any product). A use case matches a policy whose tag *value* equals `use_case_name`, or
+-- MAGIC failing that a tag *key* (case-insensitive). A policy with no billed usage in the lookback can't be matched;
+-- MAGIC N4a counts those use cases. Reads `system.billing.usage` (the date literal matches N3's).
+
+-- COMMAND ----------
+
+-- DBTITLE 1,N4 · v_policy_use_cases
+CREATE OR REPLACE TABLE v_policy_use_cases AS
+WITH pr AS (
+  SELECT u.usage_metadata.usage_policy_id AS policy_id, u.custom_tags
+  FROM system.billing.usage u
+  WHERE u.usage_date >= DATE '2026-05-05'  -- since minus 90 days (literal, as in N3)
+    AND u.usage_metadata.usage_policy_id IS NOT NULL
+),
+n AS (
+  SELECT policy_id, COUNT(*) AS billing_rows FROM pr GROUP BY 1
+),
+kv AS (
+  SELECT policy_id, key, value, COUNT(*) AS c
+  FROM pr
+  LATERAL VIEW explode(custom_tags) e AS key, value
+  GROUP BY 1, 2, 3
+),
+tags AS (
+  SELECT kv.policy_id, kv.key, kv.value
+  FROM kv
+  JOIN n USING (policy_id)
+  WHERE kv.c = n.billing_rows
+),
+uc AS (
+  SELECT DISTINCT trim(use_case_name) AS use_case_name
+  FROM v_use_case_members_raw
+  WHERE trim(use_case_name) <> ''
+),
+m AS (
+  SELECT uc.use_case_name, t.policy_id, t.key AS tag_key, t.value AS tag_value,
+         IF(lower(trim(t.value)) = lower(uc.use_case_name), 'tag value', 'tag key') AS matched_on
+  FROM uc
+  JOIN tags t
+    ON lower(trim(t.value)) = lower(uc.use_case_name)
+    OR lower(trim(t.key))   = lower(uc.use_case_name)
+)
+-- prefer value matches: drop a use case's key matches when it has any value match
+SELECT m.*
+FROM m
+QUALIFY matched_on = 'tag value' OR MAX(IF(matched_on = 'tag value', 1, 0)) OVER (PARTITION BY use_case_name) = 0
+
+-- COMMAND ----------
+
+-- MAGIC %md
+-- MAGIC ### N4 · v_user_policies
+-- MAGIC User -> permitted policy, from the sheet: each member ID is matched to a reserved-notebook `actor` that equals
+-- MAGIC it or whose part before `@` equals it (case-insensitive). The ID list is split on anything other than letters,
+-- MAGIC digits and `@ . _ -`. `use_case_unmapped` marks a membership whose use case matched no policy: that user's
+-- MAGIC permitted set is then incomplete, and N4 won't apply the 'only permitted policy' rule to them.
+-- MAGIC `policy_name` is NULL (the sheet has use cases, not policy names), so the alphabetical default isn't computed.
+
+-- COMMAND ----------
+
+-- DBTITLE 1,N4 · v_user_policies
+CREATE OR REPLACE TABLE v_user_policies AS
+WITH members AS (
+  SELECT DISTINCT trim(r.use_case_name) AS use_case_name, lower(trim(e.member_id)) AS member_id
+  FROM v_use_case_members_raw r
+  LATERAL VIEW explode(split(COALESCE(r.team_member_standard_identifier_list, ''), '[^A-Za-z0-9@._-]+')) e AS member_id
+  WHERE trim(e.member_id) <> '' AND trim(r.use_case_name) <> ''
+),
+actors AS (
+  SELECT DISTINCT actor FROM v_nb_session_policy WHERE actor IS NOT NULL
+),
+matched AS (
+  SELECT DISTINCT a.actor, m.use_case_name
+  FROM members m
+  JOIN actors a
+    ON m.member_id = lower(trim(a.actor))
+    OR m.member_id = lower(split_part(trim(a.actor), '@', 1))
+)
+SELECT DISTINCT
+  mt.actor                      AS user_email,
+  p.policy_id,
+  CAST(NULL AS STRING)          AS policy_name,
+  mt.use_case_name,
+  p.policy_id IS NULL           AS use_case_unmapped
+FROM matched mt
+LEFT JOIN (SELECT DISTINCT use_case_name, policy_id FROM v_policy_use_cases) p
+  ON lower(p.use_case_name) = lower(mt.use_case_name)
+
+-- COMMAND ----------
+
+-- MAGIC %md
+-- MAGIC ### N4a. Use-case sheet coverage
+-- MAGIC One row per measure. The ones that decide how far N4 gets: `use_cases_unmapped` (no policy carries that use case
+-- MAGIC as a tag), `use_cases_on_tag_key` (matched a tag key rather than a value: check these are right), and the
+-- MAGIC reserved-notebook GPU-hours of users not found in the sheet (usually an ID-format mismatch).
+
+-- COMMAND ----------
+
+-- DBTITLE 1,N4a. Use-case sheet coverage
+WITH uc AS (
+  SELECT DISTINCT lower(trim(use_case_name)) AS uc FROM v_use_case_members_raw WHERE trim(use_case_name) <> ''
+),
+mapped AS (
+  SELECT lower(use_case_name) AS uc, COUNT(DISTINCT policy_id) AS policies, MAX(IF(matched_on = 'tag value', 1, 0)) AS by_value
+  FROM v_policy_use_cases
+  GROUP BY 1
+),
+act AS (
+  SELECT actor,
+         SUM(hold_s * gpus) / 3600.0                              AS gpu_hours,
+         SUM(IF(policy_id IS NULL, hold_s * gpus, 0)) / 3600.0    AS null_gpu_hours
+  FROM v_nb_session_policy
+  GROUP BY 1
+),
+listed AS (
+  SELECT user_email, MAX(IF(use_case_unmapped, 1, 0)) AS incomplete, COUNT(DISTINCT policy_id) AS policies
+  FROM v_user_policies
+  GROUP BY 1
+)
+SELECT '1. use cases in sheet' AS measure, CAST(COUNT(*) AS DOUBLE) AS value FROM uc
+UNION ALL SELECT '2. use cases mapped to one policy',      CAST(COUNT(*) AS DOUBLE) FROM mapped WHERE policies = 1
+UNION ALL SELECT '3. use cases mapped to several policies', CAST(COUNT(*) AS DOUBLE) FROM mapped WHERE policies > 1
+UNION ALL SELECT '4. use cases unmapped',                   CAST(COUNT(*) AS DOUBLE) FROM uc LEFT ANTI JOIN mapped USING (uc)
+UNION ALL SELECT '5. use cases on tag key',                 CAST(COUNT(*) AS DOUBLE) FROM mapped WHERE by_value = 0
+UNION ALL SELECT '6. reserved-notebook users',              CAST(COUNT(*) AS DOUBLE) FROM act
+UNION ALL SELECT '7. ... found in sheet',                   CAST(COUNT(*) AS DOUBLE) FROM act JOIN listed ON listed.user_email = act.actor
+UNION ALL SELECT '8. ... found, permitted set complete',    CAST(COUNT(*) AS DOUBLE) FROM act JOIN listed ON listed.user_email = act.actor WHERE incomplete = 0
+UNION ALL SELECT '9. ... found, exactly one policy',        CAST(COUNT(*) AS DOUBLE) FROM act JOIN listed ON listed.user_email = act.actor WHERE incomplete = 0 AND policies = 1
+UNION ALL SELECT '10. GPU-hours, users not in sheet',       ROUND(SUM(gpu_hours), 1) FROM act LEFT ANTI JOIN listed ON listed.user_email = act.actor
+UNION ALL SELECT '11. NULL-policy GPU-hours, users in sheet', ROUND(SUM(null_gpu_hours), 1) FROM act JOIN listed ON listed.user_email = act.actor
+
+-- COMMAND ----------
+
+-- MAGIC %md
+-- MAGIC ### N4 · v_nb_session_policy_resolved
+-- MAGIC N3's rows with `resolution`, the rule that decided `resolved_policy_id`:
+-- MAGIC - 'billing evidence, permitted': N3's policy, which one of the user's use cases carries. Strongest.
+-- MAGIC - 'list incomplete': one of the user's use cases matched no policy, so the permitted set is partial. N3's answer
+-- MAGIC   kept (NULL stays NULL).
+-- MAGIC - 'only permitted policy': the user's one policy (overrides N3 if N3 picked a policy the user can't use).
+-- MAGIC - 'no permitted policy': resolved as no policy (NULL is the answer, not a gap).
+-- MAGIC - 'several permitted, none evidenced': unresolved (NULL). `default_guess_policy_id` is the alphabetically first
+-- MAGIC   policy by name when names are known (not from the use-case sheet).
+-- MAGIC - 'billing evidence, not permitted': N3's policy isn't among the user's, and they have several. Unresolved (NULL).
+-- MAGIC - 'user not in list': N3's answer kept.
+-- MAGIC
+-- MAGIC Membership is as of the sheet, not history: a change during the window can make a rule wrong for the earlier
+-- MAGIC period. A4 and A5 use `resolved_policy_id`.
 
 -- COMMAND ----------
 
 -- DBTITLE 1,N4 · v_nb_session_policy_resolved
 CREATE OR REPLACE TABLE v_nb_session_policy_resolved AS
 WITH up AS (
-  SELECT DISTINCT lower(trim(user_email)) AS actor_key, NULLIF(trim(policy_id), '') AS policy_id, policy_name
+  SELECT DISTINCT lower(trim(user_email)) AS actor_key, NULLIF(trim(policy_id), '') AS policy_id, policy_name,
+         COALESCE(use_case_unmapped, false) AS use_case_unmapped
   FROM v_user_policies
   WHERE user_email IS NOT NULL
 ),
@@ -1343,7 +1493,8 @@ per_user AS (
   SELECT actor_key,
          COUNT(DISTINCT policy_id)                                         AS permitted_policies,
          MIN(policy_id)                                                    AS any_policy,
-         min_by(policy_id, IF(policy_id IS NULL, NULL, lower(COALESCE(policy_name, policy_id)))) AS first_by_name
+         min_by(policy_id, lower(policy_name))                             AS first_by_name,
+         MAX(use_case_unmapped)                                            AS incomplete
   FROM up
   GROUP BY 1
 ),
@@ -1352,6 +1503,7 @@ r AS (
          u.permitted_policies,
          u.any_policy,
          u.first_by_name,
+         COALESCE(u.incomplete, false)                 AS permitted_incomplete,
          u.actor_key IS NOT NULL                       AS in_list,
          ok.policy_id IS NOT NULL                      AS n3_policy_permitted
   FROM v_nb_session_policy s
@@ -1362,27 +1514,30 @@ r AS (
 SELECT r.* EXCEPT (any_policy, first_by_name, in_list),
        CASE WHEN NOT r.in_list                                THEN 'user not in list'
             WHEN r.n3_policy_permitted                         THEN 'billing evidence, permitted'
+            WHEN r.permitted_incomplete                        THEN 'list incomplete'
             WHEN r.permitted_policies = 1                      THEN 'only permitted policy'
             WHEN r.permitted_policies = 0                      THEN 'no permitted policy'
             WHEN r.policy_id IS NOT NULL                       THEN 'billing evidence, not permitted'
             ELSE                                                    'several permitted, none evidenced' END AS resolution,
        CASE WHEN NOT r.in_list                                THEN r.policy_id
             WHEN r.n3_policy_permitted                         THEN r.policy_id
+            WHEN r.permitted_incomplete                        THEN r.policy_id
             WHEN r.permitted_policies = 1                      THEN r.any_policy
             ELSE NULL END                                                                                  AS resolved_policy_id,
-       IF(r.in_list AND r.permitted_policies > 1 AND r.policy_id IS NULL, r.first_by_name, NULL)          AS default_guess_policy_id
+       IF(r.in_list AND NOT r.permitted_incomplete AND r.permitted_policies > 1 AND r.policy_id IS NULL,
+          r.first_by_name, NULL)                                                                           AS default_guess_policy_id
 FROM r
 
 -- COMMAND ----------
 
 -- MAGIC %md
--- MAGIC ### N4a. Reserved notebook GPU-hours by resolution
--- MAGIC How much each rule decides. `n3_was_null` = holds N3 left without a policy; `n3_overridden` = N3 had a policy
--- MAGIC the user isn't permitted to use. `guess_gpu_hours` = what the alphabetical default would attribute if applied.
+-- MAGIC ### N4b. Reserved notebook GPU-hours by resolution
+-- MAGIC How much each rule decides. `n3_was_null_gpu_hours` = holds N3 left without a policy; `n3_overridden_gpu_hours`
+-- MAGIC = N3 had a policy the user isn't permitted to use; `guess_gpu_hours` = what the alphabetical default would add.
 
 -- COMMAND ----------
 
--- DBTITLE 1,N4a. Reserved notebook GPU-hours by resolution
+-- DBTITLE 1,N4b. Reserved notebook GPU-hours by resolution
 SELECT resolution,
        COUNT(DISTINCT actor)                                                   AS users,
        COUNT(DISTINCT notebook_id)                                             AS notebooks,
