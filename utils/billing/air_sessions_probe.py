@@ -15,6 +15,13 @@
 # MAGIC All calls are read-only GETs as the user running this notebook (notebook auth, no token handling). Session
 # MAGIC records are purged about 65 days after the session ends (per the code), so P1 can't cover older sessions.
 # MAGIC
+# MAGIC **Result from a first customer run: P1/P2 only return the caller's own sessions.** Per the handlers
+# MAGIC (`AiComputeGatewayHandlers.handleListSessions` / `handleGetSession`), only internal system users see every
+# MAGIC session; a regular user, workspace admins included, sees only sessions they own. P2 on another user's session
+# MAGIC fails with RESOURCE_CONFLICT ("does not support notebook sharing"). The list also returns `cluster_infos`
+# MAGIC (no notebook or policy); only P2's `session_info` has `attribution_info`. So these endpoints can't attribute
+# MAGIC a workspace's sessions, except per user, run by each session's owner.
+# MAGIC
 # MAGIC **Safe to paste.** Printed output is status codes, error codes, field paths, value types, enum counts and
 # MAGIC aggregate counts. IDs, emails, paths and policy IDs are not printed. The raw API rows are written to
 # MAGIC `v_air_sessions_raw` in the scratch schema, inside the workspace, for the attribution notebook to join on.
