@@ -1464,6 +1464,122 @@ UNION ALL SELECT '11. NULL-policy GPU-hours, users in sheet', ROUND(SUM(null_gpu
 -- COMMAND ----------
 
 -- MAGIC %md
+-- MAGIC ### N4c. Why use cases don't map to a policy
+-- MAGIC Each sheet use case by its best match against policy tags on billed usage (any row in the N4 lookback):
+-- MAGIC - 1: exact, on every billing row of the policy (what `v_policy_use_cases` uses today).
+-- MAGIC - 2: exact, but only on some rows: the tag was probably added or changed during the lookback.
+-- MAGIC - 3: equal only after removing case, spaces and punctuation (e.g. `Fraud Detection` vs `fraud-detection`).
+-- MAGIC - 4: matches a tag key, not a value.
+-- MAGIC - 5: no match anywhere: the tag isn't on any billed usage, e.g. the policy didn't bill in the lookback.
+-- MAGIC `tag_keys` lists the tag keys the matches were found on (keys only). If one key dominates, it's the use-case
+-- MAGIC key, and N4 can match on that key only. Reads `system.billing.usage` (date literal as in N3).
+
+-- COMMAND ----------
+
+-- DBTITLE 1,N4c. Why use cases don't map to a policy
+WITH pr AS (
+  SELECT u.usage_metadata.usage_policy_id AS policy_id, u.custom_tags
+  FROM system.billing.usage u
+  WHERE u.usage_date >= DATE '2026-05-05'  -- since minus 90 days (literal, as in N3)
+    AND u.usage_metadata.usage_policy_id IS NOT NULL
+),
+n AS (
+  SELECT policy_id, COUNT(*) AS billing_rows FROM pr GROUP BY 1
+),
+t AS (
+  SELECT kv.policy_id, kv.key, kv.value, kv.c / n.billing_rows AS share,
+         regexp_replace(lower(kv.value), '[^a-z0-9]', '') AS nv,
+         regexp_replace(lower(kv.key), '[^a-z0-9]', '')   AS nk
+  FROM (
+    SELECT policy_id, key, value, COUNT(*) AS c
+    FROM pr
+    LATERAL VIEW explode(custom_tags) e AS key, value
+    GROUP BY 1, 2, 3
+  ) kv
+  JOIN n USING (policy_id)
+),
+uc AS (
+  SELECT DISTINCT trim(use_case_name) AS use_case_name,
+         regexp_replace(lower(trim(use_case_name)), '[^a-z0-9]', '') AS nu
+  FROM v_use_case_members_raw
+  WHERE trim(use_case_name) <> ''
+),
+m AS (
+  SELECT uc.use_case_name, t.policy_id, t.key,
+         CASE WHEN lower(trim(t.value)) = lower(uc.use_case_name) AND t.share = 1 THEN 1
+              WHEN lower(trim(t.value)) = lower(uc.use_case_name)                 THEN 2
+              WHEN t.nv = uc.nu                                                   THEN 3
+              ELSE                                                                     4 END AS lvl
+  FROM uc
+  JOIN t ON t.nv = uc.nu OR t.nk = uc.nu
+),
+best AS (
+  SELECT use_case_name, MIN(lvl) AS lvl FROM m GROUP BY 1
+),
+per AS (
+  SELECT uc.use_case_name,
+         COALESCE(b.lvl, 5)                                     AS lvl,
+         COUNT(DISTINCT IF(m.lvl = b.lvl, m.policy_id, NULL))   AS policies,
+         collect_set(IF(m.lvl = b.lvl, m.key, NULL))            AS keys
+  FROM uc
+  LEFT JOIN best b USING (use_case_name)
+  LEFT JOIN m ON m.use_case_name = uc.use_case_name
+  GROUP BY 1, 2
+)
+SELECT CASE lvl WHEN 1 THEN '1. exact, every billing row (N4 today)'
+                WHEN 2 THEN '2. exact, some rows only'
+                WHEN 3 THEN '3. same ignoring case/punctuation'
+                WHEN 4 THEN '4. tag key only'
+                ELSE        '5. no match' END                  AS best_match,
+       COUNT(*)                                                AS use_cases,
+       SUM(IF(policies = 1, 1, 0))                             AS one_policy,
+       SUM(IF(policies > 1, 1, 0))                             AS several_policies,
+       array_sort(array_distinct(flatten(collect_list(keys)))) AS tag_keys
+FROM per
+GROUP BY lvl
+ORDER BY lvl
+
+-- COMMAND ----------
+
+-- MAGIC %md
+-- MAGIC ### N4d. Users found in the sheet, by number of use cases
+-- MAGIC Even with every use case mapped, a user in several use cases has several permitted policies, so 'only permitted
+-- MAGIC policy' can't decide their holds. `null_gpu_hours` in the '1' row is the most that rule could resolve.
+
+-- COMMAND ----------
+
+-- DBTITLE 1,N4d. Users found in the sheet, by number of use cases
+WITH m AS (
+  SELECT user_email,
+         COUNT(DISTINCT use_case_name)          AS use_cases,
+         COUNT(DISTINCT policy_id)              AS policies,
+         MAX(IF(use_case_unmapped, 1, 0))       AS incomplete
+  FROM v_user_policies
+  GROUP BY 1
+),
+a AS (
+  SELECT actor,
+         SUM(hold_s * gpus) / 3600.0                            AS gpu_hours,
+         SUM(IF(policy_id IS NULL, hold_s * gpus, 0)) / 3600.0  AS null_gpu_hours
+  FROM v_nb_session_policy
+  GROUP BY 1
+)
+SELECT CASE WHEN m.use_cases = 1 THEN '1'
+            WHEN m.use_cases = 2 THEN '2'
+            WHEN m.use_cases <= 5 THEN '3-5'
+            ELSE '6+' END                  AS use_cases_per_user,
+       COUNT(*)                            AS users,
+       SUM(m.incomplete)                   AS users_with_unmapped_use_case,
+       ROUND(SUM(a.gpu_hours), 1)          AS gpu_hours,
+       ROUND(SUM(a.null_gpu_hours), 1)     AS null_gpu_hours
+FROM a
+JOIN m ON m.user_email = a.actor
+GROUP BY 1
+ORDER BY 1
+
+-- COMMAND ----------
+
+-- MAGIC %md
 -- MAGIC ### N4 · v_nb_session_policy_resolved
 -- MAGIC N3's rows with `resolution`, the rule that decided `resolved_policy_id`:
 -- MAGIC - 'billing evidence, permitted': N3's policy, which one of the user's use cases carries. Strongest.
