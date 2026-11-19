@@ -1305,7 +1305,7 @@ ORDER BY 1
 -- MAGIC the user's permissions at attach and re-resolved if it isn't permitted.
 -- MAGIC
 -- MAGIC The permitted policies come from a **use-case sheet** (input): one row per use case, `use_case_name` plus
--- MAGIC `team_member_standard_identifier_list` (the members' user IDs, as they appear in `actor`). A use case is tied to
+-- MAGIC `team_member_standard_identifier_list` (ARRAY<STRING>: the members' user IDs, as they appear in `actor`). A use case is tied to
 -- MAGIC its policy by a custom tag on the policy, so N4 finds each use case's policy from the tags on that policy's
 -- MAGIC billed usage, then treats a user's use cases' policies as their permitted policies.
 -- MAGIC
@@ -1316,15 +1316,34 @@ ORDER BY 1
 -- COMMAND ----------
 
 -- DBTITLE 1,N4 · v_use_case_members_raw (input)
--- Load the use-case sheet, replacing the table, e.g. from a CSV in a volume:
---   CREATE OR REPLACE TABLE v_use_case_members_raw AS
---   SELECT use_case_name, team_member_standard_identifier_list
---   FROM read_files('/Volumes/<catalog>/<schema>/<volume>/use_cases.csv', format => 'csv', header => true);
--- or from a table created by upload:
+-- Load the use-case sheet, replacing the table. team_member_standard_identifier_list is ARRAY<STRING>. From a table
+-- that already has the array column:
 --   CREATE OR REPLACE TABLE v_use_case_members_raw AS
 --   SELECT use_case_name, team_member_standard_identifier_list FROM <uploaded table>;
--- This cell only creates an empty table if none exists, so it never overwrites a loaded sheet.
-CREATE TABLE IF NOT EXISTS v_use_case_members_raw (use_case_name STRING, team_member_standard_identifier_list STRING)
+-- From a CSV in a volume, where the list arrives as text, convert it: from_json for a JSON array ("["a","b"]"),
+-- split for a delimited list ("a, b"):
+--   CREATE OR REPLACE TABLE v_use_case_members_raw AS
+--   SELECT use_case_name,
+--          split(team_member_standard_identifier_list, '[,;\\s]+') AS team_member_standard_identifier_list
+--   FROM read_files('/Volumes/<catalog>/<schema>/<volume>/use_cases.csv', format => 'csv', header => true);
+-- This cell only creates an empty table if none exists, so it never overwrites a loaded sheet. An existing table with
+-- the old STRING column must be reloaded (DROP TABLE v_use_case_members_raw first).
+CREATE TABLE IF NOT EXISTS v_use_case_members_raw (
+  use_case_name                        STRING,
+  team_member_standard_identifier_list ARRAY<STRING>
+)
+
+-- COMMAND ----------
+
+-- DBTITLE 1,N4 · v_use_case_members
+-- One row per (use case, member ID). Array elements are trimmed and lowercased; an element holding several IDs
+-- ("a, b") is split on anything other than letters, digits and @ . _ -.
+CREATE OR REPLACE TABLE v_use_case_members AS
+SELECT DISTINCT trim(r.use_case_name) AS use_case_name, lower(trim(f.member_id)) AS member_id
+FROM v_use_case_members_raw r
+LATERAL VIEW explode(COALESCE(r.team_member_standard_identifier_list, CAST(array() AS ARRAY<STRING>))) e AS raw_id
+LATERAL VIEW explode(split(COALESCE(e.raw_id, ''), '[^A-Za-z0-9@._-]+')) f AS member_id
+WHERE trim(f.member_id) <> '' AND trim(r.use_case_name) <> ''
 
 -- COMMAND ----------
 
@@ -1382,9 +1401,8 @@ QUALIFY matched_on = 'tag value' OR MAX(IF(matched_on = 'tag value', 1, 0)) OVER
 
 -- MAGIC %md
 -- MAGIC ### N4 · v_user_policies
--- MAGIC User -> permitted policy, from the sheet: each member ID is matched to a reserved-notebook `actor` that equals
--- MAGIC it or whose part before `@` equals it (case-insensitive). The ID list is split on anything other than letters,
--- MAGIC digits and `@ . _ -`. `use_case_unmapped` marks a membership whose use case matched no policy: that user's
+-- MAGIC User -> permitted policy, from the sheet: each member ID (`v_use_case_members`) is matched to a
+-- MAGIC reserved-notebook `actor` that equals it or whose part before `@` equals it (case-insensitive). `use_case_unmapped` marks a membership whose use case matched no policy: that user's
 -- MAGIC permitted set is then incomplete, and N4 won't apply the 'only permitted policy' rule to them.
 -- MAGIC `policy_name` is NULL (the sheet has use cases, not policy names), so the alphabetical default isn't computed.
 
@@ -1393,10 +1411,7 @@ QUALIFY matched_on = 'tag value' OR MAX(IF(matched_on = 'tag value', 1, 0)) OVER
 -- DBTITLE 1,N4 · v_user_policies
 CREATE OR REPLACE TABLE v_user_policies AS
 WITH members AS (
-  SELECT DISTINCT trim(r.use_case_name) AS use_case_name, lower(trim(e.member_id)) AS member_id
-  FROM v_use_case_members_raw r
-  LATERAL VIEW explode(split(COALESCE(r.team_member_standard_identifier_list, ''), '[^A-Za-z0-9@._-]+')) e AS member_id
-  WHERE trim(e.member_id) <> '' AND trim(r.use_case_name) <> ''
+  SELECT use_case_name, member_id FROM v_use_case_members
 ),
 actors AS (
   SELECT DISTINCT actor FROM v_nb_session_policy WHERE actor IS NOT NULL
@@ -1670,23 +1685,159 @@ ORDER BY gpu_hours DESC
 -- COMMAND ----------
 
 -- MAGIC %md
+-- MAGIC ## N5. Teams
+-- MAGIC When the policy (or use case) can't be pinned down, the team is the next best unit. A use case's team is the
+-- MAGIC prefix its `use_case_name` starts with (case-insensitive, longest prefix first), from `v_team_prefixes`; a use
+-- MAGIC case matching no prefix is team 'other'. A user's teams are their use cases' teams. A4 then gives every job run
+-- MAGIC and notebook hold a team: from its policy's use cases if they're all one team, else from its user if all of
+-- MAGIC that user's use cases are one team.
+-- MAGIC
+-- MAGIC `v_team_prefixes` is an **input**, kept out of the committed notebook: insert the team prefixes once, e.g.
+-- MAGIC `INSERT INTO v_team_prefixes VALUES ('<prefix-a>'), ('<prefix-b>')`. Left empty, every use case is 'other'.
+
+-- COMMAND ----------
+
+-- DBTITLE 1,N5 · v_team_prefixes (input)
+-- Insert the team prefixes once (they're customer-specific, so they aren't committed here):
+--   INSERT INTO v_team_prefixes VALUES ('<prefix-a>'), ('<prefix-b>');
+-- This cell only creates an empty table if none exists, so it never overwrites the list.
+CREATE TABLE IF NOT EXISTS v_team_prefixes (prefix STRING)
+
+-- COMMAND ----------
+
+-- DBTITLE 1,N5 · v_use_case_teams
+CREATE OR REPLACE TABLE v_use_case_teams AS
+SELECT uc.use_case_name,
+       COALESCE(max_by(lower(trim(p.prefix)), length(trim(p.prefix))), 'other') AS team
+FROM (
+  SELECT DISTINCT trim(use_case_name) AS use_case_name
+  FROM v_use_case_members_raw
+  WHERE trim(use_case_name) <> ''
+) uc
+LEFT JOIN v_team_prefixes p
+  ON trim(p.prefix) <> ''
+ AND startswith(lower(uc.use_case_name), lower(trim(p.prefix)))
+GROUP BY 1
+
+-- COMMAND ----------
+
+-- DBTITLE 1,N5 · v_policy_teams
+-- Policy -> team(s), through the use cases N4 matched to the policy.
+CREATE OR REPLACE TABLE v_policy_teams AS
+SELECT DISTINCT p.policy_id, t.team
+FROM v_policy_use_cases p
+JOIN v_use_case_teams t USING (use_case_name)
+
+-- COMMAND ----------
+
+-- DBTITLE 1,N5 · v_run_as
+-- Each reserved job run's run-as identity, as in A3d: the job's run_as as of run start (system.lakeflow.jobs), or the
+-- submitRun caller for one-time runs.
+CREATE OR REPLACE TABLE v_run_as AS
+WITH job_run_as AS (
+  SELECT r.run_id, j.run_as
+  FROM v_run_policy r
+  JOIN system.lakeflow.jobs j ON j.job_id = r.job_key
+  WHERE r.key_type = 'job'
+  QUALIFY ROW_NUMBER() OVER (PARTITION BY r.run_id
+                             ORDER BY IF(j.change_time <= r.run_start, j.change_time, NULL) DESC NULLS LAST,
+                                      j.change_time) = 1
+)
+SELECT r.run_id,
+       COALESCE(ja.run_as, IF(r.key_type = 'run', r.policy_actor, NULL)) AS run_as,
+       CASE WHEN ja.run_as IS NOT NULL THEN 'job run_as'
+            WHEN r.key_type = 'run'    THEN 'submitRun caller' END    AS run_as_source
+FROM v_run_policy r
+LEFT JOIN job_run_as ja USING (run_id)
+
+-- COMMAND ----------
+
+-- DBTITLE 1,N5 · v_user_teams
+-- Identity -> team(s): notebook users and job run-as identities matched to sheet members, whole or by the part
+-- before @ (as in v_user_policies).
+CREATE OR REPLACE TABLE v_user_teams AS
+WITH ids AS (
+  SELECT DISTINCT actor AS identity FROM v_nb_session_policy WHERE actor IS NOT NULL
+  UNION
+  SELECT DISTINCT run_as FROM v_run_as WHERE run_as IS NOT NULL
+)
+SELECT DISTINCT lower(trim(i.identity)) AS identity_key, i.identity, m.use_case_name, t.team
+FROM v_use_case_members m
+JOIN ids i
+  ON m.member_id = lower(trim(i.identity))
+  OR m.member_id = lower(split_part(trim(i.identity), '@', 1))
+JOIN v_use_case_teams t USING (use_case_name)
+
+-- COMMAND ----------
+
+-- MAGIC %md
+-- MAGIC ### N5a. Teams per use case and per user
+-- MAGIC Use cases and users per team, and users whose use cases span several teams (A4 can't give those a team
+-- MAGIC from the user alone). Counts only.
+
+-- COMMAND ----------
+
+-- DBTITLE 1,N5a. Teams per use case and per user
+WITH uc AS (
+  SELECT t.team, t.use_case_name, MAX(IF(p.policy_id IS NOT NULL, 1, 0)) AS has_policy
+  FROM v_use_case_teams t
+  LEFT JOIN v_policy_use_cases p USING (use_case_name)
+  GROUP BY 1, 2
+),
+ut AS (
+  SELECT identity_key, COUNT(DISTINCT team) AS teams, MIN(team) AS team FROM v_user_teams GROUP BY 1
+)
+SELECT team, use_cases, use_cases_with_policy, users_only_this_team
+FROM (SELECT team, COUNT(*) AS use_cases, SUM(has_policy) AS use_cases_with_policy FROM uc GROUP BY 1) a
+FULL JOIN (SELECT team, COUNT(*) AS users_only_this_team FROM ut WHERE teams = 1 GROUP BY 1) b USING (team)
+UNION ALL
+SELECT '(users in several teams)', NULL, NULL, COUNT(*) FROM ut WHERE teams > 1
+ORDER BY team
+
+-- COMMAND ----------
+
+-- MAGIC %md
 -- MAGIC # Part A (cont.): tags and DBUs, jobs and notebooks
 -- MAGIC ## A4 · v_attributed
 -- MAGIC `v_attributed`: one row per charged unit: a reserved task run (A3) or a reserved notebook hold row (N4's
--- MAGIC `resolved_policy_id`; unit_id = session#hold).
--- MAGIC A4 and A5 read from it.
+-- MAGIC `resolved_policy_id`; unit_id = session#hold). A4 and A5 read from it.
+-- MAGIC
+-- MAGIC `identity` is the job's run-as (N5 · v_run_as) or the notebook's attaching user. `team`, in order:
+-- MAGIC - 'policy use case': the unit's policy carries use cases of exactly one team (N5 · v_policy_teams).
+-- MAGIC - 'only team of user': the identity's use cases in the sheet are all one team (N5 · v_user_teams).
+-- MAGIC - 'user in several teams' / 'user not in sheet' / 'no identity': no team (NULL).
 
 -- COMMAND ----------
 
 -- DBTITLE 1,A4 · v_attributed
 CREATE OR REPLACE TABLE v_attributed AS
-SELECT 'job' AS workload, key_type, job_key AS workload_key, CAST(run_id AS STRING) AS unit_id,
-       run_start AS start_time, policy_id, gpus, gpus_assumed, hold_s
-FROM v_run_policy
-UNION ALL
-SELECT 'notebook', 'notebook', notebook_id, concat(session_id, '#', island),
-       hold_start, resolved_policy_id, gpus, true, hold_s
-FROM v_nb_session_policy_resolved
+WITH units AS (
+  SELECT 'job' AS workload, r.key_type, r.job_key AS workload_key, CAST(r.run_id AS STRING) AS unit_id,
+         r.run_start AS start_time, r.policy_id, r.gpus, r.gpus_assumed, r.hold_s, ra.run_as AS identity
+  FROM v_run_policy r
+  LEFT JOIN v_run_as ra USING (run_id)
+  UNION ALL
+  SELECT 'notebook', 'notebook', notebook_id, concat(session_id, '#', island),
+         hold_start, resolved_policy_id, gpus, true, hold_s, actor
+  FROM v_nb_session_policy_resolved
+),
+pt AS (
+  SELECT policy_id, MIN(team) AS team, COUNT(DISTINCT team) AS teams FROM v_policy_teams GROUP BY 1
+),
+ut AS (
+  SELECT identity_key, MIN(team) AS team, COUNT(DISTINCT team) AS teams FROM v_user_teams GROUP BY 1
+)
+SELECT u.*,
+       CASE WHEN pt.teams = 1 THEN pt.team
+            WHEN ut.teams = 1 THEN ut.team END                AS team,
+       CASE WHEN pt.teams = 1          THEN 'policy use case'
+            WHEN ut.teams = 1          THEN 'only team of user'
+            WHEN ut.teams > 1          THEN 'user in several teams'
+            WHEN u.identity IS NULL    THEN 'no identity'
+            ELSE                            'user not in sheet' END AS team_basis
+FROM units u
+LEFT JOIN pt ON pt.policy_id = u.policy_id
+LEFT JOIN ut ON ut.identity_key = lower(trim(u.identity))
 
 -- COMMAND ----------
 
@@ -1792,6 +1943,31 @@ SELECT month, policy_id, jobs, task_runs, notebooks, nb_holds, runs_gpus_assumed
        job_gpu_hours, nb_gpu_hours, gpu_hours, dbus, policy_tags
 FROM v_policy_dbus
 ORDER BY month DESC, dbus DESC
+
+-- COMMAND ----------
+
+-- MAGIC %md
+-- MAGIC ## A6. GPU-hours and DBUs per team per month
+-- MAGIC A5 by team instead of policy. `team_basis` says how the team was decided (A4); a NULL team is a unit whose
+-- MAGIC policy and user don't pin one team down.
+
+-- COMMAND ----------
+
+-- DBTITLE 1,A6. GPU-hours and DBUs per team per month
+SELECT date_trunc('MONTH', a.start_time)                                         AS month,
+       a.team,
+       a.team_basis,
+       SUM(IF(a.workload = 'job', 1, 0))                                         AS task_runs,
+       SUM(IF(a.workload = 'notebook', 1, 0))                                    AS nb_holds,
+       COUNT(DISTINCT a.identity)                                                AS identities,
+       ROUND(SUM(IF(a.workload = 'job', a.hold_s * a.gpus, 0)) / 3600.0, 1)      AS job_gpu_hours,
+       ROUND(SUM(IF(a.workload = 'notebook', a.hold_s * a.gpus, 0)) / 3600.0, 1) AS nb_gpu_hours,
+       ROUND(SUM(a.hold_s * a.gpus) / 3600.0, 1)                                 AS gpu_hours,
+       ROUND(SUM(a.hold_s * a.gpus) / 3600.0 * MAX(p.dbus_per_gpu_hour), 2)      AS dbus
+FROM v_attributed a
+CROSS JOIN v_params p
+GROUP BY 1, 2, 3
+ORDER BY month DESC, gpu_hours DESC
 
 -- COMMAND ----------
 
