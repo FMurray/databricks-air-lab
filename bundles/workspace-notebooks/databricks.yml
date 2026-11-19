@@ -1,40 +1,59 @@
-# Workspace notebooks: copy this repo's workspace-side notebooks into your own workspace folder.
+# Workspace notebooks + AIR GPU usage dashboard: copy this repo's workspace-side notebooks into your own workspace
+# folder, and create (and publish) the dashboard next to it.
 #
-#   cd bundles/workspace-notebooks
-#   databricks bundle deploy -p <profile>      # or ./manage.sh deploy -p <profile>
+#   uv run bundles/workspace-notebooks/deploy.py deploy -p <profile> --var warehouse_id=<id>
 #
-# Files land under /Workspace/Users/<you>/databricks-air-lab/, mirroring the repo layout, e.g.
-# .../databricks-air-lab/utils/billing/reserved_gpu_attribution (a SQL notebook). Needs no
-# /Workspace/Shared and no Git folder. The host comes from the profile, so nothing
-# workspace-specific is committed here.
+# deploy.py (Databricks SDK, no CLI needed) reads this file; `databricks bundle deploy` from this directory, with
+# the same flags, deploys the same thing. Notebooks land under /Workspace/Users/<you>/databricks-air-lab/, mirroring
+# the repo layout, e.g. .../databricks-air-lab/utils/billing/reserved_gpu_attribution (a SQL notebook). The dashboard
+# lands at /Workspace/Users/<you>/AIR GPU usage.lvdash.json. Needs no /Workspace/Shared and no Git folder. The host
+# comes from the profile, so nothing workspace-specific is committed here.
 #
-# Sync is one way, laptop -> workspace: a deploy overwrites edits made to these copies in the
-# workspace, and removes files deleted from the listed folders. Save your own changes under another name.
+# Sync is one way, laptop -> workspace: a deploy overwrites edits made to these copies in the workspace, and removes
+# files deleted from the listed folders. Save your own changes under another name.
 bundle:
   name: air-lab-notebooks
-  # Tested with 1.20.0 (what the customer laptop has) and 1.25. The direct-engine deployment state
-  # format last changed in 1.17.0, so any CLI from 1.20 on can deploy the same target.
+  # For `databricks bundle deploy`: tested with 1.20.0 (what the customer laptop has) and 1.25.
   databricks_cli_version: ">= 1.20.0"
+
+variables:
+  warehouse_id:
+    description: >-
+      ID of the SQL warehouse the dashboard runs on (serverless recommended). deploy.py skips the dashboard
+      without it; `databricks bundle deploy` requires it.
 
 workspace:
   # Where the notebooks go; change it here to deploy elsewhere. Spelled out rather than `~/...`:
   # CLI 1.20 expands `~` in root_path only, so a `~` here would stay literal.
   file_path: /Workspace/Users/${workspace.current_user.userName}/databricks-air-lab
-  # Deployment state stays in the default hidden folder (~/.bundle/air-lab-notebooks/<target>).
+  # `databricks bundle` keeps its deployment state in the default hidden folder
+  # (~/.bundle/air-lab-notebooks/<target>); deploy.py keeps none.
 
-# Folders to copy, relative to this file. Listing folders outside this directory makes the repo root
-# the sync root, so the workspace copy keeps the repo's paths. .gitignore applies: docs/private/ and
-# __pycache__/ are never uploaded. Source-format notebooks (`# Databricks notebook source`,
-# `-- Databricks notebook source`) become notebooks; other files become workspace files.
+# Folders to copy, relative to this file. Listing folders outside this directory makes the repo root the sync root,
+# so the workspace copy keeps the repo's paths. .gitignore applies: docs/private/ and __pycache__/ are never
+# uploaded. Source-format notebooks (`# Databricks notebook source`, `-- Databricks notebook source`) become
+# notebooks; other files become workspace files.
 #
-# Not listed yet: utils/verification/uat-notebooks/ (several hard-code /Workspace/Shared/..., which
-# the customer workspace doesn't have).
+# Not listed yet: utils/verification/uat-notebooks/ (several hard-code /Workspace/Shared/..., which the customer
+# workspace doesn't have).
 sync:
   paths:
     - ../../utils/billing
 
+resources:
+  dashboards:
+    air_gpu_usage:
+      display_name: AIR GPU usage
+      # Built from utils/billing/air_gpu_usage.sql by build_dashboard.py.
+      file_path: ./src/air_gpu_usage.lvdash.json
+      warehouse_id: ${var.warehouse_id}
+      # Next to your user folder rather than inside databricks-air-lab/, which `deploy.py remove` deletes whole.
+      parent_path: /Workspace/Users/${workspace.current_user.userName}
+      # Viewers query with their own credentials, so each needs SELECT on the system tables. Embedding the
+      # publisher's credentials would show account-wide billing and audit data to anyone it's shared with.
+      embed_credentials: false
+
 targets:
   user:
     default: true
-    # Personal deployment: development mode requires paths under ~/ (or containing your username).
-    mode: development
+    # Not mode: development, which would prefix the dashboard name with "[dev <you>]".

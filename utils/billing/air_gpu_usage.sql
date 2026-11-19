@@ -1,7 +1,8 @@
 -- AIR GPU-hours per day, by capacity (reserved / on-demand), accelerator, workload shape and usage policy.
 --
--- The dataset behind bundles/air-usage-dashboard (build_dashboard.py copies this file into the dashboard JSON;
--- edit here, then rebuild). It also runs as is in the SQL editor, which prompts for the named parameters.
+-- The dataset behind the AIR GPU usage dashboard: bundles/workspace-notebooks/build_dashboard.py copies this file
+-- into the dashboard JSON (edit here, then rebuild). It also runs as is in the SQL editor, which prompts for the
+-- named parameters.
 --
 -- One row per (day, workspace, workload, capacity, accelerator, shape, policy, and how each was found).
 -- It is a single-statement version of reserved_gpu_attribution.sql (Parts A and N), widened from reserved only to

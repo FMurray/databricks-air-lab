@@ -1,25 +1,9 @@
-# AIR usage dashboard bundle
+# AIR GPU usage dashboard
 
 A Lakeview dashboard of AIR GPU-hours over time, by **capacity** (reserved / on-demand), **accelerator**,
 **workload shape** (nodes x GPUs per node) and **usage policy ID**. It reads the same system tables as the
-attribution notebooks in `utils/billing/`, with no intermediate tables to build. Deploy it with one command:
-
-```bash
-bundles/air-usage-dashboard/manage.sh deploy -p <profile> --var warehouse_id=<sql-warehouse-id>
-```
-
-It lands at `/Workspace/Users/<you>/AIR GPU usage.lvdash.json` and is published. Find a warehouse ID with
-`databricks warehouses list -p <profile>`; a serverless SQL warehouse is the best fit.
-
-| Command | Does |
-|---|---|
-| `manage.sh deploy -p <profile> --var warehouse_id=<id>` | creates or updates the dashboard and publishes it |
-| `manage.sh validate -p <profile> --var warehouse_id=<id>` | shows the resolved config without changing anything |
-| `manage.sh remove -p <profile> --var warehouse_id=<id>` | deletes the dashboard and the deploy state (asks first; `--yes` skips) |
-
-`BUNDLE_VAR_warehouse_id=<id>` in the environment works instead of `--var`. Plain `databricks bundle deploy` from
-this directory, with the same flags, does the same as `manage.sh deploy`. Like `workspace-notebooks`, it needs
-Databricks CLI 1.20 or newer, has a single `user` target, and takes the host from the profile.
+attribution notebooks in `utils/billing/`, with no intermediate tables to build. It's deployed and published with
+the notebooks by this bundle: see [README.md](README.md) (`deploy.py deploy -p <profile> --var warehouse_id=<id>`).
 
 ## What it shows
 
@@ -62,36 +46,9 @@ The dataset is `utils/billing/air_gpu_usage.sql`, a single-statement version of 
 - **Other parameters** (`hold_basis`, `nb_idle_timeout_min`, `nb_gpus`, `spec_lookback_days`) aren't on the
   dashboard. Change their defaults in the dataset (draft view > Data), or in `PARAMS` in `build_dashboard.py`
   followed by a redeploy.
-- **Deploys overwrite.** Edits made to the dashboard in the workspace are replaced on the next deploy (the CLI warns
-  if it changed remotely). Clone it in the workspace before customising.
+- **Deploys overwrite.** Edits made to the dashboard in the workspace are replaced on the next deploy. Clone it in
+  the workspace before customising.
 - **No workspace filter.** System tables are account-wide (audit: the account's workspaces in the region). Use
   the Workspace filter.
 
-## Changing the dashboard
-
-Edit `utils/billing/air_gpu_usage.sql` (the dataset) or the layout in `build_dashboard.py`, then:
-
-```bash
-python3 bundles/air-usage-dashboard/build_dashboard.py          # rewrites src/air_gpu_usage.lvdash.json
-bundles/air-usage-dashboard/manage.sh deploy -p <profile> --var warehouse_id=<id>
-```
-
-Commit the SQL, the script and the JSON together; the offline test fails if the JSON is stale. The SQL file also
-runs as is in the SQL editor, which prompts for the named parameters. It's synced to the workspace by the
-`workspace-notebooks` bundle along with the rest of `utils/billing/`.
-
-## Tested offline
-
-`tests/test_deploy_offline.py` runs a real `databricks bundle deploy` (twice), `validate` without the warehouse,
-and `manage.sh deploy` and `remove` against an in-memory fake of the workspace and Lakeview APIs. It reuses the fake
-from `workspace-notebooks/tests`. It also checks the JSON is fresh, that the dataset's parameters match the SQL, and
-that every widget field is a dataset column.
-
-```bash
-python3 bundles/air-usage-dashboard/tests/test_deploy_offline.py                    # CLI on PATH
-DATABRICKS_CLI=/path/to/databricks-1.20 python3 bundles/air-usage-dashboard/tests/test_deploy_offline.py
-```
-
-It passes with CLI 1.20.0 and 1.26 (Python 3.8+). Neither the SQL nor the dashboard has been run against a real
-workspace yet: the SQL parses (Databricks dialect), but its results, and how the widget specs render, are
-unverified.
+To change the dashboard, or for how it's tested, see [README.md](README.md).

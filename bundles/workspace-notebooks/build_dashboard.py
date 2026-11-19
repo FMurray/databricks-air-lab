@@ -1,7 +1,7 @@
 """Build src/air_gpu_usage.lvdash.json from utils/billing/air_gpu_usage.sql.
 
-    python3 bundles/air-usage-dashboard/build_dashboard.py           # rewrite the dashboard JSON
-    python3 bundles/air-usage-dashboard/build_dashboard.py --check   # exit 1 if it's out of date
+    python3 bundles/workspace-notebooks/build_dashboard.py           # rewrite the dashboard JSON
+    python3 bundles/workspace-notebooks/build_dashboard.py --check   # exit 1 if it's out of date
 
 The SQL file is the single source of the dataset (it also runs on its own in the SQL editor); this script wraps it
 with the dashboard's parameters, pages and widgets. Edit the SQL or the layout below, rebuild, and commit both.

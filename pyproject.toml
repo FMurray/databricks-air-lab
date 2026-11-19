@@ -6,7 +6,9 @@ requires-python = ">=3.10"
 dependencies = [
   "typer>=0.12",   # CLI framework (brings rich as a dep, but pin it explicitly below too)
   "rich>=13",      # pretty tables / live poll / colored verdicts
-  "mlflow>=3.15.2",
+  "mlflow>=3",
+  "databricks-sdk>=0.50",  # bundles/workspace-notebooks/deploy.py (it also declares its deps inline for `uv run`)
+  "pyyaml>=6",             # deploy.py reads the bundle's databricks.yml
 ]                    # the run/status verbs still shell out to the `air` + `databricks` CLIs
 
 [project.scripts]
