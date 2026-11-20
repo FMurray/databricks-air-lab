@@ -1350,9 +1350,11 @@ WHERE trim(f.member_id) <> '' AND trim(r.use_case_name) <> ''
 
 -- MAGIC %md
 -- MAGIC ### N4 · v_policy_use_cases
--- MAGIC Use case -> policy. A policy's tags are the key=value pairs on every one of its billing rows in the lookback
--- MAGIC (as in A4; any policy, any product). A use case matches a policy whose tag *value* equals `use_case_name`, or
--- MAGIC failing that a tag *key* (case-insensitive). A policy with no billed usage in the lookback can't be matched;
+-- MAGIC Use case -> policy, from **AIR usage only**. A policy's tags are the key=value pairs on every one of its AIR
+-- MAGIC billing rows in the lookback (`product_features.ai_runtime` or `serverless_gpu`); its usage on other products
+-- MAGIC is left out, so a use case that never ran on AIR doesn't count. A use case matches a policy whose tag *value*
+-- MAGIC equals `use_case_name`, or failing that a tag *key* (case-insensitive). Reserved rows carry no policy, so in
+-- MAGIC practice these are on-demand AIR rows: a policy with no on-demand AIR usage in the lookback can't be matched.
 -- MAGIC N4a counts those use cases. Reads `system.billing.usage` (the date literal matches N3's).
 
 -- COMMAND ----------
@@ -1364,6 +1366,8 @@ WITH pr AS (
   FROM system.billing.usage u
   WHERE u.usage_date >= DATE '2026-05-05'  -- since minus 90 days (literal, as in N3)
     AND u.usage_metadata.usage_policy_id IS NOT NULL
+    -- AIR usage only: a policy's other products (SQL, jobs, ...) don't make its use case an AIR use case
+    AND (u.product_features.ai_runtime IS NOT NULL OR u.product_features.serverless_gpu IS NOT NULL)
 ),
 n AS (
   SELECT policy_id, COUNT(*) AS billing_rows FROM pr GROUP BY 1
@@ -1403,8 +1407,8 @@ QUALIFY matched_on = 'tag value' OR MAX(IF(matched_on = 'tag value', 1, 0)) OVER
 -- MAGIC %md
 -- MAGIC ### N4 · v_user_policies
 -- MAGIC User -> permitted policy, from the sheet: each member ID (`v_use_case_members`) is matched to a
--- MAGIC reserved-notebook `actor` that equals it or whose part before `@` equals it (case-insensitive). `use_case_unmapped` marks a membership whose use case matched no policy: that user's
--- MAGIC permitted set is then incomplete, and N4 won't apply the 'only permitted policy' rule to them.
+-- MAGIC reserved-notebook `actor` that equals it or whose part before `@` equals it (case-insensitive). `use_case_unmapped` marks a membership whose use case matched no policy. N4 ignores
+-- MAGIC those memberships: the use cases that count are the ones a policy's tags carry, not every name in the sheet.
 -- MAGIC `policy_name` is NULL (the sheet has use cases, not policy names), so the alphabetical default isn't computed.
 
 -- COMMAND ----------
@@ -1498,6 +1502,8 @@ WITH pr AS (
   FROM system.billing.usage u
   WHERE u.usage_date >= DATE '2026-05-05'  -- since minus 90 days (literal, as in N3)
     AND u.usage_metadata.usage_policy_id IS NOT NULL
+    -- AIR usage only: a policy's other products (SQL, jobs, ...) don't make its use case an AIR use case
+    AND (u.product_features.ai_runtime IS NOT NULL OR u.product_features.serverless_gpu IS NOT NULL)
 ),
 n AS (
   SELECT policy_id, COUNT(*) AS billing_rows FROM pr GROUP BY 1
@@ -1599,14 +1605,19 @@ ORDER BY 1
 -- MAGIC ### N4 · v_nb_session_policy_resolved
 -- MAGIC N3's rows with `resolution`, the rule that decided `resolved_policy_id`:
 -- MAGIC - 'billing evidence, permitted': N3's policy, which one of the user's use cases carries. Strongest.
--- MAGIC - 'list incomplete': one of the user's use cases matched no policy, so the permitted set is partial. N3's answer
--- MAGIC   kept (NULL stays NULL).
--- MAGIC - 'only permitted policy': the user's one policy (overrides N3 if N3 picked a policy the user can't use).
--- MAGIC - 'no permitted policy': resolved as no policy (NULL is the answer, not a gap).
+-- MAGIC - 'billing evidence, untagged use cases': N3's policy isn't among the user's, but the user is also in use cases
+-- MAGIC   that matched no policy, so it may belong to one of those. N3's answer kept.
+-- MAGIC - 'only permitted policy': the user's one policy, from their use cases that a policy's tags carry. Use cases
+-- MAGIC   that matched no policy are ignored (`permitted_incomplete` marks those users).
+-- MAGIC - 'no tagged use case': none of the user's use cases matched a policy, and N3 found none. Unresolved (NULL).
 -- MAGIC - 'several permitted, none evidenced': unresolved (NULL). `default_guess_policy_id` is the alphabetically first
 -- MAGIC   policy by name when names are known (not from the use-case sheet).
 -- MAGIC - 'billing evidence, not permitted': N3's policy isn't among the user's, and they have several. Unresolved (NULL).
 -- MAGIC - 'user not in list': N3's answer kept.
+-- MAGIC
+-- MAGIC Ignoring the unmatched use cases has one blind spot: reserved usage carries no policy on its billing rows, so a
+-- MAGIC policy used only on the reservation never shows its tags, and its use case counts as unmatched. N4e lists the
+-- MAGIC users this could affect.
 -- MAGIC
 -- MAGIC Membership is as of the sheet, not history: a change during the window can make a rule wrong for the earlier
 -- MAGIC period. A4 and A5 use `resolved_policy_id`.
@@ -1646,17 +1657,17 @@ r AS (
 SELECT r.* EXCEPT (any_policy, first_by_name, in_list),
        CASE WHEN NOT r.in_list                                THEN 'user not in list'
             WHEN r.n3_policy_permitted                         THEN 'billing evidence, permitted'
-            WHEN r.permitted_incomplete                        THEN 'list incomplete'
+            WHEN r.permitted_incomplete AND r.policy_id IS NOT NULL THEN 'billing evidence, untagged use cases'
             WHEN r.permitted_policies = 1                      THEN 'only permitted policy'
-            WHEN r.permitted_policies = 0                      THEN 'no permitted policy'
+            WHEN r.permitted_policies = 0                      THEN 'no tagged use case'
             WHEN r.policy_id IS NOT NULL                       THEN 'billing evidence, not permitted'
             ELSE                                                    'several permitted, none evidenced' END AS resolution,
        CASE WHEN NOT r.in_list                                THEN r.policy_id
             WHEN r.n3_policy_permitted                         THEN r.policy_id
-            WHEN r.permitted_incomplete                        THEN r.policy_id
+            WHEN r.permitted_incomplete AND r.policy_id IS NOT NULL THEN r.policy_id
             WHEN r.permitted_policies = 1                      THEN r.any_policy
             ELSE NULL END                                                                                  AS resolved_policy_id,
-       IF(r.in_list AND NOT r.permitted_incomplete AND r.permitted_policies > 1 AND r.policy_id IS NULL,
+       IF(r.in_list AND r.permitted_policies > 1 AND r.policy_id IS NULL,
           r.first_by_name, NULL)                                                                           AS default_guess_policy_id
 FROM r
 
@@ -1686,21 +1697,22 @@ ORDER BY gpu_hours DESC
 -- COMMAND ----------
 
 -- MAGIC %md
--- MAGIC ### N4e. 'List incomplete': which users and which use cases
--- MAGIC One row per user whose holds resolved as 'list incomplete', biggest first: their use cases that map to a
--- MAGIC policy, and the ones that don't (`unmapped_use_cases`), which are what keeps their permitted set partial.
--- MAGIC `null_gpu_hours` is the part with no policy from N3 either.
+-- MAGIC ### N4e. Users with use cases that match no policy
+-- MAGIC One row per user N4 ignored a use case for, biggest first: their use cases that map to a policy, and the ones
+-- MAGIC that don't (`unmapped_use_cases`). `null_gpu_hours` had no policy from N3; `resolved_gpu_hours` has one after
+-- MAGIC N4. If an ignored use case is really the one the user ran under, that row's answer is wrong.
 
 -- COMMAND ----------
 
--- DBTITLE 1,N4e. 'List incomplete': which users and which use cases
+-- DBTITLE 1,N4e. Users with use cases that match no policy
 WITH h AS (
   SELECT actor,
          COUNT(*)                                                         AS holds,
          ROUND(SUM(hold_s * gpus) / 3600.0, 1)                            AS gpu_hours,
-         ROUND(SUM(IF(policy_id IS NULL, hold_s * gpus, 0)) / 3600.0, 1)  AS null_gpu_hours
+         ROUND(SUM(IF(policy_id IS NULL, hold_s * gpus, 0)) / 3600.0, 1)  AS null_gpu_hours,
+         ROUND(SUM(IF(resolved_policy_id IS NOT NULL, hold_s * gpus, 0)) / 3600.0, 1) AS resolved_gpu_hours
   FROM v_nb_session_policy_resolved
-  WHERE resolution = 'list incomplete'
+  WHERE permitted_incomplete
   GROUP BY 1
 ),
 u AS (
@@ -1711,7 +1723,7 @@ u AS (
   FROM v_user_policies
   GROUP BY 1
 )
-SELECT h.actor, h.holds, h.gpu_hours, h.null_gpu_hours,
+SELECT h.actor, h.holds, h.gpu_hours, h.null_gpu_hours, h.resolved_gpu_hours,
        u.mapped_policies, u.mapped_use_cases, u.unmapped_use_cases
 FROM h
 LEFT JOIN u ON lower(trim(u.user_email)) = lower(trim(h.actor))
@@ -2018,7 +2030,8 @@ ORDER BY month DESC, gpu_hours DESC
 -- MAGIC
 -- MAGIC `use_case`, in order (the same rule as `team` in A4):
 -- MAGIC - 'policy use case': the unit's policy maps to exactly one use case (N4 · v_policy_use_cases).
--- MAGIC - 'only use case of user': the identity is in exactly one use case in the sheet.
+-- MAGIC - 'only use case of user': the identity is in exactly one use case that a policy's tags carry. Use cases that
+-- MAGIC   matched no policy are ignored, as in N4; an identity with none that match falls back to its only sheet use case.
 -- MAGIC - 'user in several use cases' / 'user not in sheet' / 'no identity': no use case (NULL).
 
 -- COMMAND ----------
@@ -2030,8 +2043,16 @@ WITH puc AS (
   FROM v_policy_use_cases GROUP BY 1
 ),
 uuc AS (
-  SELECT identity_key, MIN(use_case_name) AS use_case, COUNT(DISTINCT use_case_name) AS use_cases
-  FROM v_user_teams GROUP BY 1
+  -- the identity's use cases that a policy carries; if none do, all of its sheet use cases
+  SELECT identity_key,
+         COALESCE(MIN(IF(tagged, use_case_name, NULL)), MIN(use_case_name))                         AS use_case,
+         COALESCE(NULLIF(COUNT(DISTINCT IF(tagged, use_case_name, NULL)), 0), COUNT(DISTINCT use_case_name)) AS use_cases
+  FROM (
+    SELECT t.identity_key, t.use_case_name,
+           t.use_case_name IN (SELECT use_case_name FROM v_policy_use_cases) AS tagged
+    FROM v_user_teams t
+  )
+  GROUP BY 1
 ),
 t AS (
   SELECT a.*,
