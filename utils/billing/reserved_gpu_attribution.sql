@@ -10,7 +10,8 @@
 -- MAGIC Part A is the load-bearing chain for jobs: job task -> reserved accelerator -> run -> policy (A1-A3).
 -- MAGIC The "Minimum viable check" right after A2's `v_task_runs` runs the jobs chain in two queries.
 -- MAGIC Part N does the same for notebooks: attach session -> reserved (by elimination) -> policy (N1-N3); its
--- MAGIC sources and inferences are in its own header. A4-A5 then take tags and DBUs for jobs and notebooks together.
+-- MAGIC sources and inferences are in its own header. A4-A6 then take tags and DBUs for jobs and notebooks together,
+-- MAGIC and A7 the peak concurrent nodes per day (pool, use case, user, team).
 -- MAGIC Part B is context (the reserved bill) and can wait.
 -- MAGIC
 -- MAGIC **No workspace filter.** System tables aren't scoped to the workspace you query them from: `system.billing.usage`
@@ -1685,6 +1686,40 @@ ORDER BY gpu_hours DESC
 -- COMMAND ----------
 
 -- MAGIC %md
+-- MAGIC ### N4e. 'List incomplete': which users and which use cases
+-- MAGIC One row per user whose holds resolved as 'list incomplete', biggest first: their use cases that map to a
+-- MAGIC policy, and the ones that don't (`unmapped_use_cases`), which are what keeps their permitted set partial.
+-- MAGIC `null_gpu_hours` is the part with no policy from N3 either.
+
+-- COMMAND ----------
+
+-- DBTITLE 1,N4e. 'List incomplete': which users and which use cases
+WITH h AS (
+  SELECT actor,
+         COUNT(*)                                                         AS holds,
+         ROUND(SUM(hold_s * gpus) / 3600.0, 1)                            AS gpu_hours,
+         ROUND(SUM(IF(policy_id IS NULL, hold_s * gpus, 0)) / 3600.0, 1)  AS null_gpu_hours
+  FROM v_nb_session_policy_resolved
+  WHERE resolution = 'list incomplete'
+  GROUP BY 1
+),
+u AS (
+  SELECT user_email,
+         COUNT(DISTINCT policy_id)                                                 AS mapped_policies,
+         sort_array(collect_set(IF(NOT use_case_unmapped, use_case_name, NULL)))   AS mapped_use_cases,
+         sort_array(collect_set(IF(use_case_unmapped, use_case_name, NULL)))       AS unmapped_use_cases
+  FROM v_user_policies
+  GROUP BY 1
+)
+SELECT h.actor, h.holds, h.gpu_hours, h.null_gpu_hours,
+       u.mapped_policies, u.mapped_use_cases, u.unmapped_use_cases
+FROM h
+LEFT JOIN u ON lower(trim(u.user_email)) = lower(trim(h.actor))
+ORDER BY h.gpu_hours DESC
+
+-- COMMAND ----------
+
+-- MAGIC %md
 -- MAGIC ## N5. Teams
 -- MAGIC When the policy (or use case) can't be pinned down, the team is the next best unit. A use case's team is the
 -- MAGIC prefix its `use_case_name` starts with (case-insensitive, longest prefix first), from `v_team_prefixes`; a use
@@ -1965,6 +2000,229 @@ SELECT date_trunc('MONTH', a.start_time)                                        
        ROUND(SUM(a.hold_s * a.gpus) / 3600.0, 1)                                 AS gpu_hours,
        ROUND(SUM(a.hold_s * a.gpus) / 3600.0 * MAX(p.dbus_per_gpu_hour), 2)      AS dbus
 FROM v_attributed a
+CROSS JOIN v_params p
+GROUP BY 1, 2, 3
+ORDER BY month DESC, gpu_hours DESC
+
+-- COMMAND ----------
+
+-- MAGIC %md
+-- MAGIC ## A7. Peak concurrent nodes per day
+-- MAGIC How many reserved nodes were held at the same time: for the whole pool, and per use case, user and team. This
+-- MAGIC needs each unit's start and end, not just its hours, so `v_unit_intervals` gives every `v_attributed` row an
+-- MAGIC interval:
+-- MAGIC - Job runs: `hold_s` ending at `run_end` (minus cleanup when `hold_basis` = 'execution'), so queue and setup
+-- MAGIC   time at the front aren't counted as held. Runs with no `hold_s` yet are left out.
+-- MAGIC - Notebook holds: `hold_start` to `hold_end` (N1).
+-- MAGIC - `nodes` = `gpus` / `nb_gpus` (GPUs per node). A notebook row's `nodes` is its share of the hold.
+-- MAGIC
+-- MAGIC `use_case`, in order (the same rule as `team` in A4):
+-- MAGIC - 'policy use case': the unit's policy maps to exactly one use case (N4 · v_policy_use_cases).
+-- MAGIC - 'only use case of user': the identity is in exactly one use case in the sheet.
+-- MAGIC - 'user in several use cases' / 'user not in sheet' / 'no identity': no use case (NULL).
+
+-- COMMAND ----------
+
+-- DBTITLE 1,A7 · v_unit_intervals
+CREATE OR REPLACE TABLE v_unit_intervals AS
+WITH puc AS (
+  SELECT policy_id, MIN(use_case_name) AS use_case, COUNT(DISTINCT use_case_name) AS use_cases
+  FROM v_policy_use_cases GROUP BY 1
+),
+uuc AS (
+  SELECT identity_key, MIN(use_case_name) AS use_case, COUNT(DISTINCT use_case_name) AS use_cases
+  FROM v_user_teams GROUP BY 1
+),
+t AS (
+  SELECT a.*,
+         IF(a.workload = 'job',
+            timestampadd(SECOND, -CAST(IF(p.hold_basis = 'execution', COALESCE(r.cleanup_s, 0), 0) AS INT), r.run_end),
+            timestampadd(SECOND, CAST(a.hold_s AS INT), a.start_time)) AS end_time,
+         a.gpus / p.nb_gpus                                            AS nodes
+  FROM v_attributed a
+  CROSS JOIN v_params p
+  LEFT JOIN v_run_policy r ON a.workload = 'job' AND CAST(r.run_id AS STRING) = a.unit_id
+)
+SELECT t.workload, t.unit_id, t.identity, t.policy_id, t.team, t.team_basis,
+       CASE WHEN puc.use_cases = 1 THEN puc.use_case
+            WHEN uuc.use_cases = 1 THEN uuc.use_case END                  AS use_case,
+       CASE WHEN puc.use_cases = 1     THEN 'policy use case'
+            WHEN uuc.use_cases = 1     THEN 'only use case of user'
+            WHEN uuc.use_cases > 1     THEN 'user in several use cases'
+            WHEN t.identity IS NULL    THEN 'no identity'
+            ELSE                            'user not in sheet' END       AS use_case_basis,
+       timestampadd(SECOND, -CAST(t.hold_s AS INT), t.end_time)           AS start_time,
+       t.end_time,
+       t.nodes
+FROM t
+LEFT JOIN puc ON puc.policy_id = t.policy_id
+LEFT JOIN uuc ON uuc.identity_key = lower(trim(t.identity))
+WHERE t.hold_s > 0 AND t.end_time IS NOT NULL
+
+-- COMMAND ----------
+
+-- MAGIC %md
+-- MAGIC ### A7a. Node-hours by how the use case was decided
+-- MAGIC How much of the held time has a use case at all. The NULL rows show up as '(unknown)' in A7c.
+
+-- COMMAND ----------
+
+-- DBTITLE 1,A7a. Node-hours by how the use case was decided
+SELECT use_case_basis,
+       COUNT(DISTINCT identity)                                                             AS identities,
+       COUNT(DISTINCT use_case)                                                             AS use_cases,
+       ROUND(SUM(IF(workload = 'job', nodes * TIMESTAMPDIFF(SECOND, start_time, end_time), 0)) / 3600.0, 1)      AS job_node_hours,
+       ROUND(SUM(IF(workload = 'notebook', nodes * TIMESTAMPDIFF(SECOND, start_time, end_time), 0)) / 3600.0, 1) AS nb_node_hours,
+       ROUND(SUM(nodes * TIMESTAMPDIFF(SECOND, start_time, end_time)) / 3600.0, 1)          AS node_hours
+FROM v_unit_intervals
+GROUP BY 1
+ORDER BY node_hours DESC
+
+-- COMMAND ----------
+
+-- MAGIC %md
+-- MAGIC ### A7 · v_daily_peaks
+-- MAGIC `v_daily_peaks`: one row per (`dim`, `key`, `day`) with `peak_nodes`, the most nodes held at one moment that
+-- MAGIC day, and `peak_at`, a moment it was reached. `dim` is 'pool' (key 'all'), 'workload' ('job' / 'notebook'),
+-- MAGIC 'use_case', 'identity' or 'team'; a NULL key is '(unknown)'.
+-- MAGIC - Nodes are whole: a notebook hold shared by several users counts as one node for each use case, user or team
+-- MAGIC   in it, and once for the pool. So per-key peaks can add up to more than the pool's peak; they would anyway,
+-- MAGIC   since each key peaks at its own time.
+-- MAGIC - A unit still held at midnight carries into the next day.
+-- MAGIC - Days are in the session time zone, from `since` to `until`. The last day or two run low: N2 leaves out
+-- MAGIC   notebook holds from the last 24 hours, and audit and timeline rows arrive late.
+
+-- COMMAND ----------
+
+-- DBTITLE 1,A7 · v_daily_peaks
+CREATE OR REPLACE TABLE v_daily_peaks AS
+WITH dims AS (
+  SELECT d.dim, d.key, u.unit_id, u.start_time, u.end_time, u.nodes
+  FROM v_unit_intervals u
+  LATERAL VIEW stack(5, 'pool',     'all',
+                        'workload', u.workload,
+                        'use_case', COALESCE(u.use_case, '(unknown)'),
+                        'identity', COALESCE(lower(trim(u.identity)), '(unknown)'),
+                        'team',     COALESCE(u.team, '(unknown)')) d AS dim, key
+),
+iv AS (
+  -- one interval per unit within a key: a shared notebook hold's shares add up to at most one node
+  SELECT dim, key, unit_id, MIN(start_time) AS start_time, MAX(end_time) AS end_time,
+         CEIL(ROUND(SUM(nodes), 6)) AS nodes
+  FROM dims
+  GROUP BY 1, 2, 3
+),
+days AS (
+  SELECT explode(sequence(to_date(since), to_date(until), INTERVAL 1 DAY)) AS day FROM v_params
+),
+ev AS (
+  SELECT dim, key, start_time AS t, nodes AS d FROM iv
+  UNION ALL
+  SELECT dim, key, end_time, -nodes FROM iv
+  UNION ALL
+  -- a zero marker at each midnight, so a day with no start or end still reports what it carried in
+  SELECT k.dim, k.key, CAST(d.day AS TIMESTAMP), 0
+  FROM (SELECT DISTINCT dim, key FROM iv) k
+  CROSS JOIN days d
+),
+run AS (
+  -- at the same instant: releases, then the midnight marker, then acquisitions
+  SELECT dim, key, t,
+         SUM(d) OVER (PARTITION BY dim, key ORDER BY t, d ROWS UNBOUNDED PRECEDING) AS nodes_held
+  FROM ev
+)
+SELECT r.dim, r.key, to_date(r.t) AS day,
+       CAST(MAX(r.nodes_held) AS INT)  AS peak_nodes,
+       max_by(r.t, r.nodes_held)       AS peak_at
+FROM run r
+JOIN days d ON d.day = to_date(r.t)
+GROUP BY 1, 2, 3
+
+-- COMMAND ----------
+
+-- MAGIC %md
+-- MAGIC ### A7b. Pool: peak nodes per day
+-- MAGIC `peak_nodes` of `reserved_nodes` (= `reserved_gpus` / `nb_gpus`). `peak_job_nodes` and `peak_nb_nodes` are each
+-- MAGIC workload's own peak, not its part of the pool's peak. `over_cap` should never be true: jobs and notebooks
+-- MAGIC together can't hold more than the reservation, so a true row means the hold model overcounts that day.
+
+-- COMMAND ----------
+
+-- DBTITLE 1,A7b. Pool: peak nodes per day
+SELECT d.day,
+       d.peak_nodes,
+       CAST(p.reserved_gpus / p.nb_gpus AS INT)        AS reserved_nodes,
+       d.peak_at,
+       COALESCE(j.peak_nodes, 0)                       AS peak_job_nodes,
+       COALESCE(n.peak_nodes, 0)                       AS peak_nb_nodes,
+       d.peak_nodes > p.reserved_gpus / p.nb_gpus      AS over_cap
+FROM v_daily_peaks d
+CROSS JOIN v_params p
+LEFT JOIN v_daily_peaks j ON j.dim = 'workload' AND j.key = 'job'      AND j.day = d.day
+LEFT JOIN v_daily_peaks n ON n.dim = 'workload' AND n.key = 'notebook' AND n.day = d.day
+WHERE d.dim = 'pool'
+ORDER BY d.day DESC
+
+-- COMMAND ----------
+
+-- MAGIC %md
+-- MAGIC ### A7c. Use case: peak nodes per day
+-- MAGIC Days a use case held nothing are left out. '(unknown)' is every unit with no use case (A7a).
+
+-- COMMAND ----------
+
+-- DBTITLE 1,A7c. Use case: peak nodes per day
+SELECT day, key AS use_case, peak_nodes, peak_at
+FROM v_daily_peaks
+WHERE dim = 'use_case' AND peak_nodes > 0
+ORDER BY day DESC, peak_nodes DESC, use_case
+
+-- COMMAND ----------
+
+-- MAGIC %md
+-- MAGIC ### A7d. User: peak nodes per day
+-- MAGIC `identity` is the job's run-as or the notebook's user (A4), lowercased so one person's jobs and notebooks add up.
+
+-- COMMAND ----------
+
+-- DBTITLE 1,A7d. User: peak nodes per day
+SELECT day, key AS identity, peak_nodes, peak_at
+FROM v_daily_peaks
+WHERE dim = 'identity' AND peak_nodes > 0
+ORDER BY day DESC, peak_nodes DESC, identity
+
+-- COMMAND ----------
+
+-- MAGIC %md
+-- MAGIC ### A7e. Team: peak nodes per day
+
+-- COMMAND ----------
+
+-- DBTITLE 1,A7e. Team: peak nodes per day
+SELECT day, key AS team, peak_nodes, peak_at
+FROM v_daily_peaks
+WHERE dim = 'team' AND peak_nodes > 0
+ORDER BY day DESC, peak_nodes DESC, team
+
+-- COMMAND ----------
+
+-- MAGIC %md
+-- MAGIC ### A7f. GPU-hours per use case per month
+-- MAGIC A6 by use case instead of team: reserved GPU-hours for jobs and notebooks, by month of the hold's start.
+-- MAGIC `use_case_basis` says how the use case was decided (A7 · v_unit_intervals); a NULL use case is a unit whose
+-- MAGIC policy and user don't pin one use case down. `nb_gpu_hours` is the notebook column.
+
+-- COMMAND ----------
+
+-- DBTITLE 1,A7f. GPU-hours per use case per month
+SELECT date_trunc('MONTH', u.start_time)                                                AS month,
+       u.use_case,
+       u.use_case_basis,
+       COUNT(DISTINCT lower(trim(u.identity)))                                          AS identities,
+       ROUND(SUM(IF(u.workload = 'job', u.nodes * p.nb_gpus * TIMESTAMPDIFF(SECOND, u.start_time, u.end_time), 0)) / 3600.0, 1)      AS job_gpu_hours,
+       ROUND(SUM(IF(u.workload = 'notebook', u.nodes * p.nb_gpus * TIMESTAMPDIFF(SECOND, u.start_time, u.end_time), 0)) / 3600.0, 1) AS nb_gpu_hours,
+       ROUND(SUM(u.nodes * p.nb_gpus * TIMESTAMPDIFF(SECOND, u.start_time, u.end_time)) / 3600.0, 1)                                 AS gpu_hours
+FROM v_unit_intervals u
 CROSS JOIN v_params p
 GROUP BY 1, 2, 3
 ORDER BY month DESC, gpu_hours DESC
